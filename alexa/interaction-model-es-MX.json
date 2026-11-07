@@ -1,0 +1,78 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "tendedero inteligente",
+      "intents": [
+        {
+          "name": "VincularThingIntent",
+          "slots": [{"name": "thing_name", "type": "AMAZON.SearchQuery"}],
+          "samples": [
+            "vincula mi objeto con {thing_name}",
+            "vincula el tendedero {thing_name}",
+            "asocia mi objeto a {thing_name}"
+          ]
+        },
+        {
+          "name": "CambiarThingIntent",
+          "slots": [{"name": "thing_name", "type": "AMAZON.SearchQuery"}],
+          "samples": [
+            "cambia mi objeto a {thing_name}",
+            "cambia el tendedero por {thing_name}"
+          ]
+        },
+        {
+          "name": "DesvincularThingIntent",
+          "slots": [],
+          "samples": [
+            "desvincula mi objeto",
+            "elimina la vinculación",
+            "desconecta mi tendedero"
+          ]
+        },
+        {
+          "name": "ConsultarAguaIntent",
+          "slots": [],
+          "samples": [
+            "hay agua en el sensor",
+            "está lloviendo",
+            "detectas lluvia",
+            "cómo está el sensor de agua"
+          ]
+        },
+        {
+          "name": "AbrirCubiertaIntent",
+          "slots": [],
+          "samples": [
+            "abre la cubierta",
+            "descubre el tendedero",
+            "abre el techo del tendedero"
+          ]
+        },
+        {
+          "name": "CerrarCubiertaIntent",
+          "slots": [],
+          "samples": [
+            "cierra la cubierta",
+            "protege el tendedero",
+            "cierra el techo del tendedero"
+          ]
+        },
+        {
+          "name": "ConsultarCubiertaIntent",
+          "slots": [],
+          "samples": [
+            "cómo está la cubierta",
+            "está cerrado el tendedero",
+            "consulta el estado de la cubierta"
+          ]
+        },
+        {"name": "AMAZON.CancelIntent", "samples": []},
+        {"name": "AMAZON.StopIntent", "samples": []},
+        {"name": "AMAZON.HelpIntent", "samples": []},
+        {"name": "AMAZON.FallbackIntent", "samples": []}
+      ],
+      "types": []
+    }
+  }
+}
+
