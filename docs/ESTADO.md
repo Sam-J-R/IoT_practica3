@@ -1,4 +1,4 @@
-# Estado de la Práctica 3 (7 de noviembre de 2026)
+# Estado de la Práctica 3 (8 de noviembre de 2026)
 
 Este documento diferencia pruebas reales, verificaciones de código y tareas todavía pendientes. **No equivale a una demo completa en AWS.**
 
@@ -14,16 +14,16 @@ Este documento diferencia pruebas reales, verificaciones de código y tareas tod
 - Código de firmware MQTT TLS/Shadow preparado. `lambda/lambda_deployment_p3.zip` contiene la misma versión de `lambda_function.py` que el código fuente.
 - Backend AWS desplegado en `us-east-2`: Things `tendedero-inteligente` y `tendedero-prueba2`, certificado activo del Thing físico, política IoT, endpoint ATS, tabla `tendedero_vinculaciones`, rol IAM y Lambda `tendedero-inteligente-alexa`.
 - Pruebas directas desde Lambda satisfactorias: arranque del handler, vinculación persistente, consulta del sensor, escritura de `desired.cubierta`, consulta de cubierta, rechazo de Thing inexistente y desvinculación. El Thing de prueba permitió simular la convergencia `desired`/`reported`.
-- CloudWatch no mostró errores en las ejecuciones verificadas; se conservó captura como evidencia. El ARN de Lambda y el modelo fueron entregados a la responsable Alexa; falta recibir el Skill ID y configurar el trigger restringido.
+- CloudWatch no mostró errores en las ejecuciones verificadas y se conservaron panel y CSV como evidencia. El trigger Alexa Skills Kit quedó restringido al Skill ID real. Desde el simulador, la Skill invocó Lambda, vinculó `prueba dos` después de admitir la variante reconocida `prueba 2` y consultó correctamente la cubierta del Shadow simulado.
 
 ## Aún no demostrado
 
 1. Clasificación del sensor `agua_detectada`: falta umbral calibrado y referencia física/ensayo autorizado. El estímulo eléctrico prueba ADC, no exactitud para agua/lluvia.
 2. Valores finales de `calibracion_local.h`: por seguridad no se incluyen datos no verificados ni se adjunta ese archivo local. La plantilla permanece desactivada.
 3. Conexión del ESP32 a AWS IoT Core real por TLS; lectura `get`, recepción `delta`, publicación `reported` y recuperación de `desired` pendiente. Los recursos AWS ya existen, pero falta probarlos desde el dispositivo físico.
-4. Skill Alexa conectada al backend y validada con voz/texto real. DynamoDB y Lambda ya están desplegadas y probadas mediante eventos directos.
+4. La conexión Skill→Lambda y las pruebas por texto de vinculación y consulta de cubierta están demostradas. No se documentó una prueba por voz ni la cadena hasta el dispositivo físico.
 5. RF1–RF9 completos de extremo a extremo; estabilidad ≥10 min, exactitud, latencia objetivo ≤3 s, frecuencia efectiva y reconexión MQTT con Shadow.
-6. Fotografías, videos, logs y capturas de AWS/Alexa para el informe; commits por cada integrante y repositorio final accesible.
+6. Fotografías, logs y capturas de AWS/Alexa para el informe; demostración presencial del movimiento, commits por cada integrante y repositorio final accesible.
 
 ## Responsabilidades acordadas
 
