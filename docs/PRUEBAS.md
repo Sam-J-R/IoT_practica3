@@ -8,13 +8,13 @@ Estado actualizado el 7/11/2026. **«Parcial»** significa que hay una prueba f�
 |---|---|---|---|
 | RF1 | Leer sensor analógico en entorno seco/con estímulo controlado | Serie + referencia de ensayo | Parcial: lectura seca `raw=0` y prueba ADC `raw=4095` documentadas; falta caracterizar sensor frente al estímulo |
 | RF2 | Sensor y actuador en `reported` periódico | Captura Shadow y tiempos | Pendiente |
-| RF3 | Lambda modifica desired → delta → servo → reported | Traza AWS + video servo | Parcial: servo físico probado por Samuel, falta cadena AWS completa |
-| RF4 | Alexa consulta presencia de agua | Simulador voz/texto + Shadow | Pendiente |
-| RF5 | Alexa ordena abrir/cerrar | Simulador + servo | Pendiente |
-| RF6 | Alexa consulta estado cubierta | Simulador + reported | Pendiente |
-| RF7 | Vinculación persiste entre sesiones | DynamoDB y dos sesiones | Pendiente |
-| RF8 | Sin vinculación: guía; con vinculación: resolve por userId | Logs y respuestas | Pendiente |
-| RF9 | Thing inexistente, cambiar y desvincular | Casos positivos/negativos | Pendiente |
+| RF3 | Lambda modifica desired → delta → servo → reported | Traza AWS + video servo | Parcial: Lambda escribió `desired` real y el Thing de prueba simuló `reported`; falta ESP32 y servo en la cadena |
+| RF4 | Alexa consulta presencia de agua | Simulador voz/texto + Shadow | Parcial: Lambda leyó el Shadow real mediante evento directo; falta Alexa |
+| RF5 | Alexa ordena abrir/cerrar | Simulador + servo | Parcial: Lambda escribió `desired.cubierta`; falta Alexa y movimiento físico |
+| RF6 | Alexa consulta estado cubierta | Simulador + reported | Parcial: Lambda distinguió estado reportado y orden pendiente; falta Alexa |
+| RF7 | Vinculación persiste entre sesiones | DynamoDB y dos sesiones | Parcial: persistencia verificada entre invocaciones directas; falta probar sesiones Alexa reales |
+| RF8 | Sin vinculación: guía; con vinculación: resolve por userId | Logs y respuestas | Parcial: enrutamiento por `userId` ejercitado directamente; falta Alexa real |
+| RF9 | Thing inexistente, cambiar y desvincular | Casos positivos/negativos | Parcial: Thing inexistente rechazado y operaciones de vinculación ejercitadas directamente; falta evidencia desde Alexa |
 
 ## No funcionales
 
@@ -36,6 +36,18 @@ Comando desde la raíz del repositorio: `py -m unittest discover -s tests -v` en
 - Una compilación de firmware o el paso de la suite no sustituyen la carga física ni demuestran tiempos de respuesta o permisos reales.
 
 No introducir agua cerca de la alimentación sin aprobación y metodología segura. Un puente conductor simulado solo comprueba respuesta eléctrica, no exactitud física del sensor.
+
+## Pruebas directas del backend AWS (7/11/2026)
+
+- Recursos desplegados en `us-east-2`: dos Things, Shadow clásico simulado, DynamoDB, IAM y Lambda.
+- El evento `LaunchRequest` cargó correctamente el handler y ASK SDK.
+- `VincularThingIntent` validó `tendedero-prueba2` y persistió `userId → thingName`.
+- `ConsultarAguaIntent` respondió de acuerdo con cambios reales de `reported.agua_detectada`.
+- `CerrarCubiertaIntent` escribió `desired.cubierta`; el reporte simulado eliminó el `delta` al converger.
+- `ConsultarCubiertaIntent` distinguió estado reportado y orden pendiente.
+- Un Thing inexistente fue rechazado sin sustituir la vinculación válida.
+- CloudWatch no mostró errores en las ejecuciones revisadas. La captura se conserva como evidencia.
+- Estas pruebas no sustituyen el simulador de Alexa ni el ESP32 real.
 
 ## Informe Markdown obligatorio
 

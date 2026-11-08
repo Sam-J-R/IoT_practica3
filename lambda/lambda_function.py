@@ -21,7 +21,7 @@ from ask_sdk_core.skill_builder import SkillBuilder
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.INFO)
 
-REGION = os.getenv("AWS_REGION", "us-east-1")
+REGION = os.getenv("AWS_REGION", "us-east-2")
 IOT_ENDPOINT = os.getenv("IOT_ENDPOINT", "")
 BINDINGS_TABLE = os.getenv("DDB_BINDINGS_TABLE", "tendedero_vinculaciones")
 
@@ -103,7 +103,7 @@ def _thing_from_spoken(raw):
     """Resuelve alias configurables; no fija un único Thing en el servicio.
 
     THING_ALIASES_JSON ejemplo:
-    {"tendedero grupo seis":"tendedero-grupo6", "prueba dos":"tendedero-prueba2"}
+    {"tendedero inteligente":"tendedero-inteligente", "prueba dos":"tendedero-prueba2"}
     """
     phrase = re.sub(r"\s+", " ", raw.strip()).casefold()
     aliases = json.loads(os.getenv("THING_ALIASES_JSON", "{}"))

@@ -2,16 +2,18 @@
 
 Crear tabla `tendedero_vinculaciones`:
 
+- Región: `us-east-2`.
 - Partition key: `userId` (String).
 - Sin sort key para la asociación 1 usuario → 1 Thing.
 - Atributos de cada ítem: `thingName` (String), `fechaVinculacion` (String ISO 8601).
+- Modo de capacidad: bajo demanda (`PAY_PER_REQUEST`).
 
 Ejemplo **ficticio**:
 
 ```json
 {
   "userId": "amzn1.ask.account.EJEMPLO",
-  "thingName": "tendedero-grupo6",
+  "thingName": "tendedero-inteligente",
   "fechaVinculacion": "2026-11-07T12:00:00Z"
 }
 ```

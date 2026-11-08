@@ -66,6 +66,7 @@ Ejemplo simplificado del Shadow:
 | 7 | `lambda/lambda_function.py` | Vincula usuarios y atiende consultas y órdenes de Alexa |
 | 8 | `alexa/interaction-model-es-MX.json` | Define lo que Alexa puede entender |
 | 9 | `docs/GUIA_INTEGRACION.md` | Pasos concretos para unir y demostrar todo |
+| 10 | `docs/GUIA_AWS.md` | Procedimiento completo de IoT Core, certificados, DynamoDB, IAM, Lambda y entrega a Alexa |
 
 **Si una clase parece complicada:** empieza por `Tendedero.cpp`; los comentarios «Paso 1» a «Paso 5» explican qué hace su `loop()`. `ClienteShadow` contiene más código porque debe recuperar la conexión y no repetir órdenes antiguas.
 
@@ -81,11 +82,11 @@ Ejemplo simplificado del Shadow:
 
 ### Compañera AWS — IoT Core, Lambda y DynamoDB
 
-1. Crear el Thing físico y otro Thing de prueba en **AWS IoT Core** (región acordada provisional: `us-east-1`).
+1. En `us-east-2`, crear el Thing físico `tendedero-inteligente` y el Thing de prueba `tendedero-prueba2` en **AWS IoT Core**.
 2. Crear/asociar certificado y política IoT. Usar `aws/iot-certificate-policy.template.json` como plantilla, reemplazando los identificadores de ejemplo.
 3. Compartir **solo por un canal seguro** con Samuel el endpoint Data-ATS, Thing, CA, certificado y clave privada del dispositivo.
 4. Crear tabla DynamoDB `tendedero_vinculaciones` con `userId` (String) como clave de partición.
-5. Desplegar `lambda/lambda_deployment_p3.zip`, con handler `lambda_function.lambda_handler` y rol IAM apropiado. Configurar variables `IOT_ENDPOINT`, `DDB_BINDINGS_TABLE`, `THING_ALIASES_JSON` (opcional para nombres pronunciados).
+5. Desplegar `lambda/lambda_deployment_p3.zip`, con handler `lambda_function.lambda_handler` y rol IAM apropiado. Configurar `IOT_ENDPOINT` sin protocolo, `DDB_BINDINGS_TABLE=tendedero_vinculaciones` y `THING_ALIASES_JSON={"tendedero inteligente":"tendedero-inteligente","prueba dos":"tendedero-prueba2"}`.
 6. Probar **dos usuarios y dos Things distintos**, cambio de vínculo, Thing inexistente y desvinculación. El backend **no usa un Thing único para todos**.
 
 ### Compañera Alexa — Skill
@@ -118,7 +119,7 @@ Para compilar el firmware final con PlatformIO:
 pio run -d firmware -e tendedero_shadow
 ```
 
-Para probar solo el servo: `pio run -d firmware -e servo_test`; para solo el sensor: `pio run -d firmware -e sensor_test`. La versión revisada todavía requiere compilación real en la computadora de Samuel.
+Para probar solo el servo: `pio run -d firmware -e servo_test`; para solo el sensor: `pio run -d firmware -e sensor_test`. Los cuatro perfiles compilaron correctamente el 7/11/2026; todavía deben cargarse y validarse con el hardware real.
 
 ## 7. Antes de la entrega
 

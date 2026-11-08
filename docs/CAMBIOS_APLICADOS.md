@@ -25,7 +25,7 @@ La primera revisión redujo el peso del paquete. **La segunda se centró en que 
 
 - [x] Se ejecutó de nuevo la suite local: **12/12** pruebas satisfactorias.
 - [x] Se verificó el código Lambda dentro de su ZIP: coincide byte por byte con `lambda_function.py`. El paquete final incluye la guía y este informe.
-- [ ] Compilar el firmware en PlatformIO; no existe una compilación real del C++ revisado en este entorno.
+- [x] Los cuatro perfiles compilaron correctamente en PlatformIO el 7/11/2026; la compilación no sustituye la carga ni la prueba física.
 - [ ] Probar conexión AWS y movimiento por Alexa en el hardware del equipo; no se afirmó como realizado.
 
 ---
@@ -77,7 +77,7 @@ Conservar las clases y el contrato funcional RF1–RF9; retirar pruebas obsoleta
 
 1. **12/12 pruebas locales satisfactorias** en esta copia (original 11/11). Incluye rutas Lambda multiusuario simuladas y verificaciones estáticas de contratos y perfiles.
 2. JSON de Alexa y políticas AWS parseados correctamente por la suite; ZIP de Lambda coincide byte por byte con el fuente incluido.
-3. **No se recompiló el firmware ESP32 en esta ejecución:** PlatformIO no está instalado en el entorno de revisión. La nueva estructura y los ajustes de `ClienteShadow.cpp` requieren compilar en VS Code/PlatformIO antes de cargar el dispositivo.
+3. Los cuatro perfiles del firmware ESP32 se compilaron correctamente en PlatformIO el 7/11/2026. Aún requieren carga y validación física en el dispositivo.
 4. No hubo acceso a Thing, DynamoDB, Lambda o Skill reales. RF1–RF9 siguen pendientes de demostración extremo a extremo y mediciones RNF.
 5. La prueba física del servo se basa en el reporte de Samuel; aún faltan pulsos calibrados, tensión y evidencia integrada.
 

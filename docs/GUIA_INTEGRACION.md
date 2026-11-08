@@ -13,11 +13,7 @@
 
 ## 2. Compañera AWS: preparar la nube
 
-1. En AWS IoT Core, crear un Thing físico y otro de prueba. Comunicar **por canal privado** a Samuel endpoint Data-ATS, CA, certificado y clave; confirmar el nombre exacto del Thing. Referencia de región acordada: `us-east-1`.
-2. Asociar el certificado a una política IoT que permita los tópicos de `CONTRATO.md`. Sustituir `REGION`, `ACCOUNT_ID` y Thing en `aws/iot-certificate-policy.template.json`.
-3. Crear en DynamoDB la tabla `tendedero_vinculaciones`: clave de partición `userId` (String); atributos `thingName` y `fechaVinculacion`.
-4. Desplegar Lambda con handler `lambda_function.lambda_handler`. Configurar `IOT_ENDPOINT`, `DDB_BINDINGS_TABLE` y alias hablados opcionales `THING_ALIASES_JSON`. Aplicar permisos IAM de IoT Registry/Shadow y DynamoDB de `aws/lambda-iam-policy.template.json`, junto con permisos de CloudWatch Logs. No usar claves de acceso AWS incrustadas.
-5. Validar un caso sin vínculo, Thing inexistente, vincular, consultar, cambiar Thing, desvincular y aislamiento entre usuarios. Guardar capturas de DynamoDB, Shadow y CloudWatch sin secretos.
+Seguir la guía operativa completa [`GUIA_AWS.md`](GUIA_AWS.md). El contrato definitivo usa `us-east-2`, Thing físico `tendedero-inteligente`, Thing de prueba `tendedero-prueba2`, tabla `tendedero_vinculaciones` y Shadow clásico. Al finalizar, entregar a la responsable Alexa el ARN de Lambda y recibir de ella el Skill ID para limitar el trigger Alexa Skills Kit.
 
 **Atención:** el ZIP de despliegue incluido corresponde exactamente al código Lambda entregado. Si se cambia `lambda_function.py`, **reconstruir el ZIP** con las dependencias antes de desplegarlo.
 

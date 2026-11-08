@@ -67,6 +67,7 @@ py -m unittest discover -s tests -v
 Las pruebas locales utilizan el SDK incluido en `lambda/lambda_deployment_p3.zip` y servicios AWS simulados. **Que pasen no demuestra funcionamiento en AWS o Alexa reales.** El ZIP de Lambda coincide con el código fuente entregado; si se modifica Lambda, debe reconstruirse antes de desplegar.
 
 - Estado verificado y pendientes: [`docs/ESTADO.md`](docs/ESTADO.md).
+- Guía operativa de la responsable AWS: [`docs/GUIA_AWS.md`](docs/GUIA_AWS.md).
 - Guía de integración y demo: [`docs/GUIA_INTEGRACION.md`](docs/GUIA_INTEGRACION.md).
 - Matriz de requisitos y pruebas: [`docs/PRUEBAS.md`](docs/PRUEBAS.md).
 - Informe técnico: [`docs/INFORME.md`](docs/INFORME.md).

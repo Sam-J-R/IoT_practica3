@@ -1,7 +1,8 @@
 # Lambda Alexa — backend provisional (no desplegado)
 
-- Requiere `IOT_ENDPOINT`, `DDB_BINDINGS_TABLE=tendedero_vinculaciones`, región AWS (normalmente `AWS_REGION` de Lambda).
-- Opcional: `THING_ALIASES_JSON` para vinculación hablada, p. ej. `{"tendedero grupo seis":"tendedero-grupo6","prueba dos":"tendedero-prueba2"}`.
+- Región acordada: `us-east-2`; IoT Core, Lambda y DynamoDB deben permanecer en esa región.
+- Requiere `IOT_ENDPOINT` sin `https://` y `DDB_BINDINGS_TABLE=tendedero_vinculaciones`. Lambda proporciona `AWS_REGION` automáticamente.
+- Alias acordados: `THING_ALIASES_JSON={"tendedero inteligente":"tendedero-inteligente","prueba dos":"tendedero-prueba2"}`.
 - Handler: `lambda_function.lambda_handler`, Python 3.11 o runtime compatible.
 - IAM: `iot:DescribeThing` para validar nombre, `iot:GetThingShadow`/`iot:UpdateThingShadow` y `dynamodb:GetItem`/`PutItem`/`DeleteItem` sobre la tabla.
 - Añadir el trigger Alexa Skills Kit limitado al Skill ID real de la compañera Alexa.

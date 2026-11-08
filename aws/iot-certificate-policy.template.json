@@ -4,36 +4,36 @@
     {
       "Effect": "Allow",
       "Action": "iot:Connect",
-      "Resource": "arn:aws:iot:REGION:ACCOUNT_ID:client/tendedero-grupo6"
+      "Resource": "arn:aws:iot:us-east-2:ACCOUNT_ID:client/tendedero-inteligente"
     },
     {
       "Effect": "Allow",
       "Action": "iot:Publish",
       "Resource": [
-        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/tendedero-grupo6/shadow/update",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/tendedero-grupo6/shadow/get"
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topic/$aws/things/tendedero-inteligente/shadow/update",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topic/$aws/things/tendedero-inteligente/shadow/get"
       ]
     },
     {
       "Effect": "Allow",
       "Action": "iot:Subscribe",
       "Resource": [
-        "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/$aws/things/tendedero-grupo6/shadow/update/delta",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/$aws/things/tendedero-grupo6/shadow/get/accepted",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/$aws/things/tendedero-grupo6/shadow/get/rejected",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/$aws/things/tendedero-grupo6/shadow/update/accepted",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/$aws/things/tendedero-grupo6/shadow/update/rejected"
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topicfilter/$aws/things/tendedero-inteligente/shadow/update/delta",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topicfilter/$aws/things/tendedero-inteligente/shadow/get/accepted",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topicfilter/$aws/things/tendedero-inteligente/shadow/get/rejected",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topicfilter/$aws/things/tendedero-inteligente/shadow/update/accepted",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topicfilter/$aws/things/tendedero-inteligente/shadow/update/rejected"
       ]
     },
     {
       "Effect": "Allow",
       "Action": "iot:Receive",
       "Resource": [
-        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/tendedero-grupo6/shadow/update/delta",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/tendedero-grupo6/shadow/get/accepted",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/tendedero-grupo6/shadow/get/rejected",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/tendedero-grupo6/shadow/update/accepted",
-        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/tendedero-grupo6/shadow/update/rejected"
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topic/$aws/things/tendedero-inteligente/shadow/update/delta",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topic/$aws/things/tendedero-inteligente/shadow/get/accepted",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topic/$aws/things/tendedero-inteligente/shadow/get/rejected",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topic/$aws/things/tendedero-inteligente/shadow/update/accepted",
+        "arn:aws:iot:us-east-2:ACCOUNT_ID:topic/$aws/things/tendedero-inteligente/shadow/update/rejected"
       ]
     }
   ]

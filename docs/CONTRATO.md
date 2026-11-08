@@ -1,9 +1,11 @@
-# Contrato provisional de integración (congelar con el equipo antes de codificar)
+# Contrato de integración del equipo
 
 ## Identificación y arquitectura
 
-- Región AWS provisional: `us-east-1`.
-- Thing físico provisional: `tendedero-grupo6`.
+- Región AWS definitiva: `us-east-2` (Ohio). IoT Core, Lambda y DynamoDB deben crearse en esta misma región.
+- Thing físico: `tendedero-inteligente`.
+- Thing de prueba para demostrar la vinculación multiusuario: `tendedero-prueba2`.
+- Tabla DynamoDB: `tendedero_vinculaciones`.
 - Shadow: clásico (sin nombre). El ESP32 conoce SU nombre de Thing, la Skill no: Lambda lo resuelve desde DynamoDB para CADA `userId`.
 - El actuador **no** depende automáticamente del sensor. El usuario pregunta por el agua y ordena el movimiento por Alexa.
 
@@ -44,7 +46,7 @@ Después de conectar/reconectar: suscribir, publicar `/get`, leer desired vigent
 
 ## Vinculación RF7–RF9
 
-Tabla DynamoDB sugerida `tendedero_vinculaciones`:
+Tabla DynamoDB `tendedero_vinculaciones`:
 
 | Campo | Tipo | Uso |
 |---|---|---|
@@ -61,7 +63,7 @@ El backend valida `DescribeThing` antes de `PutItem`, busca `GetItem` en cada in
 | `VincularThingIntent` | `thing_name` | Validar existencia y guardar usuario→Thing |
 | `CambiarThingIntent` | `thing_name` | Reemplazar vinculación existente |
 | `DesvincularThingIntent` | — | Borrar vinculación |
-| `ConsultarAguaIntent` | — | Leer `reported.agua_detectada` / raw |
+| `ConsultarAguaIntent` | — | Responder con `reported.agua_detectada`; `sensor_raw` queda solo para calibración, evidencia y diagnóstico |
 | `AbrirCubiertaIntent` | — | Escribir `desired.cubierta = abierta` |
 | `CerrarCubiertaIntent` | — | Escribir `desired.cubierta = cerrada` |
 | `ConsultarCubiertaIntent` | — | Leer `reported.cubierta` |
