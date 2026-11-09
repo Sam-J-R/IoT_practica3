@@ -1,8 +1,10 @@
-"""Backend provisional P3: Alexa -> vinculacion DynamoDB -> IoT Thing Shadow.
+"""Backend P3: Alexa -> vinculacion DynamoDB -> IoT Thing Shadow.
 
-IMPORTANTE: no se ha desplegado ni probado con AWS real. Requiere importar
-dependencias ASK SDK y configurar IAM, región y endpoints. No fija un Thing
-para todos los usuarios: lo resuelve por userId en cada solicitud.
+La funcion fue desplegada y verificada en AWS mediante eventos directos de
+Lambda: vinculacion, consultas, comandos, cambio y desvinculacion. La prueba
+extremo a extremo con la Skill y el ESP32 fisico se documenta por separado.
+No fija un Thing para todos los usuarios: lo resuelve por userId en cada
+solicitud.
 """
 
 import json
@@ -21,7 +23,7 @@ from ask_sdk_core.skill_builder import SkillBuilder
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.INFO)
 
-REGION = os.getenv("AWS_REGION", "us-east-1")
+REGION = os.getenv("AWS_REGION", "us-east-2")
 IOT_ENDPOINT = os.getenv("IOT_ENDPOINT", "")
 BINDINGS_TABLE = os.getenv("DDB_BINDINGS_TABLE", "tendedero_vinculaciones")
 
@@ -102,8 +104,11 @@ def _slot(handler_input, slot_name):
 def _thing_from_spoken(raw):
     """Resuelve alias configurables; no fija un único Thing en el servicio.
 
-    THING_ALIASES_JSON ejemplo:
-    {"tendedero grupo seis":"tendedero-grupo6", "prueba dos":"tendedero-prueba2"}
+    THING_ALIASES_JSON ejemplo (incluye variantes observadas en Alexa):
+    {"tendedero inteligente":"tendedero-inteligente",
+     "prueba dos":"tendedero-prueba2", "prueba 2":"tendedero-prueba2",
+     "tendedero prueba dos":"tendedero-prueba2",
+     "tendedero prueba 2":"tendedero-prueba2"}
     """
     phrase = re.sub(r"\s+", " ", raw.strip()).casefold()
     aliases = json.loads(os.getenv("THING_ALIASES_JSON", "{}"))
