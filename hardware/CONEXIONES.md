@@ -1,4 +1,6 @@
-# Conexiones conocidas y pendientes
+# Referencia de conexiones del prototipo
+
+Esta referencia sirve para cableado y diagnóstico. El [informe](../docs/INFORME.md) incluye el circuito, su justificación y el alcance de las evidencias; las fotografías o videos no sustituyen mediciones de alimentación.
 
 Fotografías en `referencias/`: ESP32, sensor MH frontal y posterior.
 
@@ -16,9 +18,9 @@ El sensor mostrado no tiene `DO`/`AO` separados, únicamente `S`, que funciona c
 
 No se emplean LEDs como actuadores. Los perfiles incluidos permiten probar el sensor y el servo por separado. El sensor **no** debe mover automáticamente la cubierta: los cambios proceden de Alexa mediante el Shadow.
 
-## Servo (MG90S informado por Samuel)
+## Servo (unidad identificada en el registro como MG90S)
 
-- Señal PWM: `D26/GPIO26`; la prueba de movimiento local fue reportada como correcta el 7/11. Registrar los pulsos y la fuente usados para reproducirla.
+- Señal PWM: `D26/GPIO26`; los videos de integración muestran movimiento del brazo en banco. Registrar pulsos y fuente usados para reproducirlo.
 - Positivo de servo: fuente DC regulada con tensión/corriente indicada por SU modelo, nunca GPIO ni salida 3V3 del ESP32.
 - Negativo: GND fuente compartido con ESP32.
 - Medir pulsos `SERVO_ABIERTA_US` y `SERVO_CERRADA_US`, frecuencia y asentamiento. Ver el [ensayo de banco](ENSAYO_BANCO.md).

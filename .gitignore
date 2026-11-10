@@ -19,3 +19,6 @@ firmware/.pio/
 .vscode/
 
 calibracion_local.h
+
+# Capturas originales sin redactar; solo se versionan los paneles sanitizados.
+docs/evidencias/aws/originales_privados/

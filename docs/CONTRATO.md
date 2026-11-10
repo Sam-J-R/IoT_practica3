@@ -1,4 +1,6 @@
-# Contrato de integración del equipo
+# Contrato operativo de integración
+
+Referencia breve para mantener compatibles firmware, Lambda y Skill. La explicación completa, diagramas y resultados se encuentran en [INFORME.md](INFORME.md).
 
 ## Identificación y arquitectura
 
@@ -9,7 +11,7 @@
 - Shadow: clásico (sin nombre). El ESP32 conoce SU nombre de Thing, la Skill no: Lambda lo resuelve desde DynamoDB para CADA `userId`.
 - El actuador **no** depende automáticamente del sensor. El usuario pregunta por el agua y ordena el movimiento por Alexa.
 
-## Documento Shadow (propuesta mínima)
+## Documento Shadow
 
 ```json
 {
@@ -39,10 +41,13 @@ El umbral `agua_detectada` debe definirse a partir de pruebas, no inventarse. El
 |---|---|
 | Dispositivo subscribe | `$aws/things/THING_NAME/shadow/update/delta` |
 | Dispositivo subscribe | `$aws/things/THING_NAME/shadow/get/accepted` |
+| Dispositivo subscribe | `$aws/things/THING_NAME/shadow/get/rejected` |
+| Dispositivo subscribe | `$aws/things/THING_NAME/shadow/update/accepted` |
+| Dispositivo subscribe | `$aws/things/THING_NAME/shadow/update/rejected` |
 | Dispositivo publish reportado | `$aws/things/THING_NAME/shadow/update` |
 | Dispositivo publish recuperación | `$aws/things/THING_NAME/shadow/get` |
 
-Después de conectar/reconectar: suscribir, publicar `/get`, leer desired vigente, aplicar movimiento pendiente y reportar cambio. Usar mensajes JSON completos y manejar errores de conexión. `reported` por cambio y respaldo periódico (propuesta: cada 5 s, medir costo y justificar).
+Después de conectar/reconectar: suscribir, publicar `/get`, leer desired vigente, aplicar movimiento pendiente y reportar cambio. El firmware utiliza mensajes JSON completos, versión y `clientToken`. Reporta por cambio de clasificación/posición y como respaldo nominal 5 s desde la aceptación previa; el informe distingue configuración y frecuencia efectiva.
 
 ## Vinculación RF7–RF9
 
@@ -68,7 +73,7 @@ El backend valida `DescribeThing` antes de `PutItem`, busca `GetItem` en cada in
 | `CerrarCubiertaIntent` | — | Escribir `desired.cubierta = cerrada` |
 | `ConsultarCubiertaIntent` | — | Leer `reported.cubierta` |
 
-El identificador hablado del Thing requiere pruebas de reconocimiento. Los nombres de ejemplo con guiones pueden no reconocerse por voz; se pueden usar alias hablados **sin fijar un solo Thing en código**.
+El identificador se resuelve mediante alias configurables sin fijar un único Thing. La variante `prueba 2`, recibida en el slot, y `prueba dos` se asignan a `tendedero-prueba2`. Los ensayos documentados utilizaron texto por la limitación de micrófono del entorno.
 
 ## Seguridad y coherencia
 

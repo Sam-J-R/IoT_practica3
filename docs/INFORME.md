@@ -1,78 +1,827 @@
-# Informe técnico — Práctica 3 IoT AWS + Alexa
+# Informe técnico — Tendedero inteligente con Alexa y AWS IoT Core
 
-> **Actualización de Alexa e integración: 9/11/2026.** Se documentan configuración y operaciones del simulador mediante 17 capturas y [dos videos de integración](evidencias/integracion/README.md). Se observan actuación del servo de banco, valores del sensor en el Shadow y convergencia de una orden pendiente después del retorno a operación. Las observaciones funcionales se distinguen de las mediciones RNF. Véase [ALEXA.md](ALEXA.md).
+**Asignatura:** SIS-234 · Ingeniería de Sistemas · Grupo 6
+
+**Actividad:** Integración de un objeto inteligente con Alexa mediante MQTT y AWS IoT Core
+
+**Consolidación:** 9 de noviembre de 2026, hora de Bolivia
+
+**Entrega establecida:** 10 de noviembre de 2026, 17:45, mediante enlace GitHub en LMS-UCB
+
+## Resumen
+
+Se implementó un prototipo distribuido para consultar presencia de agua y solicitar apertura/cierre de una cubierta de tendedero. El objeto utiliza ESP32, sensor analógico MH y servomotor; AWS IoT Core conserva su estado en un Shadow clásico, Lambda atiende la Skill y DynamoDB mantiene la asociación usuario–Thing. La Skill resuelve el dispositivo de cada usuario, sin fijar un único Thing para todas las cuentas.
+
+Se conservan 17 capturas Alexa, cinco paneles AWS, un CSV de CloudWatch y dos videos de integración. Se observan consultas coherentes con el Shadow, actuación del brazo del servo y convergencia de una posición solicitada durante una desconexión. El montaje grabado es de banco: no demuestra una cubierta instalada bajo carga. La entrada fue textual porque el micrófono no estuvo operativo en el entorno de ensayo; no se atribuye validación del reconocimiento de voz.
+
+El equipo confirmó que no dispone aún de resultados numéricos RNF. Se documentan criterios y métodos sin convertir parámetros del código, duraciones de videos o tiempos internos de Lambda en mediciones de estabilidad, exactitud o respuesta física.
 
 ## 1. Caso de uso y requerimientos
 
-Sistema distribuido que detecta de forma binaria la presencia de agua o lluvia mediante un sensor resistivo MH y permite al usuario ordenar por voz abrir/cerrar una cubierta móvil protectora de un tendedero. No se intenta medir cantidad, volumen ni porcentaje de agua: `sensor_raw` conserva la lectura ADC para calibración y diagnóstico, mientras que Alexa consulta exclusivamente `agua_detectada`. El ESP32 publica el sensor, y Alexa consulta/controla a través de Lambda y AWS IoT Core Device Shadow. No se implementa cierre automático local porque la práctica pide comandos por voz.
+### 1.1 Problema, solución y alcance
 
-### RF
+La ropa expuesta en un tendedero puede mojarse cuando cambia la condición ambiental. La solución permite consultar a distancia la clasificación de un sensor de agua y solicitar la posición de una cubierta. El usuario decide abrir/cerrar; el sensor no activa automáticamente el servo, conforme a la lógica de control del [enunciado](../referencias/Práctica_3.md).
 
-Trazabilidad RF1–RF9 con `docs/PRUEBAS.md` y `referencias/Práctica_3.md`.
+El sensor MH responde eléctricamente a cambios de conductividad sobre su superficie. El ESP32 digitaliza y clasifica su salida; no se mide intensidad de precipitación, cantidad de agua ni porcentaje de lluvia. El servomotor representa dos posiciones mediante pulsos calibrados. No se utiliza LED como actuador, sensor ultrasónico ni conmutación de 220 V AC. El diseño requiere actuación de baja tensión DC dentro del límite de 12 V del enunciado.
 
-### RNF
+El alcance demostrado es comunicación completa, lectura y actuación del servo de banco. Trasladarlo a una cubierta real requiere verificar recorrido, fuerza y alimentación bajo carga. Los indicadores luminosos integrados en los módulos no constituyen el actuador del caso de uso.
 
-Declarar explícitamente objetivos, unidad, método y resultados medidos. No copiar las referencias del docente como resultados reales.
+### 1.2 Requerimientos funcionales y trazabilidad
+
+| ID | Requerimiento aplicado | Implementación | Validación disponible |
+|---|---|---|---|
+| RF1 | Capturar señal del sensor. | `SensorAgua`, GPIO34 y muestreo del programa principal. | INT-01 muestra `sensor_raw = 0` y `2453`; diagnóstico ADC histórico en §4.2. |
+| RF2 | Reportar sensor/actuador en `reported`. | `ClienteShadow::reportar`, por cambio y respaldo. | INT-01 muestra actualizaciones; la periodicidad efectiva no tiene serie temporal medida. |
+| RF3 | Aplicar cambios deseados y reportar posición. | GET/delta, `ServoCubierta` y actualización posterior. | Giro del brazo y convergencia en INT-01/INT-02. |
+| RF4 | Consultar sensor en español en el Thing del usuario. | `ConsultarAguaIntent` y su handler. | AX-14 e INT-01, mediante texto. |
+| RF5 | Abrir/cerrar modificando `desired` del Thing vinculado. | `ComandoCubiertaHandler` y `ShadowService`. | AX-15 e INT-01; actuación de banco. |
+| RF6 | Consultar estado reportado del actuador. | `ConsultarCubiertaHandler`. | AX-14 e INT-01, mediante texto. |
+| RF7 | Vincular y conservar asociación entre sesiones. | Alias, `DescribeThing`, `PutItem` y `GetItem`. | AX-10/AX-11 y tabla AWS-02. |
+| RF8 | Resolver por `context.System.user.userId` y guiar sin vínculo. | `_user_id`, `_bound_thing` y DynamoDB. | AX-09; prueba dinámica con dos usuarios y registro backend AWS. |
+| RF9 | Validar existencia, cambiar y eliminar vínculo. | `VincularHandler` y `DesvincularHandler`. | AX-12: rechazo; AX-13: eliminación; AX-16: cambio válido. |
+
+RF4–RF6 incluyen voz en el enunciado. Se verificó su comportamiento mediante entrada textual en Alexa; la limitación de micrófono se declara como condición del entorno, sin afirmar reconocimiento de voz probado.
+
+### 1.3 Requerimientos no funcionales medibles
+
+Los objetivos se separan de resultados. Los criterios de error e intervalo máximo propuestos a continuación son criterios de evaluación, no calibraciones ni valores obtenidos.
+
+| ID | Atributo y objetivo de trabajo | Método | Alcance actual |
+|---|---|---|---|
+| RNF1 | Estabilidad: 15 min continuos, 0 reinicios y 0 bloqueos; referencia docente ≥10 min. | Log serie y operaciones durante el período, con inicio/fin. | Los videos breves no acreditan 15 min; no existe registro numérico del ensayo. |
+| RNF2 | Clasificación: criterio propuesto ≤5 % de errores en ≥20 observaciones independientes, repartidas entre seco/agua. | Referencia física, ADC, clasificación y matriz de confusión. | Dos estados observados no constituyen un lote de exactitud. |
+| RNF3 | Respuesta: referencia ≤3 s hasta posición física final. | ≥10 órdenes alternadas; tiempos en segundos. En este entorno el inicio se identifica como envío textual. | No hay serie de latencias físicas ni máximo medido. |
+| RNF4 | Respaldo nominal de 5 s desde aceptación previa; criterio propuesto de ensayo ≤6 s en red estable. Objetivo por evento ≤1 s sin reporte pendiente. | Timestamps consecutivos de `update/accepted` del ESP32, intervalos y máximos. | 500 ms/5 s son parámetros, no frecuencia efectiva medida. Un reporte pendiente puede retrasar eventos. |
+| RNF5 | Recuperar conexión y aplicar el `desired` vigente sin repetir orden. | Ensayar por separado reinicio y pérdida Wi-Fi con equipo encendido; registrar convergencia y tiempos. | INT-02 respalda cualitativamente reinicio; no caída aislada de Wi-Fi ni máximo temporal. |
+| RNF6 | Modularidad: separar captura, actuación, comunicación y persistencia. | Inspección de clases, interfaces y perfiles. | Implementada en ESP32 y backend Python. |
+| RNF7 | Seguridad: excluir secretos y limitar capacidades. | Plantillas, `.gitignore`, paquete y permisos AWS. | Documentada en §3.5; Lambda conserva comodín de recursos IoT justificado. |
+
+El objetivo de evento ≤1 s no es garantía bajo desconexiones o respuestas pendientes. El criterio inicial de 95 % de aciertos no extrapola fiabilidad a cualquier lluvia; debe interpretarse con tamaño muestral y condiciones de referencia.
 
 ## 2. Análisis y diseño
 
-- Diagrama arquitectura: `docs/DIAGRAMAS.md`.
-- [Circuito previsto](DIAGRAMAS.md#circuito-previsto). Confirmar la unidad MG90S, nivel de señal, fuente y recorrido con el montaje real.
-- [Clases del ESP32 y de Lambda](DIAGRAMAS.md#clases-del-esp32).
-- Secuencias mínimas: vinculación, consulta de sensor, comando actuador (ver `docs/DIAGRAMAS.md`).
-- Device Shadow: `docs/CONTRATO.md`; documentar atributos, tipos, valores y secciones desired/reported/delta.
-- Vinculación: en `us-east-2`, clave `userId`, tabla `tendedero_vinculaciones`, Thing físico `tendedero-inteligente`, Thing de prueba `tendedero-prueba2`, `DescribeThing`, cambiar/eliminar.
-- Alexa: `alexa/interaction-model-es-MX.json` y las frases efectivamente probadas.
+### 2.1 Arquitectura del sistema
+
+```mermaid
+flowchart LR
+    U[Usuario en simulador es-MX] -->|frase textual| A[Skill Custom]
+    A -->|intent, slots, userId| L[Lambda Python]
+    L <-->|GetItem, PutItem, DeleteItem| D[(DynamoDB: vinculaciones)]
+    L -->|DescribeThing| R[Registro IoT]
+    L <-->|GetThingShadow y UpdateThingShadow| S[(Shadow clasico)]
+    E[ESP32] -->|MQTT TLS: reported y get| S
+    S -->|delta y respuestas| E
+    MH[Sensor MH] -->|GPIO34 analogico| E
+    E -->|GPIO26 PWM| V[Servomotor]
+```
+
+Alexa no se conecta directamente al ESP32. El dispositivo usa MQTT sobre TLS; Lambda usa APIs AWS mediante `boto3`. El Shadow desacopla disponibilidad y solicitud: conserva una posición deseada durante la desconexión. Representa estado vigente, no una cola histórica de todas las órdenes. Se usa Shadow clásico sin nombre por el contrato pequeño y la única función de cubierta.
+
+### 2.2 Circuito y componentes
+
+```mermaid
+flowchart LR
+    USB[USB: alimentacion y datos] --> MCU[ESP32]
+    MCU -->|3V3| MP[MH: positivo]
+    MS[MH: salida S] -->|senal analogica| ADC[GPIO34 - ADC1_CH6]
+    ADC --- MCU
+    MCU -->|GPIO26 PWM| VS[Servo: senal]
+    DC[Fuente DC regulada adecuada] -->|positivo| VP[Servo: alimentacion]
+    GND[GND comun] --- MCU
+    GND --- MN[MH: negativo]
+    GND --- VN[Servo: negativo]
+    GND --- FN[Fuente: negativo]
+```
+
+| Conexión | Función y justificación |
+|---|---|
+| MH `S` → GPIO34 | ADC1 evita utilizar ADC2 para esta lectura con Wi-Fi en el ESP32 clásico. |
+| MH `+` → 3V3 | Alimentación prevista para señal compatible con la entrada del ESP32. |
+| MH `−` → GND | Referencia de lectura. |
+| Servo señal → GPIO26 | Salida PWM separada de la adquisición. |
+| Servo positivo → fuente DC adecuada | La corriente del motor no se suministra por GPIO ni 3V3. |
+| Negativos fuente/servo/ESP32 unidos | Referencia común para interpretar PWM. |
+
+El diagrama corresponde al conexionado contractual del fuente. Los videos muestran cableado de banco, sensor y brazo del servo; no permiten reconstruir con certeza cada conductor ni medir la fuente. El registro identifica el servo como MG90S, pero no aporta tensión/corriente finales, pulsos, frecuencia o asentamiento del montaje. No se sustituyen por valores típicos de catálogo. Estos parámetros no son secretos y su ausencia limita reproducir exactamente el ensayo.
+
+Se configura ADC de 12 bits y atenuación `ADC_11db`: 0–4095 son cuentas, no voltaje calibrado ni porcentaje de agua. El circuito no conmuta red eléctrica y el diseño debe respetar actuación ≤12 V DC. El procedimiento de montaje seguro se conserva en [CONEXIONES.md](../hardware/CONEXIONES.md).
+
+### 2.3 Clases del objeto inteligente
+
+```mermaid
+classDiagram
+    class SensorAgua {
+        +iniciar() void
+        +leerRaw() int
+        +detectar(raw, estado, umbralSeco, umbralAgua) bool
+    }
+    class ServoCubierta {
+        -abiertaUs_ int
+        -cerradaUs_ int
+        -hz_ int
+        -asentamientoMs_ unsignedLong
+        -destino_ Posicion
+        +iniciar() bool
+        +solicitar(posicion, ahora) void
+        +estimada(ahora) Posicion
+    }
+    class ClienteShadow {
+        -conectado_ bool
+        -sincronizado_ bool
+        -version_ uint32
+        -reportePendiente_ uint32
+        +iniciar(endpoint, thing, ca, certificado, clave) bool
+        +atender(ahora, servo) void
+        +reportar(ahora, raw, agua, cubierta) void
+        +reportarSensor(ahora, raw) void
+        -procesar(evento, ahora, servo) void
+    }
+    class Posicion {
+        <<enumeration>>
+        Desconocida
+        Abierta
+        Cerrada
+    }
+    ServoCubierta --> Posicion
+    ClienteShadow --> ServoCubierta : solicita posicion
+    ClienteShadow --> Posicion
+```
+
+`Tendedero.cpp` es el módulo coordinador con `setup()`/`loop()`, no una clase C++ llamada Tendedero. Instancia las tres clases y ordena muestreo, red, eventos, estimación y reporte. Se puede ampliar con otra clase de sensor y nuevos atributos sin trasladar persistencia ni conversación al MCU.
+
+### 2.4 Clases de Lambda
+
+```mermaid
+classDiagram
+    class AbstractRequestHandler {
+        <<abstract>>
+        +can_handle(handler_input)
+        +handle(handler_input)
+    }
+    class BindingRepository {
+        +find(user_id)
+        +bind(user_id, thing_name)
+        +unbind(user_id)
+    }
+    class ShadowService {
+        +assert_thing_exists(thing_name)
+        +read(thing_name)
+        +request_cover(thing_name, position)
+    }
+    class LaunchHandler
+    class VincularHandler
+    class DesvincularHandler
+    class ComandoCubiertaHandler
+    class ConsultarAguaHandler
+    class ConsultarCubiertaHandler
+    class HelpHandler
+    class StopHandler
+    class FallbackHandler
+    AbstractRequestHandler <|-- LaunchHandler
+    AbstractRequestHandler <|-- VincularHandler
+    AbstractRequestHandler <|-- DesvincularHandler
+    AbstractRequestHandler <|-- ComandoCubiertaHandler
+    AbstractRequestHandler <|-- ConsultarAguaHandler
+    AbstractRequestHandler <|-- ConsultarCubiertaHandler
+    AbstractRequestHandler <|-- HelpHandler
+    AbstractRequestHandler <|-- StopHandler
+    AbstractRequestHandler <|-- FallbackHandler
+    VincularHandler ..> BindingRepository
+    VincularHandler ..> ShadowService
+    DesvincularHandler ..> BindingRepository
+    ComandoCubiertaHandler ..> BindingRepository
+    ComandoCubiertaHandler ..> ShadowService
+    ConsultarAguaHandler ..> BindingRepository
+    ConsultarAguaHandler ..> ShadowService
+    ConsultarCubiertaHandler ..> BindingRepository
+    ConsultarCubiertaHandler ..> ShadowService
+```
+
+`ErrorHandler` implementa `AbstractExceptionHandler`; `SkillBuilder` registra los handlers y expone `lambda_handler`. Las funciones auxiliares resuelven usuario, slot, alias y respuesta sin duplicar esa lógica en cada intent.
+
+### 2.5 Secuencia de vinculación
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant A as Skill
+    participant L as Lambda
+    participant I as Registro IoT
+    participant D as DynamoDB
+    U->>A: vincula mi objeto con prueba dos
+    A->>L: VincularThingIntent, thing_name, userId
+    L->>L: Normalizar alias a tendedero-prueba2
+    L->>I: DescribeThing(thingName)
+    alt Thing existente
+        I-->>L: Descripcion
+        L->>D: PutItem(userId, thingName, fecha)
+        D-->>L: Escritura completada
+        L-->>A: Confirmacion
+    else Thing inexistente
+        I-->>L: ResourceNotFoundException
+        L-->>A: Identificador no registrado
+        Note over L,D: No se reemplaza el vinculo anterior
+    end
+    A-->>U: Respuesta en espanol
+```
+
+### 2.6 Secuencia de consulta del sensor
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant E as ESP32
+    participant S as Shadow
+    participant A as Skill
+    participant L as Lambda
+    participant D as DynamoDB
+    E->>E: Leer ADC y clasificar con histeresis
+    E->>S: update reported(sensor_raw, agua_detectada, cubierta)
+    S-->>E: update/accepted con clientToken
+    U->>A: hay agua en el sensor
+    A->>L: ConsultarAguaIntent y userId
+    L->>D: GetItem(userId), ConsistentRead
+    D-->>L: thingName o sin vinculo
+    alt Vinculado
+        L->>S: GetThingShadow(thingName)
+        S-->>L: Ultimo reported
+        L->>L: Comprobar booleano
+        L-->>A: Clasificacion o dato no disponible
+    else Sin vinculo
+        L-->>A: Solicitar vinculacion
+    end
+    A-->>U: Respuesta en espanol
+```
+
+La consulta no fuerza una lectura física nueva: usa el último reporte. El backend no evalúa su antigüedad.
+
+### 2.7 Secuencia de comando al actuador
+
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant A as Skill
+    participant L as Lambda
+    participant D as DynamoDB
+    participant S as Shadow
+    participant E as ESP32
+    participant V as Servo
+    U->>A: cierra la cubierta
+    A->>L: CerrarCubiertaIntent y userId
+    L->>D: GetItem(userId)
+    D-->>L: thingName
+    L->>S: UpdateThingShadow: desired.cubierta = cerrada
+    S-->>L: Actualizacion aceptada
+    L-->>A: He solicitado que quede cerrada
+    A-->>U: Respuesta de solicitud
+    S-->>E: update/delta si hay diferencia
+    E->>E: Validar version y encolar evento
+    E->>V: Solicitar pulso PWM desde loop
+    E->>E: Esperar asentamiento sin bloquear loop
+    E->>S: reported.cubierta = cerrada
+    S-->>E: update/accepted con clientToken
+```
+
+Lambda no espera el recorrido del servo. La aceptación de AWS no es confirmación mecánica: solicitud, estimación del firmware y movimiento observado son resultados distintos.
+
+### 2.8 Recuperación del estado deseado
+
+```mermaid
+sequenceDiagram
+    participant A as Alexa y Lambda
+    participant S as Shadow
+    participant E as ESP32
+    participant V as Servo
+    Note over E: Desconectado
+    A->>S: desired.cubierta = abierta
+    Note over S: reported sigue cerrada
+    Note over E: Nuevo arranque y conexion
+    E->>S: Suscribir respuestas y delta
+    E->>S: shadow/get
+    S-->>E: get/accepted con desired vigente
+    E->>V: Solicitar apertura
+    E->>S: reported.cubierta = abierta
+    S-->>E: update/accepted
+    Note over S: Convergencia de cubierta
+```
+
+INT-02 respalda el procedimiento de reinicio comunicado por el equipo. Configurar reconexión Wi-Fi/MQTT no sustituye un ensayo de pérdida de red manteniendo la alimentación.
+
+### 2.9 Especificación del Shadow
+
+```json
+{
+  "state": {
+    "desired": {"cubierta": "cerrada"},
+    "reported": {
+      "cubierta": "abierta",
+      "agua_detectada": false,
+      "sensor_raw": 0
+    }
+  }
+}
+```
+
+| Atributo | Tipo y valores | Escritor | Uso |
+|---|---|---|---|
+| `state.desired.cubierta` | String: `abierta` o `cerrada`. | Lambda. | Solicitud remota. |
+| `state.reported.cubierta` | String: `abierta` o `cerrada`; ausente si desconocida. | ESP32. | Posición estimada tras asentamiento. |
+| `state.reported.agua_detectada` | Booleano; ausente si desconocido. | ESP32. | Clasificación consultada. |
+| `state.reported.sensor_raw` | Entero 0–4095 en resolución configurada. | ESP32. | Diagnóstico; no porcentaje físico. |
+| `state.delta.cubierta` | String si hay diferencia deseada. | AWS. | Notificar cambio. |
+| `version` | Número de versión. | AWS. | Descartar deltas antiguos. |
+| `clientToken` | String `sesion-secuencia` en reportes. | ESP32; AWS lo devuelve. | Correlacionar respuesta. |
+
+Una actualización con `null` elimina el atributo; no equivale a seco/cerrado. Al coincidir `reported` y `desired`, desaparece la diferencia, sin borrar automáticamente el deseado. Los videos incluyen `welcome: aws-iot`, ajeno al contrato funcional; las actualizaciones parciales lo conservan.
+
+| Tópico, con `T = nombre del Thing` | Uso del ESP32 |
+|---|---|
+| `$aws/things/T/shadow/get` | Publicar recuperación al conectar. |
+| `$aws/things/T/shadow/get/accepted` | Recibir documento vigente. |
+| `$aws/things/T/shadow/get/rejected` | Detectar ausencia o error. |
+| `$aws/things/T/shadow/update` | Publicar `reported`. |
+| `$aws/things/T/shadow/update/delta` | Recibir diferencias deseadas. |
+| `$aws/things/T/shadow/update/accepted` | Confirmar reporte mediante token. |
+| `$aws/things/T/shadow/update/rejected` | Registrar rechazo y reintentar. |
+
+### 2.10 Mecanismo de vinculación
+
+Tabla `tendedero_vinculaciones` en `us-east-2`: clave de partición `userId` String, sin sort key ni índices secundarios; capacidad `PAY_PER_REQUEST` en la definición entregada.
+
+| Campo | Tipo | Función |
+|---|---|---|
+| `userId` | String, clave. | Identidad recibida por la Skill, no correo ni identidad biométrica. |
+| `thingName` | String. | Thing validado en IoT Core. |
+| `fechaVinculacion` | String ISO-8601 UTC. | Creación o reemplazo de asociación. |
+
+`PutItem` crea/reemplaza el ítem, `GetItem` resuelve en cada consulta/control con `ConsistentRead=True` y `DeleteItem` elimina. Cerrar la conversación no ejecuta eliminación. Dos usuarios pueden tener Things distintos, pero no se impone exclusividad de un Thing por propietario.
+
+Se valida usuario, formato, alias y existencia antes de escribir. No se demuestra posesión física: conocer un nombre válido puede permitir vincularlo. OAuth Account Linking queda fuera del alcance del enunciado; un código temporal sería una mejora.
+
+### 2.11 Modelo de interacción
+
+Invocación: **tendedero inteligente**. Locale: **es-MX**. Modelo: **Custom**. Slot de vincular/cambiar: **`thing_name`, `AMAZON.SearchQuery`**. Configuración: [interaction-model-es-MX.json](../alexa/interaction-model-es-MX.json).
+
+| Intent | Frases definidas en el JSON |
+|---|---|
+| `VincularThingIntent` | `vincula mi objeto con {thing_name}`; `vincula el tendedero {thing_name}`; `asocia mi objeto a {thing_name}`. |
+| `CambiarThingIntent` | `cambia mi objeto a {thing_name}`; `cambia el tendedero por {thing_name}`. |
+| `DesvincularThingIntent` | `desvincula mi objeto`; `elimina la vinculación`; `desconecta mi tendedero`. |
+| `ConsultarAguaIntent` | `hay agua en el sensor`; `está lloviendo`; `detectas lluvia`; `cómo está el sensor de agua`. |
+| `AbrirCubiertaIntent` | `abre la cubierta`; `descubre el tendedero`; `abre el techo del tendedero`. |
+| `CerrarCubiertaIntent` | `cierra la cubierta`; `protege el tendedero`; `cierra el techo del tendedero`. |
+| `ConsultarCubiertaIntent` | `cómo está la cubierta`; `está cerrado el tendedero`; `consulta el estado de la cubierta`. |
+
+El archivo agrega `AMAZON.CancelIntent`, `AMAZON.StopIntent`, `AMAZON.HelpIntent` y `AMAZON.FallbackIntent`. `LaunchRequest` abre sin vincular ni mover. El backend no confía solo en el slot: valida existencia.
+
+La consola capturada muestra doce entradas, incluida `AMAZON.NavigateHomeIntent`; el JSON versionado tiene siete funcionales y cuatro integrados. La lista de consola también indica un slot en desvinculación, mientras el JSON y su handler no lo requieren. Se documenta esa diferencia visible: las pruebas verifican los siete flujos funcionales, sin afirmar identidad byte por byte entre consola y archivo ni modificar el modelo para inferir una exportación distinta.
 
 ## 3. Desarrollo e implementación
 
-- [Diagnóstico de sensor](../firmware/src/SensorTest.cpp) y [orquestador Shadow](../firmware/src/Tendedero.cpp) son perfiles separados. [SensorAgua](../firmware/include/SensorAgua.h) muestrea GPIO34 cada 500 ms. La histéresis admite respuesta ascendente o descendente. Las capturas Alexa muestran clasificación seca y con agua; los umbrales locales y el error físico son datos del ensayo del sensor. La muestra cruda se reporta en cuentas ADC.
-- [ServoCubierta](../firmware/include/ServoCubierta.h) genera PWM en D26 solo después de una orden válida, con pulsos, frecuencia y asentamiento del montaje calibrado. Durante un movimiento o antes de la primera orden, la posición local es desconocida. Al cumplirse el asentamiento se reporta una estimación; los videos muestran el cambio de orientación del brazo del servo en el ensayo de banco. No existe realimentación independiente de posición ni se atribuye a la grabación una prueba de carga de una cubierta instalada.
-- [ClienteShadow](../firmware/src/ClienteShadow.cpp) prepara MQTT en TLS mutuo sobre 8883, después de sincronizar reloj por SNTP. Se suscribe a `delta`, respuestas de `get` y respuestas de `update`. En cada conexión solicita el Shadow clásico y aplica la orden vigente. Usa la versión para descartar deltas antiguos y `clientToken` para correlacionar la aceptación de cada reporte. Registra fallos inmediatos de suscripción/publicación y reintenta recuperación. Publica al cambiar la clasificación o posición y periódicamente. Un campo desconocido se retira con `null`. El equipo confirmó actuación integrada y recuperación de una orden tras reconectar el ESP32, sin repetir la solicitud.
-- [Lambda](../lambda/lambda_function.py) usa `context.System.user.userId`, con lectura consistente de la tabla. Valida el Thing con `DescribeThing` antes de escribir o reemplazar una vinculación. Usa `reported` para consultas y escribe `desired.cubierta` para órdenes. El mapa de alias configurado permite vincular nombres hablados de varios Things.
-- Las [plantillas de AWS](../aws) limitan el certificado a los tópicos del Thing físico y el rol de Lambda a tres operaciones IoT y tres operaciones sobre la tabla. En la cuenta de la práctica, el analizador IAM mostró acceso IoT nulo al restringir por ARN, por lo que se usó `Resource: "*"` solo para `DescribeThing`, `GetThingShadow` y `UpdateThingShadow`; en producción se usarían los ARN exactos de los dos Things. El [modelo Alexa es-MX](../alexa/interaction-model-es-MX.json) usa `AMAZON.SearchQuery` para captar el alias; documentar las frases reconocidas en la Skill real. Los PEM y datos Wi-Fi van en el archivo local ignorado por Git.
-- En `us-east-2` se desplegaron `tendedero-inteligente`, `tendedero-prueba2`, la tabla `tendedero_vinculaciones`, el rol de ejecución y la función `tendedero-inteligente-alexa`. El conjunto AWS publicado documenta el trigger restringido al Skill ID. La captura del endpoint y las respuestas del simulador acreditan la conexión de la Skill.
-- [Configuración y validación de Alexa](ALEXA.md): Skill Custom es-MX, backend propio, alias para variantes `dos`/`2` y operaciones de vinculación, persistencia, consulta, control, rechazo de inexistente, cambio válido y eliminación. Las [17 capturas](evidencias/alexa/README.md) se conservan con sus nombres originales. La entrada fue textual porque el micrófono no estuvo operativo en el entorno utilizado.
+### 3.1 Organización y dependencias
+
+| Ruta | Responsabilidad |
+|---|---|
+| [platformio.ini](../firmware/platformio.ini) | `espressif32 @ 7.0.1`, placa `esp32doit-devkit-v1`, Arduino y serie 115200. |
+| [Tendedero.cpp](../firmware/src/Tendedero.cpp) | Coordinar sensor, red, eventos y reportes. |
+| [SensorAgua.h](../firmware/include/SensorAgua.h) | ADC e histéresis. |
+| [ServoCubierta.h](../firmware/include/ServoCubierta.h) | PWM y posición estimada. |
+| [ClienteShadow.cpp](../firmware/src/ClienteShadow.cpp) y [cabecera](../firmware/include/ClienteShadow.h) | MQTT TLS, cola, GET/delta y aceptación. |
+| [lambda_function.py](../lambda/lambda_function.py) | Persistencia, servicio Shadow y handlers ASK. |
+| [requirements.txt](../lambda/requirements.txt) | Declara `ask-sdk-core`, `ask-sdk-model` y `boto3`. |
+| [tests](../tests) | Verificaciones estáticas, importación e integración simulada. |
+| [aws](../aws) | Políticas y tabla sanitizadas con `ACCOUNT_ID`. |
+| [evidencias](evidencias) | Capturas, CSV y videos. |
+
+| Perfil | Fuente y propósito |
+|---|---|
+| `sensor_test` | `SensorTest.cpp`: ADC sin red ni servo. |
+| `servo_test` | `ServoTest.cpp`: comandos serie `A`/`C` con calibración válida. |
+| `sensor_shadow_test` | `SensorShadowTest.cpp` y cliente Shadow: reporte ADC sin actuación. |
+| `tendedero_shadow` | `Tendedero.cpp` y cliente Shadow: integración final, perfil predeterminado. |
+
+`build_src_filter` evita múltiples `setup()`/`loop()` en una compilación. Los perfiles de red usan C++17. El firmware emplea API MQTT de ESP-IDF, FreeRTOS y cJSON disponibles en la plataforma; cambiar versiones exige verificar compatibilidad PWM/MQTT.
+
+### 3.2 Captura, clasificación y habilitación
+
+`SensorAgua::detectar` conserva el estado anterior entre los dos umbrales. Si la lectura aumenta al mojarse, entra en agua al alcanzar un umbral y vuelve a seco al cruzar el inferior. Si disminuye, invierte signos para reutilizar la comparación. La histéresis reduce oscilaciones, pero no sustituye calibración.
+
+`agua = -1` significa desconocido. `muestrear` calcula la clasificación suponiendo seco y suponiendo agua; si ambas coinciden puede resolver el estado inicial. En la banda ambigua conserva desconocido hasta una lectura inequívoca.
+
+Fragmento de habilitación en [Tendedero.cpp](../firmware/src/Tendedero.cpp):
+
+```cpp
+integracion = calibracionValida() && credencialesConfiguradas() && servo.iniciar();
+```
+
+La evaluación cortocircuitada evita iniciar servo si falla una condición previa. Sin integración sigue leyendo ADC, sin iniciar Wi-Fi/MQTT. Comprueba rangos ADC, umbrales distintos, valores positivos y duración de pulso compatible con el período; no certifica por sí sola seguridad mecánica.
+
+`__has_include` selecciona `calibracion_local.h` y `secrets.h`, o plantillas vacías si no existen. Las plantillas no contienen una calibración real. No se inspeccionan ni publican claves locales para redactar el informe.
+
+### 3.3 PWM y programa principal
+
+El servo utiliza un canal PWM de 16 bits. `solicitar` descarta posición desconocida y destino repetido, asocia el pin en la primera orden y calcula:
+
+```text
+duty = pulso_us × frecuencia_Hz × 2^16 / 1 000 000
+```
+
+Los productos intermedios usan 64 bits. Los extremos son microsegundos, no grados. `estimada` devuelve desconocida hasta transcurrir asentamiento y después el destino; no detecta atasco.
+
+El bucle muestrea cada 500 ms mediante diferencias de `millis()`, comprueba Wi-Fi/reloj, inicia MQTT, procesa eventos, estima posición y reporta. No bloquea durante todo el recorrido del servo. Configura SNTP con `pool.ntp.org` y espera un reloj superior al mínimo de referencia antes de TLS. El intento inicial MQTT tiene control de 10 s; el cliente configura reconexión a 5 s.
+
+### 3.4 MQTT y confirmación del Shadow
+
+El cliente utiliza `mqtts://endpoint:8883`, client ID igual al Thing y CA/certificado/clave del dispositivo. La cola FreeRTOS de 24 eventos transfiere trabajo del callback a `atender`; la actuación ocurre desde el bucle principal.
+
+`decodificar` compara tópicos completos, descarta mensajes incompletos y procesa JSON con cJSON; `unique_ptr` libera el documento al salir del ámbito. El búfer de entrada es 16384 bytes; no se ensamblan fragmentos mayores.
+
+Al conectar suscribe tópicos y solicita GET. Un delta recibido durante la espera se conserva por mayor versión y se compara con el documento recuperado. Una vez sincronizado, aplica versiones mayores. GET rechazado con 404 significa Shadow ausente; otros errores fuerzan recuperación.
+
+Se reportan cambios de clasificación/posición y respaldo de 5 s desde aceptación. Cada variación ADC no genera reporte inmediato. Hay espera de reintento de 5 s cuando existe un reporte pendiente. Las publicaciones usan QoS 0 y las suscripciones solicitan QoS 1; la aceptación de aplicación se correlaciona por `clientToken`. Encolar no equivale a aceptación del servicio.
+
+Un rechazo conserva la necesidad de reportar. Si se llena la cola se registra y se intenta recuperar GET. Estos controles no garantizan entrega absoluta: la recuperación de suscripciones está ligada al estado de sincronización y deben ensayarse fallos de red y mensajes grandes.
+
+### 3.5 Configuración AWS y seguridad
+
+| Recurso | Configuración documentada |
+|---|---|
+| Región | `us-east-2` (Ohio). |
+| Thing físico y de prueba | `tendedero-inteligente` y `tendedero-prueba2`. |
+| Certificado físico | Activo, asociado al Thing y a `tendedero-inteligente-device-policy`. |
+| Endpoint de datos | ATS; hostname sin protocolo ni puerto en las variables. |
+| Lambda | `tendedero-inteligente-alexa`, Python 3.11, `x86_64`, handler `lambda_function.lambda_handler`. |
+| Rol | `tendedero-inteligente-lambda-role`, logging y política de aplicación. |
+| Memoria | El CSV registra 128 MB configurados. |
+| DynamoDB | `tendedero_vinculaciones`, clave String `userId`; definición bajo demanda. |
+
+AWS-01 acredita Things/certificado; AWS-02 tabla/vínculos y AWS-03 función/rol (§8.2). El Thing de prueba permite estados simulados sin requerir otro ESP32 físico.
+
+| Relación | Identidad y autorización |
+|---|---|
+| ESP32 → IoT Core | TLS mutuo X.509 y política IoT. |
+| Lambda → IoT/DynamoDB | Rol IAM; no access keys en código. |
+| Alexa → Lambda | Permiso de invocación Alexa Skills Kit restringido al Skill ID, según registro AWS. |
+
+La CA valida al servidor; certificado/clave acreditan al dispositivo. Certificado→política y certificado→Thing son asociaciones distintas. Skill ID identifica aplicación autorizada; `userId` identifica usuario para DynamoDB.
+
+Política IoT entregada en [JSON](../aws/iot-certificate-policy.template.json):
+
+| Acción | Recurso permitido | Motivo |
+|---|---|---|
+| `iot:Connect` | `client/tendedero-inteligente`. | Client ID del firmware. |
+| `iot:Publish` | `topic/.../shadow/get` y `topic/.../shadow/update`. | Recuperar y reportar. |
+| `iot:Subscribe` | `topicfilter/.../update/delta` y respuestas GET/UPDATE. | Autorizar suscripción. |
+| `iot:Receive` | `topic/...` de esos mensajes. | Autorizar recepción. |
+
+Los ARN usan `us-east-2` y `ACCOUNT_ID` como sustitución; se distinguen `topic`/`topicfilter`. No hay comodín global para el dispositivo.
+
+Política IAM entregada en [JSON](../aws/lambda-iam-policy.template.json):
+
+| Acciones | Alcance actual | Motivo |
+|---|---|---|
+| `iot:DescribeThing` | `Resource: "*"`. | Validar existencia antes de vincular. |
+| `iot:GetThingShadow` | `Resource: "*"`. | Leer sensor/posición. |
+| `iot:UpdateThingShadow` | `Resource: "*"`. | Solicitar cubierta. |
+| `dynamodb:GetItem` | ARN de la tabla exacta. | Resolver usuario. |
+| `dynamodb:PutItem` | ARN de la tabla exacta. | Crear/cambiar vínculo. |
+| `dynamodb:DeleteItem` | ARN de la tabla exacta. | Desvincular. |
+
+Se adjunta `AWSLambdaBasicExecutionRole` para logs. El registro de despliegue indica que el analizador de la cuenta mostró acceso IoT nulo con ARN restringidos y se adoptó el comodín para tres operaciones. Es una decisión de la práctica, no una imposibilidad técnica de restringir ARN. En producción se limitarían a los Things autorizados y se verificarían con pruebas reales. El enunciado acepta este mayor alcance si se documentan motivo y mínimo necesario.
+
+| Variable Lambda | Valor/formato |
+|---|---|
+| `AWS_REGION` | La proporciona Lambda; `us-east-2`. |
+| `IOT_ENDPOINT` | Host ATS sin protocolo ni puerto. |
+| `DDB_BINDINGS_TABLE` | `tendedero_vinculaciones`. |
+| `THING_ALIASES_JSON` | Mapa siguiente. |
+
+```json
+{
+  "tendedero inteligente": "tendedero-inteligente",
+  "prueba dos": "tendedero-prueba2",
+  "prueba 2": "tendedero-prueba2",
+  "tendedero prueba dos": "tendedero-prueba2",
+  "tendedero prueba 2": "tendedero-prueba2"
+}
+```
+
+Las plantillas no incluyen certificados, claves, SSID ni contraseña. `.gitignore` excluye secretos, materiales TLS y compilaciones, pero no elimina secretos previamente versionados ni protege un ZIP manual. La calibración no es credencial: sus valores medidos pueden documentarse sin revelar secretos. El [manual AWS](GUIA_AWS.md) conserva el procedimiento operativo de aprovisionamiento.
+
+### 3.6 Backend y fragmentos clave
+
+[lambda_function.py](../lambda/lambda_function.py) separa persistencia en `BindingRepository`, llamadas IoT en `ShadowService` y conversación en handlers. Se resuelve el Thing para cada consulta/control, sin Thing por defecto.
+
+```python
+item = self._table.get_item(
+    Key={"userId": user_id}, ConsistentRead=True
+).get("Item")
+```
+
+La lectura consistente recupera el vínculo de una escritura completada. `_user_id` prioriza contexto y usa sesión como alternativa; el SDK representa `userId` como `user_id`.
+
+```python
+payload = {"state": {"desired": {"cubierta": position}}}
+```
+
+`request_cover` valida abierta/cerrada y envía la actualización parcial en UTF-8. No escribe `reported` ni reemplaza todo el documento. La consulta de agua exige booleano; un atributo ausente genera dato no disponible, no seco.
+
+La consulta de cubierta informa último reporte y orden pendiente si difiere el deseado. `_run_safe` captura errores AWS/configuración/valor y `ErrorHandler` cubre el resto. `StopHandler` termina conversación sin `DeleteItem`. Vincular y cambiar comparten handler: validan antes de `PutItem`. Desvincular utiliza `DeleteItem`. `can_handle` decide correspondencia y `handle` ejecuta; `SkillBuilder` genera la entrada Lambda.
+
+### 3.7 Configuración Alexa e incidente de alias
+
+Se creó Skill Custom es-MX con **Provision your own backend resources**, se cargó JSON, se construyó modelo y se configuró ARN Lambda en Endpoint. No se usa editor Code de Alexa-hosted. Las pruebas se realizaron en Development con Skill I/O.
+
+El primer intento con «prueba dos» falló al llegar el slot como `prueba 2`. Sin alias coincidente, el fallback de normalización habría construido `prueba-2`, diferente de `tendedero-prueba2`. Se configuraron las variantes dígito/palabra y AX-10 demuestra éxito posterior. Se corrigió configuración, sin fijar un Thing para todos.
+
+AX-01–AX-07 respaldan configuración; AX-08–AX-16 respaldan operaciones. La limitación de micrófono corresponde al entorno; no se afirma una restricción general de Alexa ni se equipara audio reproducido con reconocimiento de voz.
+
+### 3.8 Reproducción y empaquetado
+
+El [README](../README.md) contiene comandos de compilación/carga. Se completan localmente plantillas, se verifica montaje y se carga `tendedero_shadow`. Compilar plantillas vacías solo habilita ADC; compilar no conecta el dispositivo por sí solo.
+
+El [ZIP](../lambda/lambda_deployment_p3.zip) incluye ASK SDK y el handler en la raíz. En la revisión se comparó su `lambda_function.py` con el archivo del repositorio: **coinciden byte por byte**. `requirements.txt` declara dependencias sin versiones fijadas; no se afirma construcción totalmente reproducible del entorno. Si cambia el fuente debe reconstruirse el paquete antes de desplegar.
 
 ## 4. Pruebas y validaciones
 
-La matriz [PRUEBAS.md](PRUEBAS.md), el [registro Alexa](ALEXA.md) y el [índice audiovisual](evidencias/integracion/README.md) distinguen respuestas capturadas, observación del montaje, condiciones del ensayo comunicadas y mediciones. Las métricas se registran con los siguientes criterios:
+### 4.1 Método y fuentes de evidencia
 
-- Exactitud: metodología de referencia (consulta pendiente al docente para sensor sin agua).
-- Reporte por evento y periódico con timestamps.
-- Latencias extremo a extremo Alexa → servo (n≥10 recomendable), no solo Lambda → Shadow.
-- 15 minutos de estabilidad objetivo.
-- Reconexión Wi-Fi y MQTT, comando deseado pendiente aplicado.
-- RF7–RF9 documentados con capturas de usuario sin vínculo, persistencia, Thing inexistente, cambio válido y borrado de vínculo.
+| Tipo | Qué permite concluir |
+|---|---|
+| Inspección de código | Implementación y parámetros, no medición física. |
+| Prueba local simulada | Ejecución de handlers con AWS sustituido, no permisos reales. |
+| Evento directo Lambda | Backend/persistencia/Shadow, no reconocimiento en Skill. |
+| Captura del simulador | Frase y respuesta visibles. |
+| Video de banco | Servo, estados y secuencia, no una serie RNF. |
+| Registro histórico | Resultado comunicado antes, identificado sin fingir nueva ejecución. |
+
+Paneles AWS consolidados el 8/11; capturas Alexa de sesiones 8–9/11, consolidadas el 9/11; videos incorporados al registro del 9/11. No se deduce fecha exacta del ensayo por la fecha de copia del archivo.
+
+### 4.2 Hardware y suite local
+
+El registro histórico describe 27 muestras secas `raw = 0`, 12 muestras ADC `4095` con estímulo 3V3 mediante resistencia de 220 Ω y retorno a `0` al reinstalar el sensor seco. También describe reconexión Wi-Fi aislada y movimiento básico del servo. Caracteriza entrada/actuación, no exactitud frente a agua real.
+
+| Archivo de prueba | Cantidad | Alcance |
+|---|---:|---|
+| [test_static_contract.py](../tests/test_static_contract.py) | 9 | Sintaxis, JSON, intents, operaciones AWS, ADC, perfiles y controles presentes en fuente. |
+| [test_lambda_import.py](../tests/test_lambda_import.py) | 1 | Importación con SDK del ZIP y stub AWS. |
+| [test_lambda_integration.py](../tests/test_lambda_integration.py) | 2 | Dos usuarios/Things, enrutamiento, cambio, rechazo, eliminación y clasificación desconocida. |
+
+El registro del 7/11 informa **12/12 satisfactorias** y compilación de los cuatro perfiles. No se repitieron en esta revisión: `py` respondió `No installed Python found!` y no se encontró `pio` en PATH. Se declara el resultado histórico con esa limitación. Sí se revisaron JSON, enlaces, código y concordancia fuente/ZIP.
+
+### 4.3 Pruebas directas AWS
+
+| ID | Escenario | Resultado registrado | Respaldo |
+|---|---|---|---|
+| AWS-BE-01 | LaunchRequest directo. | Carga de handler y bienvenida. | Registro backend/AWS-04. |
+| AWS-BE-02 | Vincular Thing existente. | Validación y persistencia con fecha. | AWS-02 y registro backend. |
+| AWS-BE-03 | Consultar agua simulada. | Respuesta acorde al booleano. | Registro backend; INT-01 complementa integración. |
+| AWS-BE-04 | Solicitar cierre. | Escritura de `desired`. | Registro backend; AX-15. |
+| AWS-BE-05 | Consultar cubierta. | Ejecución satisfactoria y respuesta abierta coherente. | AWS-05. |
+| AWS-BE-06 | Simular convergencia. | `reported` igual a `desired`. | Shadow simulado AWS-05. |
+| AWS-BE-07 | Thing inexistente. | Rechazo sin reemplazar vínculo. | Registro backend y código; AX-12 muestra rechazo. |
+| AWS-BE-08 | Dos usuarios/Things. | Resolución por asociación propia. | Dos ítems AWS-02 y pruebas directas registradas; no dos cuentas Alexa grabadas. |
+| AWS-BE-09 | Cambiar vínculo. | Nuevo Thing para misma clave. | Registro backend; AX-16 añade prueba Skill. |
+| AWS-BE-10 | Desvincular. | Eliminación y guía posterior. | Registro backend; AX-09/AX-13. |
+| AWS-BE-11 | Logs. | START/END/REPORT sin excepciones visibles en fragmento. | AWS-04 y CSV. |
+
+La fuente de estas filas es el conjunto AWS de la revisión `a8a86c3`. Sus cinco paneles y CSV se conservan localmente en [evidencias/aws](evidencias/aws/README.md). Una fila comunicada no equivale a disponer de captura individual de cada ejecución.
+
+### 4.4 Frases probadas en la Skill
+
+| ID | Entrada | Resultado observado | Evidencia |
+|---|---|---|---|
+| AX-08 | `abre tendedero inteligente` | Saludo. | [Inicio](evidencias/alexa/08-alexa-inicio.png). |
+| AX-09 | Desvincular y `hay agua en el sensor` | Confirma borrado y solicita vínculo. | [Sin vínculo](evidencias/alexa/09-alexa-sin-vinculo.png). |
+| AX-10 | `vincula mi objeto con prueba dos` | Confirma `tendedero-prueba2`. | [Vinculación](evidencias/alexa/10-alexa-vinculacion.png). |
+| AX-11 | `para`, abrir y consultar | Conserva asociación entre conversaciones. | [Persistencia](evidencias/alexa/11-alexa-persistencia.png). |
+| AX-12 | `cambia mi objeto a objeto inexistente nueve` | Rechaza identificador. | [Caso negativo](evidencias/alexa/12-alexa-thing-inexistente.png). |
+| AX-13 | `desvincula mi objeto` | Confirma eliminación. | [Desvinculación](evidencias/alexa/13-alexa-desvinculacion.png). |
+| AX-14 | Consultar agua y cubierta | Agua negativa/afirmativa y cubierta cerrada. | [Consultas](evidencias/alexa/14-alexa-sensor-seco-y-con-agua.png). |
+| AX-15 | `abre la cubierta`; `cierra la cubierta` | Confirma solicitud de cada posición. | [Control](evidencias/alexa/15-alexa-abrir-y-cerrar-cubierta.png). |
+| AX-16 | Vincular prueba dos y `cambia mi objeto a tendedero inteligente` | Cambio al Thing físico. | [Cambio válido](evidencias/alexa/16-alexa-cambio-valido.png). |
+
+El equipo comunicó ejecución de todos los intents; aquí se identifican respuestas visibles sin atribuir capturas inexistentes a ayuda/fallback. Guía sin vínculo, persistencia y cambio válido son escenarios distintos.
+
+### 4.5 Videos de integración y recuperación
+
+| Video | Marca aproximada | Observación |
+|---|---|---|
+| [INT-01 — 21,70 s](evidencias/integracion/01-funcionamiento-completo.mp4) | 00:00 | Shadow abierto, sensor `0`/`false`. |
+| INT-01 | 00:02–00:08 | Apertura/consulta, servo visible y giro durante secuencia de cierre. |
+| INT-01 | 00:09–00:10 | Deseado/reportado cerrados; sensor `0`/`false`. |
+| INT-01 | 00:13–00:16 | Respuesta negativa; después Shadow `2453`/`true`. |
+| INT-01 | 00:19–00:21 | Respuesta afirmativa del sensor. |
+| [INT-02 — 26,16 s](evidencias/integracion/02-recuperacion-orden-reconexion.mp4) | 00:05–00:09 | Solicitud abierta; reportado cerrado y delta abierto. |
+| INT-02 | 00:11–00:24 | Montaje durante retorno a operación; giro del brazo al final. |
+| INT-02 | 00:25–00:26 | Deseado/reportado abiertos, sin diferencia anterior en vista mostrada. |
+
+El procedimiento comunicado de INT-02 fue desconectar el cable, solicitar apertura y reconectar sin repetir. El video muestra estados previo/final y actuación; se interpreta como recuperación tras nuevo arranque, no pérdida Wi-Fi aislada. Las marcas localizan escenas, no miden formalmente latencia.
+
+Los videos no muestran cubierta bajo carga ni referencia de agua por muestra. `0` y `2453` no definen los umbrales calibrados; las duraciones no acreditan estabilidad de 15 min. El [índice audiovisual](evidencias/integracion/README.md) conserva el detalle.
+
+### 4.6 Protocolo RNF
+
+El equipo confirmó ausencia de resultados numéricos RNF. Se define el protocolo reproducible, separado de resultados observados:
+
+| Ensayo | Procedimiento | Datos y cálculo | Criterio |
+|---|---|---|---|
+| Estabilidad | Operar 15 min sin interrupción intencional, con consultas/órdenes. | Inicio/fin, operaciones, reinicios, bloqueos y log continuo. | 15 min, 0 reinicios, 0 bloqueos. |
+| Exactitud | Calibrar y validar en lote distinto de ≥20 referencias físicas seguras, con ambos estados/transiciones. | Referencia, ADC, booleano, falsos positivos/negativos; errores/n × 100. | Propuesto ≤5 % de error, informando n y tipos. |
+| Respuesta | ≥10 órdenes alternadas con envío y brazo visibles. | Final − envío; promedio, mediana, máximo y excedencias. | Referencia ≤3 s, declarando inicio textual. |
+| Reporte | ≥10 mensajes aceptados del ESP32 y cambios de clasificación/posición. | Timestamps, intervalos, máximos; identificar token para no mezclar actualizaciones Lambda. | Propuesto ≤6 s estable y objetivo de evento ≤1 s sin reporte pendiente. |
+| Reconexión | Separar reinicio y pérdida Wi-Fi; ordenar posición opuesta durante ausencia. | Estado previo, deseado, retorno MQTT, giro, aceptación, tiempos y repeticiones. | Converger sin repetir orden; INT-02 ya respalda cualitativamente reinicio. |
+
+Un desconocido del sensor debe contarse, no convertirse en seco ni excluirse sin explicación. La medición manual declara incertidumbre. Los fallos se conservan junto con corrección y repetición.
+
+### 4.7 Errores y discusión
+
+| Situación | Diagnóstico | Tratamiento/interpretación |
+|---|---|---|
+| «prueba dos» no vinculaba. | Slot normalizado a `prueba 2`. | Añadir variantes; AX-10 verifica éxito. |
+| Micrófono no operativo. | Condición del entorno. | Entrada textual identificada; sin afirmar reconocimiento de voz probado. |
+| Respuesta sin nueva vinculación. | Persistencia DynamoDB. | AX-11 demuestra comportamiento esperado. |
+| Solicitud aceptada sin dispositivo. | `desired` puede cambiar sin movimiento inmediato. | INT-02 muestra orden pendiente y convergencia posterior. |
+| Posición reportada sin realimentación. | Estimación temporal. | Se distingue de confirmación mecánica. |
+| Dato histórico consultado. | No se revisa antigüedad. | Una respuesta sola no demuestra conexión activa. |
 
 ## 5. Resultados
 
-El registro previo incluye 27 muestras secas `raw=0`, 12 muestras del ADC a `raw=4095` con estímulo eléctrico y reconexión Wi-Fi local. La suite simulada ejercitó el handler con dos usuarios. La Lambda desplegada validó Things, persistió vínculos, leyó `reported` y escribió `desired`. El [conjunto AWS ya publicado](https://github.com/Sam-J-R/IoT_practica3/blob/a8a86c3f56a39b063bacd5fe4cc651dabfe73232/docs/EVIDENCIAS_AWS.md) conserva sus paneles, CSV y resultados directos.
+### 5.1 Resultados registrados
 
-La actualización Alexa incorpora respuestas reales del simulador, persistencia entre conversaciones, rechazo de identificador inexistente, eliminación y cambio válido de `tendedero-prueba2` a `tendedero-inteligente`. El video INT-01 incorpora la observación del servo y del Shadow, con dos estados del sensor: `raw = 0`/`agua_detectada = false` y `raw = 2453`/`agua_detectada = true`. Las respuestas del simulador son coherentes con esos estados.
+Hay **17 capturas Alexa, 5 paneles AWS, 1 CSV y 2 videos**. Las nueve filas AX-08–AX-16 son escenarios observables, no nueve usuarios ni un lote de exactitud. La evidencia respalda Skill → Lambda → DynamoDB/Shadow, persistencia, rechazo, cambio y borrado. Los videos añaden servo de banco y recuperación de una posición deseada tras reinicio.
 
-INT-02 muestra `desired.cubierta = abierta`, `reported.cubierta = cerrada` y delta de apertura; luego se observa el giro del servo y al final ambos estados en `abierta`. El equipo confirmó que desconectó y reconectó el cable del ESP32 sin repetir la orden. Se documenta recuperación tras nuevo arranque, diferenciada de una interrupción aislada de Wi-Fi.
+| Dato | Valor | Interpretación |
+|---|---|---|
+| Resolución configurada | 12 bits, 0–4095. | Parámetro de adquisición, no exactitud. |
+| Estados INT-01 | `0`/`false` y `2453`/`true`. | Dos reportes y consultas coherentes. |
+| Muestreo/respaldo configurados | 500 ms / 5000 ms. | Lógica nominal, no máximos efectivos medidos. |
+| Duraciones INT-01/INT-02 | 21,70 s / 26,16 s. | Duración de archivo, no estabilidad o latencia. |
+| Suite histórica | 12/12. | Resultado del 7/11, no reejecutado el 9/11. |
+| Fuente/ZIP | Igualdad byte por byte. | Verificación del handler empaquetado. |
 
-### Evidencias audiovisuales
+### 5.2 Cálculo sobre CloudWatch
 
-- [INT-01 — Funcionamiento completo, 21,70 s](evidencias/integracion/01-funcionamiento-completo.mp4): simulador, servo, consultas de sensor y estados AWS.
-- [INT-02 — Recuperación de orden, 26,16 s](evidencias/integracion/02-recuperacion-orden-reconexion.mp4): delta pendiente, actuación y convergencia final.
-- [Índice con marcas de tiempo y alcance](evidencias/integracion/README.md).
+El [CSV original](evidencias/aws/04-cloudwatch-eventos.csv) contiene cuatro REPORT. Se extrajo `Duration`, sin confundirlo con `Billed Duration` ni tiempo de movimiento:
 
-Los archivos se conservan originales. Sus duraciones y marcas de navegación no se utilizan como valores de latencia, exactitud o estabilidad.
+| Ejecución | Duration (ms) | Observación |
+|---:|---:|---|
+| 1 | 4045,84 | Registra aparte `Init Duration = 689,80 ms`. |
+| 2 | 457,30 | Ejecución Lambda. |
+| 3 | 622,83 | Ejecución Lambda. |
+| 4 | 673,31 | Ejecución Lambda. |
+| **Promedio** | **1449,82** | Incluye las cuatro, sin excluir la primera. |
+
+Mínimo **457,30 ms**, máximo **4045,84 ms**. No se identifica el intent de cada ejecución; no se presentan como cuatro órdenes de servo. No permiten concluir ≤3 s extremo a extremo, pues no incluyen todos los tramos hasta movimiento físico. START/END/REPORT sin excepciones visibles no certifican por sí solos el resultado funcional de cada solicitud.
+
+### 5.3 Justificación de frecuencia y consumo
+
+La variable funcional es presencia de agua/posición, no cada fluctuación ADC. Histéresis y reporte por cambio reducen ruido y el respaldo refresca el estado aun sin cambio de categoría.
+
+En régimen ideal, 5 s por reporte equivalen a `60/5 = 12` reportes/min y `86400/5 = 17280` reportes/día por dispositivo continuamente conectado, antes de eventos, reintentos, GET y respuestas. Es una estimación de diseño, no consumo medido ni garantía de gratuidad. Debe contrastarse el uso con las condiciones de la cuenta.
+
+El respaldo de 5 s favorece visibilidad del prototipo; para operación prolongada se ajustaría tras medir dinámica y consumo, conservando eventos relevantes. Un reporte pendiente puede retrasar eventos y debe evaluarse antes de prometer máximo temporal.
+
+### 5.4 Balance de verificación
+
+| Aspecto | Conclusión sustentada |
+|---|---|
+| Configuración/backend | Desplegados, respaldados por paneles, JSON, respuestas y registro AWS. |
+| Skill | Operaciones verificadas por texto, incluida persistencia/cambio. |
+| Actuación | Brazo del servo de banco visible; sin prueba de cubierta bajo carga. |
+| Recuperación | Evidencia cualitativa tras reinicio; no prueba Wi-Fi aislada. |
+| Exactitud, estabilidad y tiempos físicos | Sin series numéricas registradas; no se declaran aprobados. |
+| Reproducción exacta de hardware | Sin valores finales públicos de fuente/calibración; no se infieren. |
+| Voz | No ejecutada en el entorno; limitación y alternativa textual documentadas. |
+
+El informe cubre las secciones exigidas. Cobertura documental no sustituye ensayos ausentes ni equivale a aprobación total de RNF o de una cubierta bajo carga.
 
 ## 6. Conclusiones
 
-Las pruebas documentadas respaldan la configuración de Alexa y sus operaciones sobre el Thing vinculado, incluida persistencia y cambio de objeto. Los videos complementan las capturas con actuación del servo de banco, consulta de estados y convergencia de una posición solicitada durante la desconexión, conforme al procedimiento de nuevo arranque confirmado por el equipo. Se distingue entre solicitud, estado reportado estimado y observación física. La modalidad utilizada fue textual por la limitación de micrófono del entorno.
+1. La arquitectura mantiene interacción mediante Shadow y separa interfaz, backend y objeto. El estado deseado persistente permitió observar recuperación tras nuevo arranque.
+2. DynamoDB separa vínculo y sesión. Persistencia y cambio válido muestran una Skill no fijada a un Thing; el aislamiento multiusuario cuenta con pruebas directas y simuladas, diferenciadas de dos cuentas Alexa grabadas.
+3. Los alias resolvieron un error real de normalización. Validar existencia antes de escribir evita reemplazar el vínculo por un identificador no registrado.
+4. Capturas y videos respaldan consultas/actuación de banco, no posición bajo carga, porcentaje de lluvia ni error de medición. La posición del firmware es estimada.
+5. Los tiempos CloudWatch describen cuatro ejecuciones Lambda. Sin series RNF no es sustentable declarar 15 min estables, error ≤5 %, respuesta ≤3 s ni máximo real de reporte.
+6. Las clases y el contrato permiten extensión con nuevos sensores/actuadores, acompañada de permisos y pruebas. La modalidad verificada fue textual, sin afirmar reconocimiento de voz validado.
 
 ## 7. Recomendaciones
 
-La realimentación de posición permitiría distinguir entre el movimiento estimado y un posible atasco. Evaluar esa extensión con los resultados del montaje.
+1. Ejecutar y conservar los ensayos de §4.6 con datos crudos, incidencias y máximos; documentar parámetros físicos finales no secretos.
+2. Verificar fuerza, recorrido, topes y corriente con cubierta real. Añadir finales de carrera o medición de posición para detectar atasco.
+3. Evaluar antigüedad y conexión al responder consultas; evitar interpretar dato histórico como lectura actual.
+4. Incorporar prueba de posesión para vincular y restringir recursos IoT del rol, con verificación real de permisos.
+5. Ensayar pérdida de red sin corte de alimentación, errores de suscripción, fragmentación y falta de aceptación.
+6. Para uso continuo estudiar corrosión, alimentación por lectura, filtrado y protección ambiental sin cambiar la lógica de control requerida.
+7. Fijar dependencias y construcción del ZIP; sincronizar exportación de consola y repositorio, incluidas diferencias de intents integrados/slots.
+8. Revisar uso de mensajes y alerta de costos antes de operación continua. No existe evidencia que permita certificar alerta de facturación configurada.
 
 ## 8. Anexos
 
-- [Capturas de configuración y pruebas Alexa](evidencias/alexa/README.md).
-- [Videos de integración y recuperación](evidencias/integracion/README.md).
-- [Evidencias AWS ya publicadas](https://github.com/Sam-J-R/IoT_practica3/blob/a8a86c3f56a39b063bacd5fe4cc651dabfe73232/docs/EVIDENCIAS_AWS.md).
-- [Diagramas del sistema](DIAGRAMAS.md) y [conexiones](../hardware/CONEXIONES.md).
+### 8.1 Entregables y archivos
 
+El informe integra el contenido técnico sin sustituir los registros de trabajo de cada área: se conservan la [documentación de Alexa](ALEXA.md), la [documentación original AWS](EVIDENCIAS_AWS.md), su [guía de configuración](GUIA_AWS.md), el [esquema DynamoDB](../aws/dynamodb-schema.md) y la [matriz de pruebas](PRUEBAS.md). Las imágenes y el CSV AWS reutilizados mantienen su contenido original.
+
+| Entregable | Ubicación |
+|---|---|
+| Informe con ocho secciones | Este archivo. |
+| Código objeto | [firmware/src](../firmware/src) y [firmware/include](../firmware/include). |
+| Código backend | [lambda_function.py](../lambda/lambda_function.py). |
+| Modelo Alexa JSON | [interaction-model-es-MX.json](../alexa/interaction-model-es-MX.json). |
+| Política IoT | [iot-certificate-policy.template.json](../aws/iot-certificate-policy.template.json). |
+| Política IAM | [lambda-iam-policy.template.json](../aws/lambda-iam-policy.template.json). |
+| Definición tabla | [dynamodb-table.template.json](../aws/dynamodb-table.template.json). |
+| Configuración sin secretos | [secrets.example.h](../firmware/include/secrets.example.h), [calibracion.example.h](../firmware/include/calibracion.example.h), [config.h](../firmware/include/config.h). |
+| Diagramas completos | §2.1–2.8. |
+| Pruebas, frases y resultados | §4–§5. |
+
+### 8.2 Figuras AWS
+
+![AWS-01: Things, certificado y asociaciones](evidencias/aws/01-iot-core-things-certificado.png)
+
+**AWS-01.** Consola, 8/11/2026: Things, certificado activo y asociaciones. Identificadores ocultados en el original sanitizado.
+
+![AWS-02: DynamoDB y vínculos](evidencias/aws/02-dynamodb-tabla-vinculaciones.png)
+
+**AWS-02.** Tabla activa, clave String y dos ítems con Things distintos; usuarios truncados. No representa dos sesiones de voz grabadas.
+
+![AWS-03: Lambda e IAM](evidencias/aws/03-lambda-iam-configuracion.png)
+
+**AWS-03.** Función, variables, runtime, handler, arquitectura y políticas del rol; alcance detallado en §3.5.
+
+![AWS-04: CloudWatch](evidencias/aws/04-cloudwatch-ejecuciones-lambda.png)
+
+**AWS-04.** Ejecuciones del 7–8/11 UTC, consolidadas el 8/11. El [CSV](evidencias/aws/04-cloudwatch-eventos.csv) reproduce §5.2.
+
+![AWS-05: Shadow y respuesta Lambda](evidencias/aws/05-backend-shadow-respuesta-lambda.png)
+
+**AWS-05.** Shadow simulado de `tendedero-prueba2` y respuesta directa abierta. No se presenta como prueba física.
+
+### 8.3 Figuras Alexa
+
+El [índice de 17 capturas](evidencias/alexa/README.md) identifica todos los archivos. Se destacan:
+
+![AX-01: invocación](evidencias/alexa/01-invocacion.png)
+
+**AX-01.** Nombre de invocación e idioma.
+
+![AX-05: construcción](evidencias/alexa/05-modelo-construido.png)
+
+**AX-05.** Notificación Build Completed; se conservan los elementos de estado originales de consola.
+
+![AX-06: endpoint](evidencias/alexa/06-endpoint.png)
+
+**AX-06.** AWS Lambda ARN con campos parcialmente ocultos; respuestas de ejecución corroboran conexión.
+
+![AX-11: persistencia](evidencias/alexa/11-alexa-persistencia.png)
+
+**AX-11.** Detener, abrir y consultar sin nueva asociación.
+
+![AX-14: consultas](evidencias/alexa/14-alexa-sensor-seco-y-con-agua.png)
+
+**AX-14.** Estados del sensor y consulta de cubierta.
+
+![AX-16: cambio válido](evidencias/alexa/16-alexa-cambio-valido.png)
+
+**AX-16.** Paso del Thing de prueba al físico; complementa rechazo y eliminación de AX-12/AX-13.
+
+### 8.4 Videos y fotografías
+
+- [INT-01 — funcionamiento completo](evidencias/integracion/01-funcionamiento-completo.mp4).
+- [INT-02 — recuperación de orden](evidencias/integracion/02-recuperacion-orden-reconexion.mp4).
+- [Índice audiovisual con marcas](evidencias/integracion/README.md).
+- [ESP32](../referencias/esp32.jpeg), [sensor frontal](../referencias/sensor_frente.jpeg) y [reverso](../referencias/sensor_reverso.jpeg).
+
+### 8.5 Aportes y entrega
+
+El historial conserva aportes verificables con `git log --all --oneline` y sus diffs. Revisiones AWS: `341e17a`, `3e5bb31`, `a8a86c3`; Alexa/integración: `9fca64a`, `8c28234`, `542cc8c`. Estos identificadores permiten inspeccionar cambios; la evidencia individual se verifica en las cuentas y commits de GitHub, sin atribuir participación no comprobada.
+
+Se entrega el repositorio accesible al docente y su enlace por LMS-UCB antes del plazo. Este informe no afirma haber publicado esta revisión ni enviado el enlace. Demo y defensa individual son componentes separados: el documento no reemplaza su presentación.
+
+### 8.6 Correspondencia con el enunciado
+
+| Exigencia | Sección |
+|---|---|
+| Caso de uso, justificación y restricciones | 1.1 y 2.2. |
+| RF/RNF medibles y trazables | 1.2–1.3, 4.6 y 5.4. |
+| Arquitectura y circuito | 2.1–2.2. |
+| Clases del objeto y Lambda | 2.3–2.4. |
+| Secuencias de vincular, consultar y actuar | 2.5–2.7; recuperación 2.8. |
+| Shadow, vinculación y modelo de Skill | 2.9–2.11. |
+| Código modular, fragmentos y enlaces | 3.1–3.4 y 3.6. |
+| AWS/Alexa y permisos justificados | 3.5 y 3.7–3.8. |
+| Pruebas, frases, validaciones y errores | 4. |
+| Resultados cuantificables y límites | 5. |
+| Conclusiones y recomendaciones | 6–7. |
+| Configuraciones, diagramas, evidencias y entrega | 8. |
+
+### 8.7 Fuentes
+
+Implementación y evidencias del repositorio son las fuentes primarias. Referencias de plataforma asociadas a los apartados indicados:
+
+- [Enunciado](../referencias/Práctica_3.md), contrastado con el adjunto docente; solo difiere el formato de fin de línea.
+- [AWS: documento Shadow](https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-document.html), para estados, delta, versión y `null` (§2.9).
+- [AWS: autorización IoT](https://docs.aws.amazon.com/iot/latest/developerguide/iot-authorization.html), para identidad y políticas (§3.5).
+- [AWS: GetItem](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_GetItem.html), para lectura por clave/consistencia (§2.10 y §3.6).
+- [Amazon: solicitudes de Skill](https://developer.amazon.com/en-US/docs/alexa/custom-skills/handle-requests-sent-by-alexa.html), para handlers e identidad (§3.6–3.7).
+- [Espressif: ADC ESP32](https://docs.espressif.com/projects/esp-idf/en/v4.2.4/esp32/api-reference/peripherals/adc.html), para GPIO34/ADC1 (§2.2).

@@ -1,79 +1,63 @@
 # Práctica 3 — Tendedero inteligente con Alexa y AWS IoT Core
 
-**SIS-234 · Grupo 6 · Entrega: martes 10/11/2026, 17:45 (Bolivia)**
+**SIS-234 · Grupo 6 · Entrega: 10/11/2026, 17:45 (Bolivia)**
 
-Un ESP32 lee un sensor analógico MH y mueve una cubierta con un servomotor. La cubierta se controla **solo desde Alexa**, mediante Lambda y AWS IoT Core Device Shadow; el sensor se consulta por voz. No hay LEDs ni cierre automático local.
+Un ESP32 captura un sensor analógico MH y controla un servomotor. La Skill consulta y solicita posiciones a través de Lambda, DynamoDB y el Device Shadow del Thing vinculado. No hay cierre automático local ni LED como actuador.
 
-> **¿Se lo vas a pasar a una compañera?** Empieza por [`GUIA_PARA_COMPANERA.md`](GUIA_PARA_COMPANERA.md). Explica en palabras sencillas cómo funciona, qué hace cada archivo y qué le falta a cada responsable.
+## Informe y evidencias
 
-## Estructura mínima
+El **[informe técnico completo](docs/INFORME.md)** concentra los requerimientos, arquitectura, circuito, clases, secuencias, contrato Shadow, configuraciones, pruebas, resultados y anexos exigidos. Se conservan también los registros específicos de cada área para mantener la trazabilidad de los aportes y sus evidencias.
 
-| Carpeta | Contenido |
+- [Enunciado de la práctica](referencias/Práctica_3.md).
+- [Documentación de configuración y pruebas de Alexa](docs/ALEXA.md).
+- [Documentación original de evidencias AWS](docs/EVIDENCIAS_AWS.md).
+- [Matriz de pruebas y registro del backend](docs/PRUEBAS.md).
+- [Capturas de Alexa](docs/evidencias/alexa/README.md).
+- [Paneles AWS y CSV](docs/evidencias/aws/README.md).
+- [Videos de integración y recuperación](docs/evidencias/integracion/README.md).
+
+Se demostraron operaciones por texto y actuación de servo de banco. La entrada textual corresponde a la limitación de micrófono del entorno. El informe distingue esa evidencia de una prueba de voz, cubierta bajo carga y mediciones RNF; no se atribuyen resultados no registrados.
+
+## Firmware
+
+Abrir `firmware/` en PlatformIO. Placa `esp32doit-devkit-v1`, serie 115200. Los pines del contrato son GPIO34 para sensor y GPIO26 para PWM.
+
+| Perfil | Uso |
 |---|---|
-| `firmware/` | Código ESP32 orientado a objetos y perfiles PlatformIO |
-| `lambda/` | Backend Alexa: vinculación por usuario y acceso a Shadow |
-| `alexa/` | Modelo de interacción en español |
-| `aws/` | Plantillas IoT, DynamoDB e IAM |
-| `hardware/` | Conexiones y procedimiento de ensayo seguro |
-| `docs/` | Contrato, diagramas, pruebas, informe y registro de cambios |
-| `tests/` | Pruebas locales sin servicios AWS reales |
-| `referencias/` | Enunciado original y fotografías del hardware |
+| `sensor_test` | Diagnóstico ADC sin red ni servo. |
+| `servo_test` | Diagnóstico del servo por comandos serie `A`/`C`. |
+| `sensor_shadow_test` | MQTT TLS y reporte ADC sin mover servo. |
+| `tendedero_shadow` | Programa final, perfil predeterminado. |
 
-## Firmware: qué ejecutar
+Antes de la integración, copiar y completar localmente `firmware/include/secrets.example.h` como `secrets.h` y `calibracion.example.h` como `calibracion_local.h`. Los valores de calibración deben provenir del montaje. Sin credenciales y parámetros válidos, el programa final solo lee ADC.
 
-Abre **únicamente la carpeta `firmware/`** en VS Code con PlatformIO. Placa: `esp32doit-devkit-v1`; monitor serie: 115200.
-
-| Perfil | Para qué sirve |
-|---|---|
-| `sensor_test` | Leer GPIO34 sin Wi-Fi, servo ni AWS |
-| `servo_test` | Probar apertura/cierre con comandos `A` y `C` en serie, sin AWS |
-| `sensor_shadow_test` | Diagnosticar MQTT TLS y reporte ADC sin mover el servo |
-| `tendedero_shadow` | **Programa final**: sensor + servo + Device Shadow |
-
-En PowerShell, desde la raíz del repositorio:
+Desde la raíz, con PlatformIO instalado:
 
 ```powershell
 pio run -d firmware -e tendedero_shadow
 pio run -d firmware -e tendedero_shadow -t upload
-pio device monitor -b 115200
+pio device monitor -d firmware -b 115200
 ```
 
-Para pruebas individuales, sustituye `tendedero_shadow` por el perfil correspondiente.
+Conexiones y procedimiento reproducible: [hardware/CONEXIONES.md](hardware/CONEXIONES.md) y [hardware/ENSAYO_BANCO.md](hardware/ENSAYO_BANCO.md). El servo necesita alimentación DC adecuada y GND común; no se alimenta desde GPIO ni 3V3.
 
-**Antes de cargar el perfil final:**
+## Backend y Skill
 
-1. Conectar MH: `S → GPIO34`, `+ → 3V3`, `− → GND`.
-2. Conectar señal del servo a GPIO26 y alimentarlo con una fuente DC regulada adecuada, **nunca desde un GPIO o 3V3**; unir tierras.
-3. Copiar `firmware/include/secrets.example.h` a `secrets.h` y configurar Wi-Fi, endpoint, Thing y certificados AWS solo en la computadora local.
-4. Copiar `calibracion.example.h` a `calibracion_local.h` e introducir **únicamente** umbrales y pulsos medidos con el hardware.
-5. Configurar el Thing y su política IoT siguiendo `docs/GUIA_INTEGRACION.md`. Sin credenciales o calibración válida, el firmware final se mantiene en modo lectura ADC, sin activar el servo/MQTT.
+- [Manual de aprovisionamiento AWS](docs/GUIA_AWS.md).
+- [Contrato operativo de atributos e intents](docs/CONTRATO.md).
+- [Paquete y ejecución Lambda](lambda/README.md).
+- [Modelo de interacción Alexa](alexa/README.md).
 
-No subir ni compartir `secrets.h`, certificados, claves privadas o compilaciones que puedan contener datos Wi-Fi.
+IoT Core, Lambda y DynamoDB utilizan `us-east-2`. El dispositivo físico es `tendedero-inteligente`; el de prueba es `tendedero-prueba2`. El modelo y las políticas se entregan como JSON sin credenciales en `alexa/` y `aws/`.
 
-## Integración de equipo
+## Pruebas locales
 
-- **Samuel:** hardware, firmware y evidencias físicas.
-- **Compañera AWS:** Thing, certificados, políticas, DynamoDB y Lambda.
-- **Compañera Alexa:** Skill, frases de ejemplo, pruebas del simulador.
-
-Contrato compartido: [`docs/CONTRATO.md`](docs/CONTRATO.md). No cambiar nombres de atributos del Shadow ni de intents sin coordinación.
-
-## Verificación
+Con Python compatible con `unittest.TestCase.enterContext` —por ejemplo Python 3.11— instalado:
 
 ```powershell
-py -m unittest discover -s tests -v
+py -B -m unittest discover -s tests -v
 ```
 
-Las pruebas locales utilizan el SDK incluido en `lambda/lambda_deployment_p3.zip` y servicios AWS simulados. **Que pasen no demuestra funcionamiento en AWS o Alexa reales.** El ZIP de Lambda coincide con el código fuente entregado; si se modifica Lambda, debe reconstruirse antes de desplegar.
+Las pruebas utilizan el ASK SDK del ZIP y clientes AWS simulados. El informe conserva el resultado histórico y distingue las comprobaciones realizadas en la revisión actual. El fuente del handler y su copia en `lambda/lambda_deployment_p3.zip` coinciden; cualquier modificación del fuente exige reconstruir el paquete antes de desplegar.
 
-- Estado verificado y pendientes: [`docs/ESTADO.md`](docs/ESTADO.md).
-- Guía operativa de la responsable AWS: [`docs/GUIA_AWS.md`](docs/GUIA_AWS.md).
-- Configuración y resultados de Alexa: [`docs/ALEXA.md`](docs/ALEXA.md).
-- Capturas de configuración y pruebas de Alexa: [`docs/evidencias/alexa/README.md`](docs/evidencias/alexa/README.md).
-- Videos de funcionamiento y recuperación de orden: [`docs/evidencias/integracion/README.md`](docs/evidencias/integracion/README.md).
-- Guía de integración y demo: [`docs/GUIA_INTEGRACION.md`](docs/GUIA_INTEGRACION.md).
-- Matriz de requisitos y pruebas: [`docs/PRUEBAS.md`](docs/PRUEBAS.md).
-- Informe técnico: [`docs/INFORME.md`](docs/INFORME.md).
-- Cambios de esta versión: [`docs/CAMBIOS_APLICADOS.md`](docs/CAMBIOS_APLICADOS.md).
-
-El trabajo final requiere AWS/Alexa reales, pruebas medibles, evidencias y commits de cada integrante. El docente recibe el enlace al repositorio accesible en LMS-UCB.
+No publicar `secrets.h`, `.env`, certificados, claves privadas, tokens de Skill I/O ni compilaciones con datos Wi-Fi. `.gitignore` no protege un archivo ya versionado o un ZIP construido manualmente.

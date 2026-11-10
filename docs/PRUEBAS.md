@@ -60,6 +60,26 @@ No introducir agua cerca de la alimentación sin aprobación y metodología segu
 - CloudWatch no mostró errores en las ejecuciones revisadas. La captura se conserva como evidencia.
 - Estas pruebas directas AWS se complementan con las pruebas Alexa e integración registradas el 9/11 en [ALEXA.md](ALEXA.md).
 
+### Tabla consolidada del backend desplegado
+
+| ID | Prueba realizada | Resultado esperado | Resultado observado | Estado | Evidencia |
+|---|---|---|---|---|---|
+| AWS-BE-01 | Ejecutar `LaunchRequest` | Cargar ASK SDK y devolver bienvenida | La invocación terminó con `Succeeded` y devolvió la respuesta de bienvenida | Aprobada | Ejecución directa y CloudWatch |
+| AWS-BE-02 | Vincular un usuario de prueba con `tendedero-prueba2` | Validar el Thing y persistir `userId → thingName` | `DescribeThing` aceptó el identificador y DynamoDB creó el ítem con fecha | Aprobada | Panel DynamoDB y ejecución directa |
+| AWS-BE-03 | Consultar agua con usuario vinculado | Leer `reported.agua_detectada` del Shadow correcto | La respuesta cambió de acuerdo con el booleano simulado del Shadow | Aprobada | Ejecución directa y Shadow de prueba |
+| AWS-BE-04 | Solicitar cerrar la cubierta | Escribir `desired.cubierta = cerrada` | El Shadow mostró la orden deseada y Lambda respondió que fue solicitada | Aprobada | Ejecución directa y Shadow de prueba |
+| AWS-BE-05 | Consultar cubierta | Informar el último estado reportado y, si corresponde, una orden pendiente | `PruebaConsultarCubierta` terminó con `Succeeded` y respondió que la cubierta estaba abierta, coherente con el Shadow capturado | Aprobada | [`05-backend-shadow-respuesta-lambda.png`](evidencias/aws/05-backend-shadow-respuesta-lambda.png) |
+| AWS-BE-06 | Simular que el dispositivo alcanzó la posición | Hacer converger `reported.cubierta` con `desired.cubierta` | Al actualizar `reported`, dejó de existir diferencia pendiente | Aprobada | Shadow de prueba |
+| AWS-BE-07 | Intentar vincular un Thing inexistente | Rechazarlo sin reemplazar la vinculación válida | Lambda indicó que no estaba registrado y conservó el vínculo anterior | Aprobada | Ejecución directa |
+| AWS-BE-08 | Usar dos usuarios vinculados a Things distintos | Resolver cada solicitud por su propio `userId` | Las consultas se dirigieron al Thing vinculado de cada usuario sin cruce | Aprobada | Dos ítems DynamoDB y ejecuciones directas |
+| AWS-BE-09 | Cambiar la vinculación de un usuario | Sobrescribir el `thingName` para la misma clave | DynamoDB conservó un solo vínculo activo para el usuario con el nuevo Thing | Aprobada | Ejecución directa y DynamoDB |
+| AWS-BE-10 | Desvincular un usuario | Eliminar el ítem y exigir nueva vinculación | El ítem fue eliminado y las operaciones posteriores solicitaron vincular | Aprobada | Ejecución directa |
+| AWS-BE-11 | Revisar invocaciones en CloudWatch | No encontrar excepciones ni `AccessDenied` | Se observaron eventos `START`, `END` y `REPORT` sin errores en el periodo revisado | Aprobada | [`04-cloudwatch-ejecuciones-lambda.png`](evidencias/aws/04-cloudwatch-ejecuciones-lambda.png) y [`04-cloudwatch-eventos.csv`](evidencias/aws/04-cloudwatch-eventos.csv) |
+
+Las pruebas AWS-BE validan el backend y el enrutamiento por usuario. RF4–RF9
+solo se consideran completos cuando los mismos casos se ejecuten desde la Skill
+real; RF2, RF3 y RF5 requieren además el ESP32 y el actuador físico.
+
 ## Informe Markdown obligatorio
 
 1. Caso de uso y RF/RNF trazables.

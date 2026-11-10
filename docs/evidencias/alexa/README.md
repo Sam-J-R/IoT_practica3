@@ -39,6 +39,6 @@ Las capturas acreditan la configuración y las respuestas observadas en la Skill
 
 Las pruebas utilizaron entrada textual porque el micrófono no estuvo operativo en el entorno utilizado. No se presentan como pruebas de reconocimiento de voz.
 
-Las evidencias generales de AWS se reutilizan desde el [conjunto ya incorporado en el repositorio](https://github.com/Sam-J-R/IoT_practica3/blob/a8a86c3f56a39b063bacd5fe4cc651dabfe73232/docs/EVIDENCIAS_AWS.md): Things y certificado, DynamoDB, Lambda e IAM, CloudWatch y Shadow de prueba. No se duplican en esta carpeta.
+Las evidencias generales de AWS se reutilizan desde el [conjunto local](../aws/README.md) y su [documentación original](../../EVIDENCIAS_AWS.md): Things y certificado, DynamoDB, Lambda e IAM, CloudWatch y Shadow de prueba. No se duplican en esta carpeta. Se conservan la [documentación de Alexa](../../ALEXA.md) y el [informe consolidado](../../INFORME.md).
 
 No se incluyen solicitudes completas de Skill I/O, tokens ni claves privadas. Las capturas muestran solo las porciones visibles de los paneles aportados.
