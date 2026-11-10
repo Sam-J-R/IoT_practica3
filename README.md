@@ -41,7 +41,7 @@ pio run -d firmware -e tendedero_shadow -t upload
 pio device monitor -d firmware -b 115200
 ```
 
-Conexiones y procedimiento reproducible: [hardware/CONEXIONES.md](hardware/CONEXIONES.md) y [hardware/ENSAYO_BANCO.md](hardware/ENSAYO_BANCO.md). El servo necesita alimentación DC adecuada y GND común; no se alimenta desde GPIO ni 3V3.
+Conexiones y procedimiento reproducible: [hardware/CONEXIONES.md](hardware/CONEXIONES.md) y [hardware/ENSAYO_BANCO.md](hardware/ENSAYO_BANCO.md). [Esquema del circuito](hardware/circuito.svg) y [foto del montaje](referencias/montaje.jpg). El servo se alimenta desde VIN (5 V del USB) con GND común; no desde un GPIO ni desde 3V3.
 
 ## Backend y Skill
 

@@ -2,7 +2,7 @@
 
 Esta referencia sirve para cableado y diagnóstico. El [informe](../docs/INFORME.md) incluye el circuito, su justificación y el alcance de las evidencias; las fotografías o videos no sustituyen mediciones de alimentación.
 
-Fotografías en `referencias/`: ESP32, sensor MH frontal y posterior.
+[Esquema del circuito](circuito.svg). Fotografías en `referencias/`: [montaje de banco](../referencias/montaje.jpg), ESP32, sensor MH frontal y posterior.
 
 ## Sensor MH (3 pines `S + -`)
 
@@ -20,9 +20,12 @@ No se emplean LEDs como actuadores. Los perfiles incluidos permiten probar el se
 
 ## Servo (unidad identificada en el registro como MG90S)
 
-- Señal PWM: `D26/GPIO26`; los videos de integración muestran movimiento del brazo en banco. Registrar pulsos y fuente usados para reproducirlo.
-- Positivo de servo: fuente DC regulada con tensión/corriente indicada por SU modelo, nunca GPIO ni salida 3V3 del ESP32.
-- Negativo: GND fuente compartido con ESP32.
+| Servo | ESP32 | Razón |
+|---|---|---|
+| Señal (naranja) | `D26/GPIO26` | Salida PWM |
+| `+` (rojo) | `VIN` | 5 V del USB, dentro del rango del MG90S (4,8–6 V); nunca un GPIO ni `3V3` |
+| `−` (marrón) | `GND` | Tierra común |
+
 - Medir pulsos `SERVO_ABIERTA_US` y `SERVO_CERRADA_US`, frecuencia y asentamiento. Ver el [ensayo de banco](ENSAYO_BANCO.md).
 - Verificar fuerza necesaria, tope mecánico, recorrido, corriente de arranque y reinicios ESP32.
 - Actuador DC ≤12 V, prohibida carga 220 V AC.

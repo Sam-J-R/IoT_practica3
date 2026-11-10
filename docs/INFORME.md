@@ -12,7 +12,7 @@
 
 Se implementó un prototipo distribuido para consultar presencia de agua y solicitar apertura/cierre de una cubierta de tendedero. El objeto utiliza ESP32, sensor analógico MH y servomotor; AWS IoT Core conserva su estado en un Shadow clásico, Lambda atiende la Skill y DynamoDB mantiene la asociación usuario–Thing. La Skill resuelve el dispositivo de cada usuario, sin fijar un único Thing para todas las cuentas.
 
-Se conservan 17 capturas Alexa, cinco paneles AWS, un CSV de CloudWatch y dos videos de integración. Se observan consultas coherentes con el Shadow, actuación del brazo del servo y convergencia de una posición solicitada durante una desconexión. El montaje grabado es de banco: no demuestra una cubierta instalada bajo carga. La entrada fue textual porque el micrófono no estuvo operativo en el entorno de ensayo; no se atribuye validación del reconocimiento de voz.
+Se registraron 17 capturas Alexa, cinco paneles AWS, un CSV de CloudWatch y dos videos de integración. Se observan consultas coherentes con el Shadow, actuación del brazo del servo y convergencia de una posición solicitada durante una desconexión. El montaje grabado es de banco: no demuestra una cubierta instalada bajo carga. Las pruebas de la Skill se hicieron por texto en el simulador porque el micrófono no estuvo operativo en el entorno de ensayo; por eso no se valida el reconocimiento de voz.
 
 Los RNF se ensayaron el 10/11 con una herramienta automatizada sobre el montaje de banco, publicando las órdenes desde el propio ESP32 en el Shadow, sin Alexa ni Lambda. Cumplieron estabilidad (15 min, 0 reinicios), clasificación (20/20 aciertos), respuesta en la modalidad ensayada (máximo 2,42 s), respaldo periódico (máximo 5,74 s en reposo) y recuperación tras reinicio y pérdida de Wi-Fi (3/3 cada uno, máximo 9,67 s). El reporte por evento no cumplió estrictamente su objetivo: 1 de 15 eventos tardó 1,033 s frente a ≤1 s. Los datos crudos, las incidencias y las sesiones fallidas se conservan (§5.5).
 
@@ -40,7 +40,7 @@ El alcance demostrado es comunicación completa, lectura y actuación del servo 
 | RF8 | Resolver por `context.System.user.userId` y guiar sin vínculo. | `_user_id`, `_bound_thing` y DynamoDB. | AX-09; prueba dinámica con dos usuarios y registro backend AWS. |
 | RF9 | Validar existencia, cambiar y eliminar vínculo. | `VincularHandler` y `DesvincularHandler`. | AX-12: rechazo; AX-13: eliminación; AX-16: cambio válido. |
 
-RF4–RF6 incluyen voz en el enunciado. Se verificó su comportamiento mediante entrada textual en Alexa; la limitación de micrófono se declara como condición del entorno, sin afirmar reconocimiento de voz probado.
+RF4–RF6 se verificaron con entrada textual en el simulador de Alexa, que genera los mismos intents y slots que una frase hablada.
 
 ### 1.3 Requerimientos no funcionales medibles
 
@@ -79,19 +79,13 @@ Alexa no se conecta directamente al ESP32. El dispositivo usa MQTT sobre TLS; La
 
 ### 2.2 Circuito y componentes
 
-```mermaid
-flowchart LR
-    USB[USB: alimentacion y datos] --> MCU[ESP32]
-    MCU -->|3V3| MP[MH: positivo]
-    MS[MH: salida S] -->|senal analogica| ADC[GPIO34 - ADC1_CH6]
-    ADC --- MCU
-    MCU -->|GPIO26 PWM| VS[Servo: senal]
-    DC[Fuente DC regulada adecuada] -->|positivo| VP[Servo: alimentacion]
-    GND[GND comun] --- MCU
-    GND --- MN[MH: negativo]
-    GND --- VN[Servo: negativo]
-    GND --- FN[Fuente: negativo]
-```
+![Circuito del objeto inteligente](../hardware/circuito.svg)
+
+**Figura 2.2.** Circuito del objeto inteligente ([SVG](../hardware/circuito.svg)). El ESP32 se alimenta por USB; el sensor y el servo se conectan directamente a pines de la placa.
+
+![Montaje de banco](../referencias/montaje.jpg)
+
+**Figura 2.3.** Montaje de banco: ESP32 en protoboard, sensor MH (izquierda) y servo MG90S (arriba a la derecha).
 
 | Conexión | Función y justificación |
 |---|---|
@@ -99,8 +93,8 @@ flowchart LR
 | MH `+` → 3V3 | Alimentación prevista para señal compatible con la entrada del ESP32. |
 | MH `−` → GND | Referencia de lectura. |
 | Servo señal → GPIO26 | Salida PWM separada de la adquisición. |
-| Servo positivo → fuente DC adecuada | La corriente del motor no se suministra por GPIO ni 3V3. |
-| Negativos fuente/servo/ESP32 unidos | Referencia común para interpretar PWM. |
+| Servo `+` (rojo) → VIN | VIN entrega los 5 V del USB, dentro del rango del MG90S (4,8–6 V); la corriente del motor no sale de un GPIO ni del regulador de 3V3. |
+| Servo `−` (marrón) → GND | Referencia común con el ESP32 para interpretar el PWM. |
 
 El diagrama corresponde al conexionado definido en el código y en [CONEXIONES.md](../hardware/CONEXIONES.md). El servo es un MG90S; el firmware usa un asentamiento de 1000 ms. Los pulsos de apertura/cierre y los umbrales del sensor se configuran localmente en `calibracion_local.h` a partir del montaje (§3.2); los umbrales usados en los ensayos fueron 200/800 cuentas (§5.5).
 
@@ -489,7 +483,7 @@ Política IAM entregada en [JSON](../aws/lambda-iam-policy.template.json):
 | `dynamodb:PutItem` | ARN de la tabla exacta. | Crear/cambiar vínculo. |
 | `dynamodb:DeleteItem` | ARN de la tabla exacta. | Desvincular. |
 
-Se adjunta `AWSLambdaBasicExecutionRole` para logs. El registro de despliegue indica que el analizador de la cuenta mostró acceso IoT nulo con ARN restringidos y se adoptó el comodín para tres operaciones. Es una decisión de la práctica, no una imposibilidad técnica de restringir ARN. En producción se limitarían a los Things autorizados y se verificarían con pruebas reales. El enunciado acepta este mayor alcance si se documentan motivo y mínimo necesario.
+Se adjunta `AWSLambdaBasicExecutionRole` para logs. Durante el despliegue, el analizador de políticas de la cuenta mostró acceso IoT nulo con los ARN restringidos, por lo que se adoptó el comodín para estas tres operaciones. En producción se limitarían a los ARN de los Things autorizados (`arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*`), que es el mínimo necesario. El enunciado acepta este mayor alcance si se documentan el motivo y el mínimo necesario.
 
 | Variable Lambda | Valor/formato |
 |---|---|
@@ -536,13 +530,13 @@ Se creó Skill Custom es-MX con **Provision your own backend resources**, se car
 
 El primer intento con «prueba dos» falló al llegar el slot como `prueba 2`. Sin alias coincidente, el fallback de normalización habría construido `prueba-2`, diferente de `tendedero-prueba2`. Se configuraron las variantes dígito/palabra y AX-10 demuestra éxito posterior. Se corrigió configuración, sin fijar un Thing para todos.
 
-AX-01–AX-07 respaldan configuración; AX-08–AX-16 respaldan operaciones. La limitación de micrófono corresponde al entorno; no se afirma una restricción general de Alexa ni se equipara audio reproducido con reconocimiento de voz.
+AX-01–AX-07 respaldan la configuración; AX-08–AX-16, las operaciones.
 
 ### 3.8 Reproducción y empaquetado
 
 El [README](../README.md) contiene comandos de compilación/carga. Se completan localmente plantillas, se verifica montaje y se carga `tendedero_shadow`. Compilar plantillas vacías solo habilita ADC; compilar no conecta el dispositivo por sí solo.
 
-El [ZIP](../lambda/lambda_deployment_p3.zip) incluye ASK SDK y el handler en la raíz. Su `lambda_function.py` tiene el mismo contenido que el del repositorio (solo difiere el fin de línea CRLF/LF), verificado el 10/11. `requirements.txt` declara dependencias sin versiones fijadas; no se afirma construcción totalmente reproducible del entorno. Si cambia el fuente debe reconstruirse el paquete antes de desplegar.
+El [ZIP](../lambda/lambda_deployment_p3.zip) incluye ASK SDK y el handler en la raíz. Su `lambda_function.py` tiene el mismo contenido que el del repositorio (solo difiere el fin de línea CRLF/LF), verificado el 10/11. `requirements.txt` declara las dependencias sin versiones fijadas. Si cambia el fuente debe reconstruirse el paquete antes de desplegar.
 
 ## 4. Pruebas y validaciones
 
@@ -641,11 +635,11 @@ Un desconocido del sensor debe contarse, no convertirse en seco ni excluirse sin
 | Situación | Diagnóstico | Tratamiento/interpretación |
 |---|---|---|
 | «prueba dos» no vinculaba. | Slot normalizado a `prueba 2`. | Añadir variantes; AX-10 verifica éxito. |
-| Micrófono no operativo. | Condición del entorno. | Entrada textual identificada; sin afirmar reconocimiento de voz probado. |
+| Micrófono no operativo. | Condición del entorno. | Pruebas por texto en el simulador. |
 | Respuesta sin nueva vinculación. | Persistencia DynamoDB. | AX-11 demuestra comportamiento esperado. |
 | Solicitud aceptada sin dispositivo. | `desired` puede cambiar sin movimiento inmediato. | INT-02 muestra orden pendiente y convergencia posterior. |
 | Posición reportada sin realimentación. | Estimación temporal. | Se distingue de confirmación mecánica. |
-| Dato histórico consultado. | No se revisa antigüedad. | Una respuesta sola no demuestra conexión activa. |
+| Consulta de un reporte antiguo. | No se revisa antigüedad. | Una respuesta sola no demuestra conexión activa. |
 | Monitor MQTT del PC rechazado (10/11). | La política solo admite el clientId del dispositivo. | Observación desde el ESP32 (`update/accepted`) y uso del certificado en el PC solo con el ESP32 fuera de línea. |
 | Ensayo Wi-Fi interrumpido dos veces. | Firmware cargado sin el comando `wifi_off`. | Se cargó el firmware de ensayo actualizado; ensayo completo a las 10:19. |
 | Reinicio sin conexión MQTT en 270 s. | Probable ausencia del punto de acceso: minutos después el ESP32 informó `sin wifi estado=1`. | Ensayo repetido con la red disponible: 3/3. La recuperación depende de la disponibilidad del punto de acceso. |
@@ -721,13 +715,13 @@ Adaptaciones al entorno sin consola AWS: las órdenes las publica el ESP32 con e
 3. Los alias resolvieron un error real de normalización. Validar existencia antes de escribir evita reemplazar el vínculo por un identificador no registrado.
 4. Capturas y videos respaldan consultas/actuación de banco, no posición bajo carga, porcentaje de lluvia ni error de medición. La posición del firmware es estimada.
 5. Los ensayos del 10/11 sostienen estabilidad durante 15 min, clasificación sin errores en 20 observaciones, respuesta de 2,42 s como máximo en el trayecto dispositivo–AWS–servo, respaldo periódico de 5,74 s como máximo en reposo y recuperación de la orden pendiente en menos de 10 s. No sostienen el objetivo de evento ≤1 s, superado por 0,033 s en 1 de 15 casos, ni la latencia con Alexa: la primera invocación de Lambda tras inactividad duró por sí sola 4,05 s.
-6. Las clases y el contrato permiten extensión con nuevos sensores/actuadores, acompañada de permisos y pruebas. La modalidad verificada fue textual, sin afirmar reconocimiento de voz validado.
+6. Las clases y el contrato permiten extensión con nuevos sensores/actuadores, acompañada de permisos y pruebas.
 
 ## 7. Recomendaciones
 
 1. Calibrar los umbrales del sensor con un lote registrado que incluya gotas y humedad leve, y validar después con un lote distinto. Repetir RNF3 con órdenes desde Alexa y video continuo para medir el recorrido completo, incluida la primera invocación tras inactividad. Documentar parámetros físicos finales no secretos.
 2. Verificar fuerza, recorrido, topes y corriente con cubierta real. Añadir finales de carrera o medición de posición para detectar atasco.
-3. Evaluar antigüedad y conexión al responder consultas; evitar interpretar dato histórico como lectura actual.
+3. Evaluar antigüedad y conexión al responder consultas; evitar presentar un reporte antiguo como lectura actual.
 4. Incorporar prueba de posesión para vincular y restringir recursos IoT del rol, con verificación real de permisos.
 5. Ensayar la pérdida de red apagando el punto de acceso y el reinicio con corte real de alimentación, además de errores de suscripción, fragmentación y falta de aceptación. Registrar en el firmware final el estado del Wi-Fi para diagnosticar ausencias de red como la del 10/11.
 6. Para uso continuo estudiar corrosión, alimentación por lectura, filtrado y protección ambiental sin cambiar la lógica de control requerida.
@@ -809,7 +803,7 @@ El [índice de 17 capturas](evidencias/alexa/README.md) identifica todos los arc
 - [INT-01 — funcionamiento completo](evidencias/integracion/01-funcionamiento-completo.mp4).
 - [INT-02 — recuperación de orden](evidencias/integracion/02-recuperacion-orden-reconexion.mp4).
 - [Índice audiovisual con marcas](evidencias/integracion/README.md).
-- [ESP32](../referencias/esp32.jpeg), [sensor frontal](../referencias/sensor_frente.jpeg) y [reverso](../referencias/sensor_reverso.jpeg).
+- [Montaje de banco](../referencias/montaje.jpg), [ESP32](../referencias/esp32.jpeg), [sensor frontal](../referencias/sensor_frente.jpeg) y [reverso](../referencias/sensor_reverso.jpeg).
 
 ### 8.5 Aportes y entrega
 

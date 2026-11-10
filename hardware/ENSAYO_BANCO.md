@@ -33,9 +33,9 @@ pio device monitor -d firmware -b 115200
 
 ## 3. Servo y parámetros
 
-La unidad fue identificada en el registro como TowerPro MG90S y los videos muestran actuación de banco. Para reproducir el montaje se necesitan tensión, pulsos, tiempos y recorrido medidos. Antes de repetir, revisar pinout, frecuencia PWM y fuente regulada adecuada a los picos de corriente. [Ficha de referencia TowerPro MG90S](https://towerpro.com.tw/product/mg90s-3/).
+La unidad fue identificada en el registro como TowerPro MG90S y los videos muestran actuación de banco. Para reproducir el montaje se necesitan tensión, pulsos, tiempos y recorrido medidos. Antes de repetir, revisar pinout, frecuencia PWM y que el servo esté conectado a VIN y GND de la placa. [Ficha de referencia TowerPro MG90S](https://towerpro.com.tw/product/mg90s-3/).
 
-Ensayar primero sin acoplar la cubierta, con un comprobador de servos compatible y dentro del rango de la unidad. Después acoplar la cubierta sin forzar topes. Medir pulsos de apertura y cierre en µs, frecuencia y tiempo de asentamiento con carga. Registrar tensión y capacidad de fuente, caídas durante el movimiento y compatibilidad de señal. Cortar alimentación si se atasca o zumba sostenidamente. Una vez validado, conectar D26 a la entrada de señal compatible y unir el negativo de la fuente externa con GND del ESP32.
+Ensayar primero sin acoplar la cubierta, con un comprobador de servos compatible y dentro del rango de la unidad. Después acoplar la cubierta sin forzar topes. Medir pulsos de apertura y cierre en µs, frecuencia y tiempo de asentamiento con carga. Vigilar reinicios del ESP32 durante el movimiento, que indicarían caídas de tensión en VIN. Desconectar el USB si el servo se atasca o zumba sostenidamente. Una vez validado, conectar la señal a D26, `+` a VIN y `−` a GND.
 
 Copiar `firmware/include/calibracion.example.h` como `calibracion_local.h` e introducir solo parámetros obtenidos del ensayo. Conservar las medidas en el informe. La clasificación usa histéresis: `UMBRAL_SECO` marca el regreso al estado seco y `UMBRAL_AGUA` la entrada al estado agua, en el sentido observado de la lectura. Validar ambos en un lote independiente.
 
