@@ -1,5 +1,7 @@
 # Estado de la Práctica 3 (actualización de integración: 9 de noviembre de 2026)
 
+> **Actualización 10/11/2026:** los RNF se midieron con ensayos automatizados. Resultados, condiciones e incidencias: [RESULTADOS_RNF.md](RESULTADOS_RNF.md). Las menciones de este documento a mediciones pendientes corresponden al estado del 9/11.
+
 Este documento diferencia capturas, videos inspeccionables, condiciones del ensayo comunicadas por el equipo y mediciones. La actualización de Alexa se detalla en [ALEXA.md](ALEXA.md), con [17 capturas](evidencias/alexa/README.md) y [dos videos de integración](evidencias/integracion/README.md).
 
 ## Confirmado

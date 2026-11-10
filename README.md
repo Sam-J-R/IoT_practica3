@@ -4,8 +4,6 @@
 
 Un ESP32 lee un sensor analógico MH y mueve una cubierta con un servomotor. La cubierta se controla **solo desde Alexa**, mediante Lambda y AWS IoT Core Device Shadow; el sensor se consulta por voz. No hay LEDs ni cierre automático local.
 
-> **¿Se lo vas a pasar a una compañera?** Empieza por [`GUIA_PARA_COMPANERA.md`](GUIA_PARA_COMPANERA.md). Explica en palabras sencillas cómo funciona, qué hace cada archivo y qué le falta a cada responsable.
-
 ## Estructura mínima
 
 | Carpeta | Contenido |
@@ -16,6 +14,7 @@ Un ESP32 lee un sensor analógico MH y mueve una cubierta con un servomotor. La 
 | `aws/` | Plantillas IoT, DynamoDB e IAM |
 | `hardware/` | Conexiones y procedimiento de ensayo seguro |
 | `docs/` | Contrato, diagramas, pruebas, informe y registro de cambios |
+| `resultados/` | Logs, tablas e informes de los ensayos RNF del 10/11/2026 |
 | `tests/` | Pruebas locales sin servicios AWS reales |
 | `referencias/` | Enunciado original y fotografías del hardware |
 
@@ -29,6 +28,7 @@ Abre **únicamente la carpeta `firmware/`** en VS Code con PlatformIO. Placa: `e
 | `servo_test` | Probar apertura/cierre con comandos `A` y `C` en serie, sin AWS |
 | `sensor_shadow_test` | Diagnosticar MQTT TLS y reporte ADC sin mover el servo |
 | `tendedero_shadow` | **Programa final**: sensor + servo + Device Shadow |
+| `tendedero_ensayo` | Programa final + comandos serie de ensayo (`abrir`, `cerrar`, `estado`, `wifi_off`, `wifi_on`) para medir RNF |
 
 En PowerShell, desde la raíz del repositorio:
 
@@ -49,6 +49,18 @@ Para pruebas individuales, sustituye `tendedero_shadow` por el perfil correspond
 5. Configurar el Thing y su política IoT siguiendo `docs/GUIA_INTEGRACION.md`. Sin credenciales o calibración válida, el firmware final se mantiene en modo lectura ADC, sin activar el servo/MQTT.
 
 No subir ni compartir `secrets.h`, certificados, claves privadas o compilaciones que puedan contener datos Wi-Fi.
+
+## Ensayos de requisitos no funcionales
+
+Con el perfil `tendedero_ensayo` cargado y el monitor serie cerrado, `ensayo_rnf.py` ejecuta los ensayos y genera informes en `resultados/`:
+
+```powershell
+pip install pyserial paho-mqtt
+python ensayo_rnf.py --puerto COM3 todo --endpoint <endpoint ATS> --thing tendedero-inteligente --ca <CA> --cert <certificado> --key <clave privada>
+python ensayo_rnf.py --puerto COM3 sensor --referencia "método físico"
+```
+
+Reemplazar los valores entre `< >` por las rutas locales, entre comillas si tienen espacios; los certificados nunca se suben al repositorio. Procedimiento: [`docs/ENSAYOS_RNF_SIN_CONSOLA.md`](docs/ENSAYOS_RNF_SIN_CONSOLA.md). Resultados: [`docs/RESULTADOS_RNF.md`](docs/RESULTADOS_RNF.md). `analizar_rnf.py`, `grabar_rnf.py` y `orden_offline.py` permiten registrar y analizar ensayos manuales.
 
 ## Integración de equipo
 
@@ -73,6 +85,7 @@ Las pruebas locales utilizan el SDK incluido en `lambda/lambda_deployment_p3.zip
 - Videos de funcionamiento y recuperación de orden: [`docs/evidencias/integracion/README.md`](docs/evidencias/integracion/README.md).
 - Guía de integración y demo: [`docs/GUIA_INTEGRACION.md`](docs/GUIA_INTEGRACION.md).
 - Matriz de requisitos y pruebas: [`docs/PRUEBAS.md`](docs/PRUEBAS.md).
+- Resultados de los ensayos RNF: [`docs/RESULTADOS_RNF.md`](docs/RESULTADOS_RNF.md).
 - Informe técnico: [`docs/INFORME.md`](docs/INFORME.md).
 - Cambios de esta versión: [`docs/CAMBIOS_APLICADOS.md`](docs/CAMBIOS_APLICADOS.md).
 

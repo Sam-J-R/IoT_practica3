@@ -26,7 +26,7 @@ Preparación: `pio run -e tendedero_ensayo -t upload`, cerrar el monitor de Plat
 
 ## 3. Lo que ya está medido en los registros existentes
 
-Verificado sobre los CSV del repositorio (horas de Bolivia, 10/11/2026).
+Verificado sobre los registros previos a la automatización, conservados en [`resultados/previos/`](../resultados/previos/README.md) (horas de Bolivia, 10/11/2026).
 
 **Frecuencia de reporte (RNF 4), respaldo periódico.** `rnf-01.csv`, 00:20:40–00:39:44: 214 reportes aceptados, 213 intervalos, promedio 5,35 s, máximo 5,54 s, mínimo 5,29 s. `rnf-04.csv`: 30 intervalos, promedio 5,34 s, máximo 5,53 s. El exceso sobre 5 s es coherente con el código: el plazo cuenta desde la aceptación anterior, así que cada intervalo suma el viaje de ida y vuelta ESP32–AWS (≈0,3 s).
 
@@ -90,7 +90,7 @@ Sin consola AWS no hay capturas del Shadow; la evidencia es el log serie con las
 
 ## 6. Integridad de los registros
 
-`completar_15.py` genera líneas de sensor, Shadow y MQTT sintéticas para alargar un registro hasta 15 minutos. Ninguna de sus salidas debe usarse como evidencia. Se revisó `rnf-01.csv`: sus horas están en hora local (el script escribe UTC) y los tiempos tienen la variación propia del dispositivo, por lo que no contiene esa salida. Se recomienda eliminar el script del repositorio.
+`completar_15.py` genera líneas de sensor, Shadow y MQTT sintéticas para alargar un registro hasta 15 minutos. Ninguna de sus salidas debe usarse como evidencia. Se revisó `rnf-01.csv`: sus horas están en hora local (el script escribe UTC) y los tiempos tienen la variación propia del dispositivo, por lo que no contiene esa salida. El script se eliminó del repositorio.
 
 ## 7. Ejecución automática
 

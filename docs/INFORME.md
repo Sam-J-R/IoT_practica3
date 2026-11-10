@@ -587,7 +587,7 @@ El registro del 7/11 informa **12/12 satisfactorias** y compilación de los cuat
 | AWS-BE-10 | Desvincular. | Eliminación y guía posterior. | Registro backend; AX-09/AX-13. |
 | AWS-BE-11 | Logs. | START/END/REPORT sin excepciones visibles en fragmento. | AWS-04 y CSV. |
 
-La fuente de estas filas es el conjunto AWS de la revisión `a8a86c3`. Sus cinco paneles y CSV se conservan localmente en [evidencias/aws](evidencias/aws/README.md). Una fila comunicada no equivale a disponer de captura individual de cada ejecución.
+La fuente de estas filas es el conjunto AWS de la revisión `a8a86c3`. Sus cinco paneles y CSV se conservan localmente en [evidencias/aws](EVIDENCIAS_AWS.md). Una fila comunicada no equivale a disponer de captura individual de cada ejecución.
 
 ### 4.4 Frases probadas en la Skill
 

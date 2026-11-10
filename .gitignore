@@ -22,3 +22,9 @@ calibracion_local.h
 
 # Capturas originales sin redactar; solo se versionan los paneles sanitizados.
 docs/evidencias/aws/originales_privados/
+
+# Copias locales, respaldos y paquetes generados (no forman parte de la entrega)
+firmware_respaldo/
+estructura.txt
+*.zip
+!lambda/lambda_deployment_p3.zip
