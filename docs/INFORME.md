@@ -14,7 +14,7 @@ Se implementó un prototipo distribuido para consultar presencia de agua y solic
 
 Se registraron 17 capturas Alexa, cinco paneles AWS, un CSV de CloudWatch y dos videos de integración. Se observan consultas coherentes con el Shadow, actuación del brazo del servo y convergencia de una posición solicitada durante una desconexión. El montaje grabado es de banco: no demuestra una cubierta instalada bajo carga. Las pruebas de la Skill se hicieron por texto en el simulador porque el micrófono no estuvo operativo en el entorno de ensayo; por eso no se valida el reconocimiento de voz.
 
-Los RNF se ensayaron el 10/11 con una herramienta automatizada sobre el montaje de banco, publicando las órdenes desde el propio ESP32 en el Shadow, sin Alexa ni Lambda. Cumplieron estabilidad (15 min, 0 reinicios), clasificación (20/20 aciertos), respuesta en la modalidad ensayada (máximo 2,42 s), respaldo periódico (máximo 5,74 s en reposo) y recuperación tras reinicio y pérdida de Wi-Fi (3/3 cada uno, máximo 9,67 s). El reporte por evento no cumplió estrictamente su objetivo: 1 de 15 eventos tardó 1,033 s frente a ≤1 s. Los datos crudos, las incidencias y las sesiones fallidas se conservan (§5.5).
+Los RNF se ensayaron el 10/11 sobre el montaje de banco: la mayoría con una herramienta automatizada que publica las órdenes desde el propio ESP32, y el tiempo de respuesta de extremo a extremo con órdenes reales desde la Skill. Cumplieron estabilidad (15 min, 0 reinicios), clasificación (20/20 aciertos), tiempo de respuesta Alexa → servo (10/10 órdenes, máximo 1,80 s), respaldo periódico (máximo 5,74 s en reposo) y recuperación tras reinicio y pérdida de Wi-Fi (3/3 cada uno, máximo 9,67 s). El reporte por evento no cumplió estrictamente su objetivo: 1 de 15 eventos tardó 1,033 s frente a ≤1 s. Los datos crudos, las incidencias y las sesiones fallidas se conservan (§5.5).
 
 ## 1. Caso de uso y requerimientos
 
@@ -50,7 +50,7 @@ Los objetivos se declararon el 9/11, antes de los ensayos, y no se modificaron d
 |---|---|---|---|
 | RNF1 | Estabilidad: 15 min continuos, 0 reinicios y 0 bloqueos; referencia docente ≥10 min. | Log serie y operaciones durante el período, con inicio/fin. | Cumple: 15,0 min, 0 reinicios, 0 bloqueos, 15 órdenes y 14 consultas. |
 | RNF2 | Clasificación: criterio propuesto ≤5 % de errores en ≥20 observaciones independientes, repartidas entre seco/agua. | Referencia física, ADC, clasificación y matriz de confusión. | Cumple: 0/20 errores (0 FP, 0 FN), condición rehecha en cada observación. Valida agua abundante, no gotas ni humedad leve. |
-| RNF3 | Respuesta: referencia ≤3 s hasta posición física final. | ≥10 órdenes alternadas; tiempo desde el envío de la orden hasta la posición final. | Cumple en modalidad MQTT desde el dispositivo: máximo 2,42 s hasta la posición estimada. Sin Alexa ni Lambda. |
+| RNF3 | Respuesta: referencia ≤3 s hasta posición física final. | ≥10 órdenes alternadas; tiempo desde el envío de la orden hasta la posición final. | Cumple: 10/10 órdenes desde la Skill, promedio 1,70 s y máximo 1,80 s hasta la posición física final. |
 | RNF4 | Respaldo nominal de 5 s desde aceptación previa; criterio propuesto de ensayo ≤6 s en red estable. Objetivo por evento ≤1 s sin reporte pendiente. | Timestamps consecutivos de `update/accepted` del ESP32, intervalos y máximos. | Periódico cumple: máximo 5,74 s en reposo. Evento no cumple: 14/15 en ≤1 s, máximo 1,033 s. |
 | RNF5 | Recuperar conexión y aplicar el `desired` vigente sin repetir orden, en ≤30 s. | Ensayar por separado reinicio y pérdida Wi-Fi con equipo encendido; registrar convergencia y tiempos. | Cumple: reinicio 3/3 (máximo 9,67 s) y Wi-Fi 3/3 (máximo 7,69 s), sin repetir la orden. |
 | RNF6 | Modularidad: separar captura, actuación, comunicación y persistencia. | Inspección de clases, interfaces y perfiles. | Implementada en ESP32 y backend Python. |
@@ -624,7 +624,7 @@ Protocolo de referencia, definido antes de los ensayos. Su ejecución del 10/11,
 |---|---|---|---|
 | Estabilidad | Operar 15 min sin interrupción intencional, con consultas/órdenes. | Inicio/fin, operaciones, reinicios, bloqueos y log continuo. | 15 min, 0 reinicios, 0 bloqueos. |
 | Exactitud | Calibrar y validar en lote distinto de ≥20 referencias físicas seguras, con ambos estados/transiciones. | Referencia, ADC, booleano, falsos positivos/negativos; errores/n × 100. | Propuesto ≤5 % de error, informando n y tipos. |
-| Respuesta | ≥10 órdenes alternadas con envío y brazo visibles. | Final − envío; promedio, mediana, máximo y excedencias. | Referencia ≤3 s, declarando inicio textual. |
+| Respuesta | ≥10 órdenes alternadas desde la Skill, con el simulador y el brazo del servo en el mismo video. | Final − envío, cuadro a cuadro; promedio, máximo y excedencias. | ≤3 s en todas las órdenes. |
 | Reporte | ≥10 mensajes aceptados del ESP32 y cambios de clasificación/posición. | Timestamps, intervalos, máximos; identificar token para no mezclar actualizaciones Lambda. | Propuesto ≤6 s estable y objetivo de evento ≤1 s sin reporte pendiente. |
 | Reconexión | Separar reinicio y pérdida Wi-Fi; ordenar posición opuesta durante ausencia. | Estado previo, deseado, retorno MQTT, giro, aceptación, tiempos y repeticiones. | Converger sin repetir la orden, en ≤30 s. |
 
@@ -644,13 +644,14 @@ Un desconocido del sensor debe contarse, no convertirse en seco ni excluirse sin
 | Ensayo Wi-Fi interrumpido dos veces. | Firmware cargado sin el comando `wifi_off`. | Se cargó el firmware de ensayo actualizado; ensayo completo a las 10:19. |
 | Reinicio sin conexión MQTT en 270 s. | Probable ausencia del punto de acceso: minutos después el ESP32 informó `sin wifi estado=1`. | Ensayo repetido con la red disponible: 3/3. La recuperación depende de la disponibilidad del punto de acceso. |
 | Log cortado. | Disco del PC lleno. | Ensayo invalidado y repetido; la herramienta verifica ahora el espacio libre. |
+| Primera orden tras inactividad: 6,47 s (10/11, 14:31). | Arranque en frío de Lambda: carga del entorno y del ASK SDK, ya observado en CloudWatch (§5.2). | Se informa aparte; las 10 órdenes siguientes tardaron 1,5–1,8 s. Mitigación en §7. |
 | Intervalos periódicos de hasta 6,97 s. | Siguen a consultas de ensayo del Shadow desde el ESP32, inexistentes en la operación real. | Se midió además en reposo según la guía: máximo 5,74 s. Se informan ambos. |
 
 ## 5. Resultados
 
 ### 5.1 Resultados registrados
 
-Hay **17 capturas Alexa, 5 paneles AWS, 1 CSV, 2 videos y los registros de 6 ensayos RNF**. La evidencia respalda el flujo Skill → Lambda → DynamoDB/Shadow, la persistencia, el rechazo, el cambio y el borrado del vínculo; los videos añaden la actuación del servo de banco y la recuperación de una posición deseada tras reinicio.
+Hay **17 capturas Alexa, 5 paneles AWS, 1 CSV, 2 videos de integración y los registros de 7 ensayos RNF**, uno de ellos en video. La evidencia respalda el flujo Skill → Lambda → DynamoDB/Shadow, la persistencia, el rechazo, el cambio y el borrado del vínculo; los videos añaden la actuación del servo de banco y la recuperación de una posición deseada tras reinicio.
 
 | Dato | Valor | Interpretación |
 |---|---|---|
@@ -691,22 +692,28 @@ El intervalo medido en reposo, 5,39 s de promedio, equivale a unos 11 reportes/m
 | Skill | Operaciones verificadas por texto, incluida persistencia/cambio. |
 | Actuación | Brazo del servo de banco visible; sin prueba de cubierta bajo carga. |
 | Recuperación | Medida tras reinicio por EN y tras pérdida de Wi-Fi con el equipo encendido: 3/3 en cada caso (§5.5). |
-| Exactitud, estabilidad y tiempos | Medidos el 10/11 (§5.5), con órdenes MQTT desde el dispositivo y posición estimada; no incluyen Alexa ni la posición física. |
+| Exactitud, estabilidad y tiempos | Medidos el 10/11 (§5.5). El tiempo de respuesta se midió de extremo a extremo con la Skill y la posición física del servo; los demás ensayos usan órdenes MQTT desde el dispositivo. |
 | Voz | Entrada textual en el simulador por limitación de micrófono del entorno. |
 
 ### 5.5 Resultados RNF
 
-Ensayos del 10/11/2026, 09:48–11:15, con [`ensayo_rnf.py`](../ensayo_rnf.py) y el firmware `tendedero_ensayo`. Condiciones, discusión e incidencias completas: [RESULTADOS_RNF.md](RESULTADOS_RNF.md). Datos crudos y sesiones fallidas: [`resultados/`](../resultados/INDICE.md).
+Ensayos del 10/11/2026, 09:48–11:15, con [`ensayo_rnf.py`](../ensayo_rnf.py) y el firmware `tendedero_ensayo`; el tiempo de respuesta con Alexa se midió a las 14:31 con el programa final `tendedero_shadow` ([respuesta-alexa](../resultados/respuesta-alexa-20261110-1431.md), [video](../resultados/RNF3.webm)). Condiciones, discusión e incidencias completas: [RESULTADOS_RNF.md](RESULTADOS_RNF.md). Datos crudos y sesiones fallidas: [`resultados/`](../resultados/INDICE.md).
 
 | ID | Objetivo (§1.3) | Resultado medido | ¿Cumple? |
 |---|---|---|---|
 | RNF1 | 15 min, 0 reinicios, 0 bloqueos | 15,0 min; 15/15 órdenes, 14/14 consultas; 0 reinicios, 0 bloqueos, 0 desconexiones MQTT | Cumple |
 | RNF2 | ≤5 % de errores, ≥20 observaciones independientes | 20 observaciones (10/10): 0 errores; ADC seco 0, con agua 1745–2221 | Cumple |
-| RNF3 | ≤3 s hasta la posición final | 10/10; promedio 2,19 s, máximo 2,42 s hasta la posición estimada; envío → delta 1,19 s de promedio | Cumple en modalidad MQTT desde el dispositivo |
+| RNF3 | ≤3 s hasta la posición final | Alexa → servo: 10/10 órdenes, promedio 1,70 s, máximo 1,80 s hasta la posición física final. Complemento sin Alexa (MQTT desde el ESP32): máximo 2,42 s hasta la posición estimada | Cumple |
 | RNF4 | Periódico ≤6 s; evento ≤1 s sin reporte pendiente | Reposo: 54 intervalos, promedio 5,39 s, máximo 5,74 s. Evento: 14/15 en ≤1 s, máximo 1,033 s | Periódico: cumple. Evento: no cumple |
 | RNF5 | `desired` aplicado sin repetir la orden; ≤30 s | Reinicio por EN: 3/3, máximo 9,67 s. Wi-Fi: 3/3, máximo 7,69 s | Cumple |
 
-Adaptaciones al entorno sin consola AWS: las órdenes las publica el ESP32 con el mismo documento que Lambda; la pérdida de red es una desasociación provocada por el ESP32; el reinicio usa la línea RTS sobre el pin EN y no corta la alimentación del servo; y la posición es la estimada al terminar el asentamiento de 1 s. En RNF2 la referencia fue una toalla mojada en contacto con el sensor (agua) y su parte seca para secarlo (seco), rehaciendo la condición en cada observación; los umbrales 200/800 son estimaciones del equipo, sin lote de calibración registrado, y el ensayo no evalúa gotas aisladas ni humedad leve. Durante la estabilidad, 10 de 158 intervalos periódicos superaron 6 s (máximo 6,97 s). Todos siguen a consultas de ensayo del Shadow desde el ESP32, que no existen en la operación real; por eso la frecuencia se midió también en reposo, como indica la guía.
+**RNF3 con Alexa.** Se enviaron órdenes alternadas «abre/cierra la cubierta» desde el simulador mientras una cámara grababa el servo en el mismo video, analizado cuadro a cuadro: desde el envío hasta que el brazo queda quieto en la nueva posición. Las 10 órdenes con Lambda activa tardaron entre 1,53 y 1,80 s, y el servo terminó antes de que el simulador mostrara la respuesta (1,74 s de promedio), porque Lambda escribe `desired` antes de responder. La primera orden tras un período sin uso tardó 6,47 s por el arranque en frío de Lambda y se informa aparte. La cámara llega por Meet con algo de retardo, así que los tiempos son, si acaso, sobreestimados.
+
+![RNF3: orden desde Alexa cuadro a cuadro](../resultados/respuesta-alexa-20261110-1431-fotogramas.png)
+
+**Figura 5.5.** Orden «abre la cubierta» cuadro a cuadro: el brazo queda en su posición final a t₀ + 1,7 s.
+
+Adaptaciones de los demás ensayos al entorno sin consola AWS: las órdenes las publica el ESP32 con el mismo documento que Lambda; la pérdida de red es una desasociación provocada por el ESP32; el reinicio usa la línea RTS sobre el pin EN y no corta la alimentación del servo; y la posición es la estimada al terminar el asentamiento de 1 s. En RNF2 la referencia fue una toalla mojada en contacto con el sensor (agua) y su parte seca para secarlo (seco), rehaciendo la condición en cada observación; los umbrales 200/800 son estimaciones del equipo, sin lote de calibración registrado, y el ensayo no evalúa gotas aisladas ni humedad leve. Durante la estabilidad, 10 de 158 intervalos periódicos superaron 6 s (máximo 6,97 s). Todos siguen a consultas de ensayo del Shadow desde el ESP32, que no existen en la operación real; por eso la frecuencia se midió también en reposo, como indica la guía.
 
 ## 6. Conclusiones
 
@@ -714,19 +721,20 @@ Adaptaciones al entorno sin consola AWS: las órdenes las publica el ESP32 con e
 2. DynamoDB separa vínculo y sesión. Persistencia y cambio válido muestran una Skill no fijada a un Thing; el aislamiento multiusuario cuenta con pruebas directas y simuladas, diferenciadas de dos cuentas Alexa grabadas.
 3. Los alias resolvieron un error real de normalización. Validar existencia antes de escribir evita reemplazar el vínculo por un identificador no registrado.
 4. Capturas y videos respaldan consultas/actuación de banco, no posición bajo carga, porcentaje de lluvia ni error de medición. La posición del firmware es estimada.
-5. Los ensayos del 10/11 sostienen estabilidad durante 15 min, clasificación sin errores en 20 observaciones, respuesta de 2,42 s como máximo en el trayecto dispositivo–AWS–servo, respaldo periódico de 5,74 s como máximo en reposo y recuperación de la orden pendiente en menos de 10 s. No sostienen el objetivo de evento ≤1 s, superado por 0,033 s en 1 de 15 casos, ni la latencia con Alexa: la primera invocación de Lambda tras inactividad duró por sí sola 4,05 s.
+5. Los ensayos del 10/11 sostienen estabilidad durante 15 min, clasificación sin errores en 20 observaciones, respuesta de extremo a extremo Alexa → servo de 1,80 s como máximo (10/10 órdenes), respaldo periódico de 5,74 s como máximo en reposo y recuperación de la orden pendiente en menos de 10 s. El objetivo de evento ≤1 s se superó por 0,033 s en 1 de 15 casos, y la primera orden tras inactividad tardó 6,47 s por el arranque en frío de Lambda.
 6. Las clases y el contrato permiten extensión con nuevos sensores/actuadores, acompañada de permisos y pruebas.
 
 ## 7. Recomendaciones
 
-1. Calibrar los umbrales del sensor con un lote registrado que incluya gotas y humedad leve, y validar después con un lote distinto. Repetir RNF3 con órdenes desde Alexa y video continuo para medir el recorrido completo, incluida la primera invocación tras inactividad. Documentar parámetros físicos finales no secretos.
-2. Verificar fuerza, recorrido, topes y corriente con cubierta real. Añadir finales de carrera o medición de posición para detectar atasco.
-3. Evaluar antigüedad y conexión al responder consultas; evitar presentar un reporte antiguo como lectura actual.
-4. Incorporar prueba de posesión para vincular y restringir recursos IoT del rol, con verificación real de permisos.
-5. Ensayar la pérdida de red apagando el punto de acceso y el reinicio con corte real de alimentación, además de errores de suscripción, fragmentación y falta de aceptación. Registrar en el firmware final el estado del Wi-Fi para diagnosticar ausencias de red como la del 10/11.
-6. Para uso continuo estudiar corrosión, alimentación por lectura, filtrado y protección ambiental sin cambiar la lógica de control requerida.
-7. Fijar dependencias y construcción del ZIP; sincronizar exportación de consola y repositorio, incluidas diferencias de intents integrados/slots.
-8. Revisar uso de mensajes y alerta de costos antes de operación continua. No existe evidencia que permita certificar alerta de facturación configurada.
+1. Calibrar los umbrales del sensor con un lote registrado que incluya gotas y humedad leve, y validar después con un lote distinto. Documentar parámetros físicos finales no secretos.
+2. Reducir el arranque en frío de Lambda, que llevó la primera orden tras inactividad a 6,47 s: concurrencia aprovisionada, una invocación programada periódica que la mantenga activa, o un paquete más liviano.
+3. Verificar fuerza, recorrido, topes y corriente con cubierta real. Añadir finales de carrera o medición de posición para detectar atasco.
+4. Evaluar antigüedad y conexión al responder consultas; evitar presentar un reporte antiguo como lectura actual.
+5. Incorporar prueba de posesión para vincular y restringir recursos IoT del rol, con verificación real de permisos.
+6. Ensayar la pérdida de red apagando el punto de acceso y el reinicio con corte real de alimentación, además de errores de suscripción, fragmentación y falta de aceptación. Registrar en el firmware final el estado del Wi-Fi para diagnosticar ausencias de red como la del 10/11.
+7. Para uso continuo estudiar corrosión, alimentación por lectura, filtrado y protección ambiental sin cambiar la lógica de control requerida.
+8. Fijar dependencias y construcción del ZIP; sincronizar exportación de consola y repositorio, incluidas diferencias de intents integrados/slots.
+9. Revisar uso de mensajes y alerta de costos antes de operación continua. No existe evidencia que permita certificar alerta de facturación configurada.
 
 ## 8. Anexos
 
@@ -746,7 +754,7 @@ El informe integra el contenido técnico sin sustituir los registros de trabajo 
 | Configuración sin secretos | [secrets.example.h](../firmware/include/secrets.example.h), [calibracion.example.h](../firmware/include/calibracion.example.h), [config.h](../firmware/include/config.h). |
 | Diagramas completos | §2.1–2.8. |
 | Pruebas, frases y resultados | §4–§5. |
-| Ensayos RNF | [RESULTADOS_RNF.md](RESULTADOS_RNF.md), [resultados/](../resultados/INDICE.md), [ensayo_rnf.py](../ensayo_rnf.py) y [procedimiento](ENSAYOS_RNF_SIN_CONSOLA.md). |
+| Ensayos RNF | [RESULTADOS_RNF.md](RESULTADOS_RNF.md), [resultados/](../resultados/INDICE.md), [ensayo_rnf.py](../ensayo_rnf.py), [procedimiento](ENSAYOS_RNF_SIN_CONSOLA.md) y [video de RNF3 con Alexa](../resultados/RNF3.webm). |
 
 ### 8.2 Figuras AWS
 
@@ -803,6 +811,7 @@ El [índice de 17 capturas](evidencias/alexa/README.md) identifica todos los arc
 - [INT-01 — funcionamiento completo](evidencias/integracion/01-funcionamiento-completo.mp4).
 - [INT-02 — recuperación de orden](evidencias/integracion/02-recuperacion-orden-reconexion.mp4).
 - [Índice audiovisual con marcas](evidencias/integracion/README.md).
+- [RNF3 — tiempo de respuesta con Alexa](../resultados/RNF3.webm) y su [análisis cuadro a cuadro](../resultados/respuesta-alexa-20261110-1431.md).
 - [Montaje de banco](../referencias/montaje.jpg), [ESP32](../referencias/esp32.jpeg), [sensor frontal](../referencias/sensor_frente.jpeg) y [reverso](../referencias/sensor_reverso.jpeg).
 
 ### 8.5 Aportes y entrega

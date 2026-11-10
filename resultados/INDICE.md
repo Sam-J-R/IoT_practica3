@@ -15,6 +15,7 @@ Registros generados por `ensayo_rnf.py` con el firmware `tendedero_ensayo`, ESP3
 | `log-20261110-103933.csv` | 10:39–10:42 | Reinicio | Completo, 3 repeticiones. | [rnf-05](rnf-05-reinicio-20261110-103933.md) |
 | `log-20261110-104652.csv` | 10:46–10:52 | Sensor | Completo, 20 observaciones. | [rnf-03](rnf-03-sensor-20261110-104652.md) |
 | `log-20261110-111031.csv` | 11:10–11:15 | Frecuencia pasiva | Completo, 5 min. | [rnf-04 pasivo](rnf-04-frecuencia-20261110-111031.md) |
+| [`RNF3.webm`](RNF3.webm) | 14:31–14:33 | Respuesta con Alexa (programa final `tendedero_shadow`) | Completo: 11 órdenes desde el simulador; la primera tras inactividad, 10 con Lambda activa. | [respuesta-alexa](respuesta-alexa-20261110-1431.md) |
 
 Los registros anteriores a la automatización (00:00–00:45 del 10/11, con `grabar_rnf.py`) están en [`previos/`](previos/README.md).
 
@@ -32,6 +33,7 @@ Los archivos siguen la numeración de la guía de mediciones; el informe técnic
 |---|---|---|
 | `rnf-01-estabilidad` | Estabilidad | RNF1 |
 | `rnf-02-respuesta` | Tiempo de respuesta | RNF3 |
+| `respuesta-alexa` | Tiempo de respuesta (con Alexa) | RNF3 |
 | `rnf-03-sensor` | Clasificación del sensor | RNF2 |
 | `rnf-04-frecuencia` | Frecuencia de reporte | RNF4 |
 | `rnf-05-reinicio` | Recuperación tras reinicio | RNF5 (reinicio) |
