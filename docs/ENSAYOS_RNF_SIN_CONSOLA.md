@@ -1,6 +1,6 @@
 # Ensayos RNF sin acceso a la cuenta AWS
 
-Complemento de `GUIA_MEDICIONES_RNF.md`. Recursos disponibles: ESP32 montado, certificado del dispositivo, nombre del Thing (`tendedero-inteligente`) y endpoint ATS. No hay acceso a la consola de AWS (cliente MQTT de prueba, CloudWatch, Shadow).
+Procedimiento usado en los ensayos del 10/11/2026; los resultados están en [RESULTADOS_RNF.md](RESULTADOS_RNF.md). La numeración «RNF n» de este documento sigue la guía de mediciones, no el informe técnico (ver la [correspondencia](../resultados/INDICE.md#correspondencia-de-numeración)). Complemento de `GUIA_MEDICIONES_RNF.md`. Recursos disponibles: ESP32 montado, certificado del dispositivo, nombre del Thing (`tendedero-inteligente`) y endpoint ATS. No hay acceso a la consola de AWS (cliente MQTT de prueba, CloudWatch, Shadow).
 
 ## 1. Restricción que condiciona los ensayos
 
@@ -24,7 +24,7 @@ Preparación: `pio run -e tendedero_ensayo -t upload`, cerrar el monitor de Plat
 
 **Cómo funciona la orden de ensayo.** `abrir`/`cerrar` hace que el ESP32 publique `{"state":{"desired":{"cubierta":"…"}}}` en `shadow/update`, el mismo documento que publica Lambda. AWS calcula el delta y lo devuelve al ESP32, que lo procesa por el mismo código que una orden de Alexa. El recorrido ESP32 → AWS IoT Core → delta → servo es real; lo que no se incluye es Alexa ni Lambda.
 
-## 3. Lo que ya está medido en los registros existentes
+## 3. Registros previos a la automatización
 
 Verificado sobre los registros previos a la automatización, conservados en [`resultados/previos/`](../resultados/previos/README.md) (horas de Bolivia, 10/11/2026).
 
@@ -38,7 +38,7 @@ Verificado sobre los registros previos a la automatización, conservados en [`re
 
 **Componente Lambda.** `docs/evidencias/aws/04-cloudwatch-eventos.csv`: cuatro invocaciones del 7/11/2026. La primera, en frío, duró 4045,84 ms, con 689,80 ms adicionales de inicialización (`Init Duration`); las tres siguientes duraron 457,30, 622,83 y 673,31 ms. Mide solo la ejecución de Lambda; no se suma a otros tiempos para inventar un total.
 
-## 4. Ensayos pendientes
+## 4. Procedimiento de cada ensayo
 
 ### 4.1 Estabilidad con carga (RNF 1)
 

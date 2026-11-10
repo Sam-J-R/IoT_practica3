@@ -1,4 +1,4 @@
-# Matriz de pruebas y evidencias — sin resultados inventados
+# Matriz de pruebas y evidencias
 
 Actualización RNF: 10/11/2026, ensayos automatizados ([resultados](RESULTADOS_RNF.md)). Actualización Alexa e integración: 9/11/2026. Las capturas de respuestas, los [videos de integración](evidencias/integracion/README.md), las pruebas directas AWS y las mediciones tienen alcances distintos. El [registro Alexa](ALEXA.md) identifica resultados y fuentes.
 
@@ -7,7 +7,7 @@ Actualización RNF: 10/11/2026, ensayos automatizados ([resultados](RESULTADOS_R
 | ID | Escenario | Evidencia exigible | Estado |
 |---|---|---|---|
 | RF1 | Leer sensor analógico en condiciones conocidas | Serie + referencia de ensayo | INT-01 muestra `sensor_raw = 0`/`false` y `2453`/`true`; el error físico se evalúa con referencia independiente. |
-| RF2 | Sensor y actuador en `reported` periódico | Shadow y tiempos | INT-01 muestra actualizaciones de sensor y cubierta; la frecuencia efectiva se determina con timestamps consecutivos. |
+| RF2 | Sensor y actuador en `reported` periódico | Shadow y tiempos | INT-01 muestra actualizaciones de sensor y cubierta; frecuencia efectiva medida en RNF4 (abajo). |
 | RF3 | desired → delta → servo → reported | Observación del mecanismo y AWS | INT-02 muestra orden pendiente, giro del servo y convergencia final; procedimiento de reinicio confirmado por el equipo. |
 | RF4 | Alexa consulta presencia de agua | Respuesta y estado de referencia | Captura 14 e INT-01: respuestas negativa/afirmativa coherentes con estados del Shadow. Entrada textual. |
 | RF5 | Alexa solicita abrir/cerrar | Respuesta y observación del servo | Captura 15 e INT-01: solicitudes y actuación del servo en el montaje de banco. |
@@ -46,7 +46,7 @@ Las marcas localizan escenas y no se registran como latencia del sistema. El [í
 
 Comando desde la raíz del repositorio: `py -m unittest discover -s tests -v` en Windows, o `python -m unittest discover -s tests -v` en Linux.
 
-- **12/12 satisfactorias** en la revisión del 7/11/2026 de la versión limpia, con el SDK incluido y clientes de AWS simulados (la versión original tenía 11/11).
+- **12/12 satisfactorias** el 7/11/2026 y de nuevo el 10/11/2026 sobre la revisión final, con el SDK incluido y clientes de AWS simulados.
 - La prueba dinámica verifica dos usuarios, dos Things, vínculos independientes, órdenes sobre cada Shadow, cambio y desvinculación.
 - Una prueba estática comprueba la separación de los perfiles de diagnóstico y el programa final sin LED como actuador.
 - Una compilación de firmware o el paso de la suite no sustituyen la carga física ni demuestran tiempos de respuesta o permisos reales.
@@ -81,28 +81,6 @@ No introducir agua cerca de la alimentación sin aprobación y metodología segu
 | AWS-BE-10 | Desvincular un usuario | Eliminar el ítem y exigir nueva vinculación | El ítem fue eliminado y las operaciones posteriores solicitaron vincular | Aprobada | Ejecución directa |
 | AWS-BE-11 | Revisar invocaciones en CloudWatch | No encontrar excepciones ni `AccessDenied` | Se observaron eventos `START`, `END` y `REPORT` sin errores en el periodo revisado | Aprobada | [`04-cloudwatch-ejecuciones-lambda.png`](evidencias/aws/04-cloudwatch-ejecuciones-lambda.png) y [`04-cloudwatch-eventos.csv`](evidencias/aws/04-cloudwatch-eventos.csv) |
 
-Las pruebas AWS-BE validan el backend y el enrutamiento por usuario. RF4–RF9
-solo se consideran completos cuando los mismos casos se ejecuten desde la Skill
-real; RF2, RF3 y RF5 requieren además el ESP32 y el actuador físico.
-
-## Informe Markdown obligatorio
-
-1. Caso de uso y RF/RNF trazables.
-2. Arquitectura, circuito, clases ESP32 + Lambda, diagramas de secuencia para vinculación, consulta de sensor y comando.
-3. Contrato Shadow y tabla/userId + validaciones, modelo Alexa.
-4. Implementación POO y enlaces al código.
-5. AWS Thing, certificados/políticas sin secretos, IAM, DynamoDB, Alexa.
-6. Pruebas con datos crudos, métricas, errores y discusión.
-7. Resultados cuantificables, conclusiones, recomendaciones y anexos.
-8. GitHub con archivos, evidencias y commits de las tres cuentas, link LMS.
-
-
-## Cómo cerrar cada medición
-
-- **RF1**. Aplicar el [ensayo de banco](../hardware/ENSAYO_BANCO.md). Anexar lotes de seco inicial, resistencia conocida y seco de retorno con min/máx/mediana y montaje. Registrar identificación de los electrodos.
-- **Exactitud**. La salida final es binaria. Con referencia física autorizada y lote independiente, anotar estado de referencia y observado por muestra, matriz de confusión, falsos positivos/negativos y proporción de errores. Definir el criterio de aceptación con la referencia y el uso real. El ADC crudo y el estímulo eléctrico se conservan como caracterización de banco.
-- **Estabilidad**. Cronometrar 15 min continuos desde un sistema integrado y guardar serie con `ms`, Shadow y varias operaciones Alexa. Contar reinicios, bloqueos y pérdida de conexión. Un reinicio de `ms` durante el ensayo se registra como incidencia.
-- **Respuesta**. Grabar ≥10 órdenes alternadas con audio y cubierta visible. Medir desde fin de la frase hasta posición mecánica final y registrar también el inicio de movimiento si se distingue. Informar n, mediana, máximo y cantidad que supera la referencia de 3 s. La aceptación de `reported` es una marca de telemetría separada.
-- **Frecuencia**. Capturar `update/accepted` en régimen estable y al cambiar la clasificación o posición. Calcular intervalos consecutivos y latencia de evento. Muestreo configurado a 500 ms, intento por evento y respaldo 5 s después de la aceptación previa. En régimen ideal, 5 s entre reportes representan hasta unos 12 intentos periódicos por minuto o 17 280 al día para un dispositivo conectado continuamente, antes de eventos, reintentos y mensajes de respuesta. Registrar volumen observado y contrastarlo con la configuración de cuenta vigente.
-- **Reconexión**. Registrar pérdida Wi-Fi/MQTT, orden Alexa en ausencia, `desired` pendiente, vuelta de Wi-Fi, nueva sesión MQTT, `get`, movimiento y convergencia. Medir desde retorno de red hasta movimiento y aceptación, sin repetir la orden. Repetir si se puede aislar solo la pérdida de MQTT.
-- **RF4–RF9**. Conservar las frases y respuestas del modelo es-MX. Las capturas adjuntas acreditan pruebas por texto por la limitación de micrófono del entorno. Distinguir pruebas directas AWS de interacciones del simulador y ocultar identificadores completos de usuario.
+Las pruebas AWS-BE validan el backend y el enrutamiento por usuario. Los mismos
+casos se ejecutaron después desde la Skill (capturas AX-08 a AX-16) y con el
+ESP32 y el servo (videos INT-01 e INT-02).

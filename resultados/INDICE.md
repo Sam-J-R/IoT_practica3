@@ -1,6 +1,6 @@
 # Índice de ensayos RNF — 10/11/2026
 
-Registros generados por `ensayo_rnf.py` con el firmware `tendedero_ensayo`, ESP32 en COM3. Horas de Bolivia (UTC−4), tomadas del reloj del PC. La tabla consolidada está en [docs/RESULTADOS_RNF.md](../docs/RESULTADOS_RNF.md); `resumen.md` es la tabla automática y solo guarda el último ensayo de cada requisito.
+Registros generados por `ensayo_rnf.py` con el firmware `tendedero_ensayo`, ESP32 en COM3. Horas de Bolivia (UTC−4), tomadas del reloj del PC. La tabla consolidada está en [docs/RESULTADOS_RNF.md](../docs/RESULTADOS_RNF.md). La tabla automática `resumen.md` que genera la herramienta no se conserva: solo guardaba el último ensayo de cada requisito y omitía la componente por evento de RNF4.
 
 ## Sesiones
 

@@ -28,3 +28,6 @@ firmware_respaldo/
 estructura.txt
 *.zip
 !lambda/lambda_deployment_p3.zip
+
+# Copias descargadas del asistente
+Claude outputs/

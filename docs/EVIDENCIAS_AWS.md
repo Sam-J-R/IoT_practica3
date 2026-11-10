@@ -1,9 +1,8 @@
 # Evidencias AWS para el informe
 
-Este documento cierra el conjunto de evidencias correspondiente a la
-configuración y las pruebas directas realizadas en AWS. Se usan cinco figuras
-consolidadas, configuraciones JSON sanitizadas, una tabla de resultados y el
-log exportado de CloudWatch. No se requieren más capturas AWS.
+Conjunto de evidencias de la configuración y las pruebas directas realizadas
+en AWS: cinco figuras, configuraciones JSON sanitizadas, una tabla de
+resultados y el log exportado de CloudWatch.
 
 ## Reglas de seguridad
 
@@ -42,23 +41,12 @@ Estas configuraciones sustituyen capturas adicionales de los editores:
 privilegio y el uso de `Resource: "*"` para las tres acciones IoT de Lambda se
 justifican en `docs/GUIA_AWS.md` y `docs/INFORME.md`.
 
-## Alcance cerrado
+## Alcance
 
-No se agregarán al conjunto de evidencias AWS capturas del ESP32, estabilidad,
-reconexión, movimiento físico o simulador de Alexa. Esas actividades no se
-presentan como realizadas por la responsable AWS: pertenecen a la integración
-del equipo, a la responsable correspondiente o a la demostración presencial.
+Este conjunto cubre solo la configuración y las pruebas directas de AWS. La
+integración con el ESP32 y la Skill está en los
+[videos de integración](evidencias/integracion/README.md) y en
+[ALEXA.md](ALEXA.md); las mediciones RNF, en [RESULTADOS_RNF.md](RESULTADOS_RNF.md).
 
-No se grabará video. El movimiento del servo se verificará durante la demo. 
-
-## Registro en el informe
-
-Cada figura debe acompañarse por una breve explicación de:
-
-- fecha y recurso observado;
-- acción realizada;
-- resultado que respalda;
-- si se trató de un estado simulado o de una ejecución directa.
-
-Las cinco figuras ya están insertadas en `docs/INFORME.md`. La tabla funcional
-detallada se encuentra en `docs/PRUEBAS.md`.
+Las cinco figuras están insertadas en el [informe técnico](INFORME.md) (§8.2) y
+la tabla funcional detallada está en [PRUEBAS.md](PRUEBAS.md).

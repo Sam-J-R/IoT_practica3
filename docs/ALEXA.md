@@ -1,6 +1,6 @@
 # Configuración, implementación y validación de Alexa
 
-Registro consolidado el **9 de noviembre de 2026**, hora de Bolivia.
+Registro del **9 de noviembre de 2026**, hora de Bolivia. Los identificadores AX coinciden con el número de captura y con el [informe técnico](INFORME.md) (§4.4).
 
 ## 1. Función de Alexa en el sistema
 
@@ -79,18 +79,18 @@ Modalidad: **entrada textual en el simulador**. En el entorno utilizado, el micr
 
 | ID | Escenario | Resultado | Evidencia |
 |---|---|---|---|
-| AX-01 | Abrir la Skill | Bienvenida y orientación de operaciones. | [08](evidencias/alexa/08-alexa-inicio.png) |
-| AX-02 | Consultar sin vínculo después de desvincular | Solicita vincular primero. | [09](evidencias/alexa/09-alexa-sin-vinculo.png) |
-| AX-03 | Vincular con prueba dos | Confirma `tendedero-prueba2`. | [10](evidencias/alexa/10-alexa-vinculacion.png) |
-| AX-04 | Detener, volver a abrir y consultar | Conserva vínculo y responde sin nueva asociación. | [11](evidencias/alexa/11-alexa-persistencia.png) |
-| AX-05 | Solicitar cambio a un Thing inexistente | Rechaza el identificador. | [12](evidencias/alexa/12-alexa-thing-inexistente.png) |
-| AX-06 | Desvincular | Confirma eliminación; otra consulta sin vínculo se observa en AX-02. | [13](evidencias/alexa/13-alexa-desvinculacion.png) |
-| AX-07 | Consultar clasificación seca y con agua | Respuestas negativa y afirmativa para el sensor. | [14](evidencias/alexa/14-alexa-sensor-seco-y-con-agua.png) |
-| AX-08 | Consultar cubierta | Informa cubierta cerrada según el último reporte. | [14](evidencias/alexa/14-alexa-sensor-seco-y-con-agua.png) |
-| AX-09 | Solicitar abrir y cerrar | Confirma envío de cada posición solicitada. | [15](evidencias/alexa/15-alexa-abrir-y-cerrar-cubierta.png) |
-| AX-10 | Cambiar a un Thing válido | Reemplaza el vínculo de prueba por el Thing físico. | [16](evidencias/alexa/16-alexa-cambio-valido.png) |
+| AX-08 | Abrir la Skill | Bienvenida y orientación de operaciones. | [08](evidencias/alexa/08-alexa-inicio.png) |
+| AX-09 | Consultar sin vínculo después de desvincular | Solicita vincular primero. | [09](evidencias/alexa/09-alexa-sin-vinculo.png) |
+| AX-10 | Vincular con prueba dos | Confirma `tendedero-prueba2`. | [10](evidencias/alexa/10-alexa-vinculacion.png) |
+| AX-11 | Detener, volver a abrir y consultar | Conserva vínculo y responde sin nueva asociación. | [11](evidencias/alexa/11-alexa-persistencia.png) |
+| AX-12 | Solicitar cambio a un Thing inexistente | Rechaza el identificador. | [12](evidencias/alexa/12-alexa-thing-inexistente.png) |
+| AX-13 | Desvincular | Confirma eliminación; otra consulta sin vínculo se observa en AX-09. | [13](evidencias/alexa/13-alexa-desvinculacion.png) |
+| AX-14 | Consultar clasificación seca y con agua | Respuestas negativa y afirmativa para el sensor. | [14](evidencias/alexa/14-alexa-sensor-seco-y-con-agua.png) |
+| AX-14 | Consultar cubierta | Informa cubierta cerrada según el último reporte. | [14](evidencias/alexa/14-alexa-sensor-seco-y-con-agua.png) |
+| AX-15 | Solicitar abrir y cerrar | Confirma envío de cada posición solicitada. | [15](evidencias/alexa/15-alexa-abrir-y-cerrar-cubierta.png) |
+| AX-16 | Cambiar a un Thing válido | Reemplaza el vínculo de prueba por el Thing físico. | [16](evidencias/alexa/16-alexa-cambio-valido.png) |
 
-El equipo confirmó la ejecución de todos los intents. Las figuras permiten inspeccionar las operaciones indicadas en la tabla; no se atribuye una captura individual a ayuda o fallback si no está incluida en este conjunto.
+Se ejecutaron todos los intents; la tabla lista los que tienen captura. Ayuda y fallback se probaron sin captura.
 
 ## 6. Integración con el dispositivo y recuperación de orden
 
@@ -108,7 +108,7 @@ También se ensayó esta secuencia:
 
 El [video de recuperación](evidencias/integracion/02-recuperacion-orden-reconexion.mp4) muestra hacia 00:08–00:09 `desired.cubierta = abierta`, `reported.cubierta = cerrada` y `delta.cubierta = abierta`. Hacia 00:22–00:24 se observa el giro del brazo del servo y al final se muestran `desired` y `reported` en `abierta`. El procedimiento confirmado por el equipo no repitió la orden.
 
-Este resultado corresponde a recuperación tras desconexión y nuevo arranque. El firmware, al conectar MQTT, solicita el Shadow y aplica la posición deseada vigente. No se equipara ese ensayo con una pérdida aislada de Wi-Fi manteniendo el dispositivo encendido.
+Este resultado corresponde a recuperación tras desconexión y nuevo arranque. El firmware, al conectar MQTT, solicita el Shadow y aplica la posición deseada vigente. La pérdida de Wi-Fi con el dispositivo encendido se ensayó aparte el 10/11 (RNF5, [resultados](RESULTADOS_RNF.md)): 3/3 recuperaciones, máximo 7,69 s.
 
 Las capturas documentan la interfaz Alexa y los videos incorporan la observación del montaje de banco, el servo y los estados AWS. Se muestra el brazo del servo; no se presenta una prueba de carga de una cubierta instalada. El estado reportado por el firmware sigue siendo una estimación tras asentamiento, no una medición independiente de posición. Las marcas de los videos son referencias de navegación, no mediciones de latencia.
 
@@ -147,7 +147,7 @@ El enlace identifica la revisión concreta utilizada como referencia. Así se co
 - **Persistencia externa:** cerrar conversación no elimina lo guardado en DynamoDB.
 - **Separación de solicitud y estado:** «He solicitado…» describe una actualización de `desired`, no una confirmación mecánica.
 - **Consulta del último reporte:** una respuesta del sensor no demuestra por sí sola conexión activa ni antigüedad aceptable del dato.
-- **Mediciones:** las capturas y observaciones funcionales no se convierten en valores numéricos de latencia, exactitud o estabilidad. La [matriz de pruebas](PRUEBAS.md) distingue esos atributos de las operaciones funcionales del simulador.
+- **Mediciones:** las capturas y videos son evidencia funcional; los valores de latencia, exactitud y estabilidad provienen de los ensayos RNF del 10/11 ([RESULTADOS_RNF.md](RESULTADOS_RNF.md)).
 
 ## 10. Evidencias y archivos de configuración
 
