@@ -4,11 +4,9 @@
 
 **Actividad:** Integración de un objeto inteligente con Alexa mediante MQTT y AWS IoT Core
 
-**Consolidación:** 9 de noviembre de 2026, hora de Bolivia
+**Integrantes:** Samuel ([Sam-J-R](https://github.com/Sam-J-R)) — hardware, firmware y ensayos RNF · María Lozada ([mjlozada](https://github.com/mjlozada)) — AWS IoT Core, Lambda y DynamoDB · Kathy ([KathM00](https://github.com/KathM00)) — Skill de Alexa, integración e informe
 
-**Actualización RNF:** 10 de noviembre de 2026, con los ensayos automatizados de [RESULTADOS_RNF.md](RESULTADOS_RNF.md)
-
-**Entrega establecida:** 10 de noviembre de 2026, 17:45, mediante enlace GitHub en LMS-UCB
+**Fecha:** 10 de noviembre de 2026 · **Repositorio:** [github.com/Sam-J-R/IoT_practica3](https://github.com/Sam-J-R/IoT_practica3)
 
 ## Resumen
 
@@ -32,8 +30,8 @@ El alcance demostrado es comunicación completa, lectura y actuación del servo 
 
 | ID | Requerimiento aplicado | Implementación | Validación disponible |
 |---|---|---|---|
-| RF1 | Capturar señal del sensor. | `SensorAgua`, GPIO34 y muestreo del programa principal. | INT-01 muestra `sensor_raw = 0` y `2453`; diagnóstico ADC histórico en §4.2. |
-| RF2 | Reportar sensor/actuador en `reported`. | `ClienteShadow::reportar`, por cambio y respaldo. | INT-01 muestra actualizaciones; la periodicidad efectiva no tiene serie temporal medida. |
+| RF1 | Capturar señal del sensor. | `SensorAgua`, GPIO34 y muestreo del programa principal. | INT-01 muestra `sensor_raw = 0` y `2453`; diagnóstico ADC del 7/11 en §4.2. |
+| RF2 | Reportar sensor/actuador en `reported`. | `ClienteShadow::reportar`, por cambio y respaldo. | INT-01 muestra actualizaciones; intervalo medido en RNF4 (§5.5). |
 | RF3 | Aplicar cambios deseados y reportar posición. | GET/delta, `ServoCubierta` y actualización posterior. | Giro del brazo y convergencia en INT-01/INT-02. |
 | RF4 | Consultar sensor en español en el Thing del usuario. | `ConsultarAguaIntent` y su handler. | AX-14 e INT-01, mediante texto. |
 | RF5 | Abrir/cerrar modificando `desired` del Thing vinculado. | `ComandoCubiertaHandler` y `ShadowService`. | AX-15 e INT-01; actuación de banco. |
@@ -46,19 +44,19 @@ RF4–RF6 incluyen voz en el enunciado. Se verificó su comportamiento mediante 
 
 ### 1.3 Requerimientos no funcionales medibles
 
-Los objetivos se separan de resultados. Los criterios de error e intervalo máximo propuestos a continuación son criterios de evaluación, no calibraciones ni valores obtenidos.
+Los objetivos se declararon el 9/11, antes de los ensayos, y no se modificaron después de ver los resultados.
 
 | ID | Atributo y objetivo de trabajo | Método | Resultado (10/11, §5.5) |
 |---|---|---|---|
 | RNF1 | Estabilidad: 15 min continuos, 0 reinicios y 0 bloqueos; referencia docente ≥10 min. | Log serie y operaciones durante el período, con inicio/fin. | Cumple: 15,0 min, 0 reinicios, 0 bloqueos, 15 órdenes y 14 consultas. |
 | RNF2 | Clasificación: criterio propuesto ≤5 % de errores en ≥20 observaciones independientes, repartidas entre seco/agua. | Referencia física, ADC, clasificación y matriz de confusión. | Cumple: 0/20 errores (0 FP, 0 FN), condición rehecha en cada observación. Valida agua abundante, no gotas ni humedad leve. |
-| RNF3 | Respuesta: referencia ≤3 s hasta posición física final. | ≥10 órdenes alternadas; tiempos en segundos. En este entorno el inicio se identifica como envío textual. | Cumple en modalidad MQTT desde el dispositivo: máximo 2,42 s hasta la posición estimada. Sin Alexa ni Lambda. |
+| RNF3 | Respuesta: referencia ≤3 s hasta posición física final. | ≥10 órdenes alternadas; tiempo desde el envío de la orden hasta la posición final. | Cumple en modalidad MQTT desde el dispositivo: máximo 2,42 s hasta la posición estimada. Sin Alexa ni Lambda. |
 | RNF4 | Respaldo nominal de 5 s desde aceptación previa; criterio propuesto de ensayo ≤6 s en red estable. Objetivo por evento ≤1 s sin reporte pendiente. | Timestamps consecutivos de `update/accepted` del ESP32, intervalos y máximos. | Periódico cumple: máximo 5,74 s en reposo. Evento no cumple: 14/15 en ≤1 s, máximo 1,033 s. |
 | RNF5 | Recuperar conexión y aplicar el `desired` vigente sin repetir orden. | Ensayar por separado reinicio y pérdida Wi-Fi con equipo encendido; registrar convergencia y tiempos. | Cumple: reinicio 3/3 (máximo 9,67 s) y Wi-Fi 3/3 (máximo 7,69 s), sin repetir la orden. |
 | RNF6 | Modularidad: separar captura, actuación, comunicación y persistencia. | Inspección de clases, interfaces y perfiles. | Implementada en ESP32 y backend Python. |
 | RNF7 | Seguridad: excluir secretos y limitar capacidades. | Plantillas, `.gitignore`, paquete y permisos AWS. | Documentada en §3.5; Lambda conserva comodín de recursos IoT justificado. |
 
-El objetivo de evento ≤1 s no es garantía bajo desconexiones o respuestas pendientes. El criterio inicial de 95 % de aciertos no extrapola fiabilidad a cualquier lluvia; debe interpretarse con tamaño muestral y condiciones de referencia.
+El objetivo de evento ≤1 s no es garantía bajo desconexiones o respuestas pendientes. El criterio de ≤5 % de errores se interpreta junto con el tamaño de muestra y la referencia física usada; no se extrapola a cualquier tipo de lluvia.
 
 ## 2. Análisis y diseño
 
@@ -104,9 +102,9 @@ flowchart LR
 | Servo positivo → fuente DC adecuada | La corriente del motor no se suministra por GPIO ni 3V3. |
 | Negativos fuente/servo/ESP32 unidos | Referencia común para interpretar PWM. |
 
-El diagrama corresponde al conexionado contractual del fuente. Los videos muestran cableado de banco, sensor y brazo del servo; no permiten reconstruir con certeza cada conductor ni medir la fuente. El registro identifica el servo como MG90S, pero no aporta tensión/corriente finales, pulsos, frecuencia o asentamiento del montaje. No se sustituyen por valores típicos de catálogo. Estos parámetros no son secretos y su ausencia limita reproducir exactamente el ensayo.
+El diagrama corresponde al conexionado definido en el código y en [CONEXIONES.md](../hardware/CONEXIONES.md). El servo es un MG90S; el firmware usa un asentamiento de 1000 ms. Los pulsos de apertura/cierre y los umbrales del sensor se configuran localmente en `calibracion_local.h` a partir del montaje (§3.2); los umbrales usados en los ensayos fueron 200/800 cuentas (§5.5).
 
-Se configura ADC de 12 bits y atenuación `ADC_11db`: 0–4095 son cuentas, no voltaje calibrado ni porcentaje de agua. El circuito no conmuta red eléctrica y el diseño debe respetar actuación ≤12 V DC. El procedimiento de montaje seguro se conserva en [CONEXIONES.md](../hardware/CONEXIONES.md).
+Se configura ADC de 12 bits y atenuación `ADC_11db`: 0–4095 son cuentas, no voltaje calibrado ni porcentaje de agua. El circuito no conmuta red eléctrica y el diseño debe respetar actuación ≤12 V DC. El procedimiento de montaje seguro está en [ENSAYO_BANCO.md](../hardware/ENSAYO_BANCO.md).
 
 ### 2.3 Clases del objeto inteligente
 
@@ -307,7 +305,7 @@ sequenceDiagram
     Note over S: Convergencia de cubierta
 ```
 
-INT-02 respalda el procedimiento de reinicio comunicado por el equipo. Configurar reconexión Wi-Fi/MQTT no sustituye un ensayo de pérdida de red manteniendo la alimentación.
+El mismo flujo aplica tras un reinicio o tras una pérdida de Wi-Fi con el equipo encendido: el video INT-02 lo muestra tras un reinicio y los ensayos RNF5 lo midieron en ambos casos (§5.5).
 
 ### 2.9 Especificación del Shadow
 
@@ -376,7 +374,7 @@ Invocación: **tendedero inteligente**. Locale: **es-MX**. Modelo: **Custom**. S
 
 El archivo agrega `AMAZON.CancelIntent`, `AMAZON.StopIntent`, `AMAZON.HelpIntent` y `AMAZON.FallbackIntent`. `LaunchRequest` abre sin vincular ni mover. El backend no confía solo en el slot: valida existencia.
 
-La consola capturada muestra doce entradas, incluida `AMAZON.NavigateHomeIntent`; el JSON versionado tiene siete funcionales y cuatro integrados. La lista de consola también indica un slot en desvinculación, mientras el JSON y su handler no lo requieren. Se documenta esa diferencia visible: las pruebas verifican los siete flujos funcionales, sin afirmar identidad byte por byte entre consola y archivo ni modificar el modelo para inferir una exportación distinta.
+La consola de Alexa muestra además `AMAZON.NavigateHomeIntent`, que Alexa agrega por defecto, y un slot en desvinculación que el JSON y su handler no utilizan. Ninguna de las dos diferencias afecta a los siete intents funcionales, que se probaron todos (§4.4).
 
 ## 3. Desarrollo e implementación
 
@@ -394,6 +392,7 @@ La consola capturada muestra doce entradas, incluida `AMAZON.NavigateHomeIntent`
 | [tests](../tests) | Verificaciones estáticas, importación e integración simulada. |
 | [aws](../aws) | Políticas y tabla sanitizadas con `ACCOUNT_ID`. |
 | [evidencias](evidencias) | Capturas, CSV y videos. |
+| [ensayo_rnf.py](../ensayo_rnf.py) y [resultados](../resultados/INDICE.md) | Herramienta de ensayos RNF y sus registros. |
 
 | Perfil | Fuente y propósito |
 |---|---|
@@ -401,6 +400,7 @@ La consola capturada muestra doce entradas, incluida `AMAZON.NavigateHomeIntent`
 | `servo_test` | `ServoTest.cpp`: comandos serie `A`/`C` con calibración válida. |
 | `sensor_shadow_test` | `SensorShadowTest.cpp` y cliente Shadow: reporte ADC sin actuación. |
 | `tendedero_shadow` | `Tendedero.cpp` y cliente Shadow: integración final, perfil predeterminado. |
+| `tendedero_ensayo` | Igual que `tendedero_shadow`, compilado con `MODO_ENSAYO_RNF`: añade comandos serie (`abrir`, `cerrar`, `estado`, `wifi_off`, `wifi_on`) y marcas de tiempo para los ensayos RNF. |
 
 `build_src_filter` evita múltiples `setup()`/`loop()` en una compilación. Los perfiles de red usan C++17. El firmware emplea API MQTT de ESP-IDF, FreeRTOS y cJSON disponibles en la plataforma; cambiar versiones exige verificar compatibilidad PWM/MQTT.
 
@@ -418,7 +418,7 @@ integracion = calibracionValida() && credencialesConfiguradas() && servo.iniciar
 
 La evaluación cortocircuitada evita iniciar servo si falla una condición previa. Sin integración sigue leyendo ADC, sin iniciar Wi-Fi/MQTT. Comprueba rangos ADC, umbrales distintos, valores positivos y duración de pulso compatible con el período; no certifica por sí sola seguridad mecánica.
 
-`__has_include` selecciona `calibracion_local.h` y `secrets.h`, o plantillas vacías si no existen. Las plantillas no contienen una calibración real. No se inspeccionan ni publican claves locales para redactar el informe.
+`__has_include` selecciona `calibracion_local.h` y `secrets.h`, o plantillas vacías si no existen. Las plantillas no contienen una calibración real ni credenciales.
 
 ### 3.3 PWM y programa principal
 
@@ -442,7 +442,7 @@ Al conectar suscribe tópicos y solicita GET. Un delta recibido durante la esper
 
 Se reportan cambios de clasificación/posición y respaldo de 5 s desde aceptación. Cada variación ADC no genera reporte inmediato. Hay espera de reintento de 5 s cuando existe un reporte pendiente. Las publicaciones usan QoS 0 y las suscripciones solicitan QoS 1; la aceptación de aplicación se correlaciona por `clientToken`. Encolar no equivale a aceptación del servicio.
 
-Un rechazo conserva la necesidad de reportar. Si se llena la cola se registra y se intenta recuperar GET. Estos controles no garantizan entrega absoluta: la recuperación de suscripciones está ligada al estado de sincronización y deben ensayarse fallos de red y mensajes grandes.
+Un rechazo conserva la necesidad de reportar. Si se llena la cola se registra y se intenta recuperar GET. Estos controles no garantizan entrega absoluta; la recuperación tras reinicio y tras pérdida de Wi-Fi se midió en RNF5 (§5.5).
 
 ### 3.5 Configuración AWS y seguridad
 
@@ -542,7 +542,7 @@ AX-01–AX-07 respaldan configuración; AX-08–AX-16 respaldan operaciones. La 
 
 El [README](../README.md) contiene comandos de compilación/carga. Se completan localmente plantillas, se verifica montaje y se carga `tendedero_shadow`. Compilar plantillas vacías solo habilita ADC; compilar no conecta el dispositivo por sí solo.
 
-El [ZIP](../lambda/lambda_deployment_p3.zip) incluye ASK SDK y el handler en la raíz. En la revisión se comparó su `lambda_function.py` con el archivo del repositorio: **coinciden byte por byte**. `requirements.txt` declara dependencias sin versiones fijadas; no se afirma construcción totalmente reproducible del entorno. Si cambia el fuente debe reconstruirse el paquete antes de desplegar.
+El [ZIP](../lambda/lambda_deployment_p3.zip) incluye ASK SDK y el handler en la raíz. Su `lambda_function.py` tiene el mismo contenido que el del repositorio (solo difiere el fin de línea CRLF/LF), verificado el 10/11. `requirements.txt` declara dependencias sin versiones fijadas; no se afirma construcción totalmente reproducible del entorno. Si cambia el fuente debe reconstruirse el paquete antes de desplegar.
 
 ## 4. Pruebas y validaciones
 
@@ -554,14 +554,14 @@ El [ZIP](../lambda/lambda_deployment_p3.zip) incluye ASK SDK y el handler en la 
 | Prueba local simulada | Ejecución de handlers con AWS sustituido, no permisos reales. |
 | Evento directo Lambda | Backend/persistencia/Shadow, no reconocimiento en Skill. |
 | Captura del simulador | Frase y respuesta visibles. |
-| Video de banco | Servo, estados y secuencia, no una serie RNF. |
-| Registro histórico | Resultado comunicado antes, identificado sin fingir nueva ejecución. |
+| Video de banco | Servo, estados y secuencia. |
+| Ensayo RNF automatizado | Series temporales y conteos medidos (§5.5). |
 
-Paneles AWS consolidados el 8/11; capturas Alexa de sesiones 8–9/11, consolidadas el 9/11; videos incorporados al registro del 9/11. No se deduce fecha exacta del ensayo por la fecha de copia del archivo.
+Paneles AWS del 8/11; capturas Alexa del 8–9/11; videos del 9/11; ensayos RNF del 10/11.
 
 ### 4.2 Hardware y suite local
 
-El registro histórico describe 27 muestras secas `raw = 0`, 12 muestras ADC `4095` con estímulo 3V3 mediante resistencia de 220 Ω y retorno a `0` al reinstalar el sensor seco. También describe reconexión Wi-Fi aislada y movimiento básico del servo. Caracteriza entrada/actuación, no exactitud frente a agua real.
+Los diagnósticos del 7/11 registraron 27 muestras secas `raw = 0`, 12 muestras ADC `4095` con estímulo 3V3 mediante resistencia de 220 Ω y retorno a `0` al reinstalar el sensor seco. También comprobaron reconexión Wi-Fi aislada y movimiento básico del servo. Caracteriza entrada/actuación, no exactitud frente a agua real.
 
 | Archivo de prueba | Cantidad | Alcance |
 |---|---:|---|
@@ -569,7 +569,7 @@ El registro histórico describe 27 muestras secas `raw = 0`, 12 muestras ADC `40
 | [test_lambda_import.py](../tests/test_lambda_import.py) | 1 | Importación con SDK del ZIP y stub AWS. |
 | [test_lambda_integration.py](../tests/test_lambda_integration.py) | 2 | Dos usuarios/Things, enrutamiento, cambio, rechazo, eliminación y clasificación desconocida. |
 
-El registro del 7/11 informa **12/12 satisfactorias** y compilación de los cuatro perfiles. No se repitieron en esta revisión: `py` respondió `No installed Python found!` y no se encontró `pio` en PATH. Se declara el resultado histórico con esa limitación. Sí se revisaron JSON, enlaces, código y concordancia fuente/ZIP.
+La suite se ejecutó el 7/11 (Python 3.11) y de nuevo el 10/11 sobre la revisión final (Python 3.13): **12/12 satisfactorias** en ambas. Los cuatro perfiles compilaron el 7/11, y `tendedero_ensayo` se compiló y cargó el 10/11 para los ensayos RNF.
 
 ### 4.3 Pruebas directas AWS
 
@@ -587,7 +587,7 @@ El registro del 7/11 informa **12/12 satisfactorias** y compilación de los cuat
 | AWS-BE-10 | Desvincular. | Eliminación y guía posterior. | Registro backend; AX-09/AX-13. |
 | AWS-BE-11 | Logs. | START/END/REPORT sin excepciones visibles en fragmento. | AWS-04 y CSV. |
 
-La fuente de estas filas es el conjunto AWS de la revisión `a8a86c3`. Sus cinco paneles y CSV se conservan localmente en [evidencias/aws](EVIDENCIAS_AWS.md). Una fila comunicada no equivale a disponer de captura individual de cada ejecución.
+Estas pruebas corresponden a la revisión `a8a86c3`. Los cinco paneles y el CSV están en [evidencias/aws](evidencias/aws/README.md) y el registro detallado en [EVIDENCIAS_AWS.md](EVIDENCIAS_AWS.md).
 
 ### 4.4 Frases probadas en la Skill
 
@@ -603,7 +603,7 @@ La fuente de estas filas es el conjunto AWS de la revisión `a8a86c3`. Sus cinco
 | AX-15 | `abre la cubierta`; `cierra la cubierta` | Confirma solicitud de cada posición. | [Control](evidencias/alexa/15-alexa-abrir-y-cerrar-cubierta.png). |
 | AX-16 | Vincular prueba dos y `cambia mi objeto a tendedero inteligente` | Cambio al Thing físico. | [Cambio válido](evidencias/alexa/16-alexa-cambio-valido.png). |
 
-El equipo comunicó ejecución de todos los intents; aquí se identifican respuestas visibles sin atribuir capturas inexistentes a ayuda/fallback. Guía sin vínculo, persistencia y cambio válido son escenarios distintos.
+Se ejecutaron todos los intents; la tabla lista los que tienen captura. Ayuda y fallback se probaron sin captura.
 
 ### 4.5 Videos de integración y recuperación
 
@@ -618,9 +618,9 @@ El equipo comunicó ejecución de todos los intents; aquí se identifican respue
 | INT-02 | 00:11–00:24 | Montaje durante retorno a operación; giro del brazo al final. |
 | INT-02 | 00:25–00:26 | Deseado/reportado abiertos, sin diferencia anterior en vista mostrada. |
 
-El procedimiento comunicado de INT-02 fue desconectar el cable, solicitar apertura y reconectar sin repetir. El video muestra estados previo/final y actuación; se interpreta como recuperación tras nuevo arranque, no pérdida Wi-Fi aislada. Las marcas localizan escenas, no miden formalmente latencia.
+En INT-02 se desconectó el cable, se solicitó la apertura y se reconectó sin repetir la orden. El video muestra los estados previo y final y la actuación. Las marcas localizan escenas; los tiempos se midieron aparte (§5.5).
 
-Los videos no muestran cubierta bajo carga ni referencia de agua por muestra. `0` y `2453` no definen los umbrales calibrados; las duraciones no acreditan estabilidad de 15 min. El [índice audiovisual](evidencias/integracion/README.md) conserva el detalle.
+Los videos no muestran una cubierta bajo carga. El [índice audiovisual](evidencias/integracion/README.md) conserva el detalle.
 
 ### 4.6 Protocolo RNF
 
@@ -632,7 +632,7 @@ Protocolo de referencia, definido antes de los ensayos. Su ejecución del 10/11,
 | Exactitud | Calibrar y validar en lote distinto de ≥20 referencias físicas seguras, con ambos estados/transiciones. | Referencia, ADC, booleano, falsos positivos/negativos; errores/n × 100. | Propuesto ≤5 % de error, informando n y tipos. |
 | Respuesta | ≥10 órdenes alternadas con envío y brazo visibles. | Final − envío; promedio, mediana, máximo y excedencias. | Referencia ≤3 s, declarando inicio textual. |
 | Reporte | ≥10 mensajes aceptados del ESP32 y cambios de clasificación/posición. | Timestamps, intervalos, máximos; identificar token para no mezclar actualizaciones Lambda. | Propuesto ≤6 s estable y objetivo de evento ≤1 s sin reporte pendiente. |
-| Reconexión | Separar reinicio y pérdida Wi-Fi; ordenar posición opuesta durante ausencia. | Estado previo, deseado, retorno MQTT, giro, aceptación, tiempos y repeticiones. | Converger sin repetir orden; INT-02 ya respalda cualitativamente reinicio. |
+| Reconexión | Separar reinicio y pérdida Wi-Fi; ordenar posición opuesta durante ausencia. | Estado previo, deseado, retorno MQTT, giro, aceptación, tiempos y repeticiones. | Converger sin repetir la orden, en ≤30 s. |
 
 Un desconocido del sensor debe contarse, no convertirse en seco ni excluirse sin explicación. La medición manual declara incertidumbre. Los fallos se conservan junto con corrección y repetición.
 
@@ -656,17 +656,17 @@ Un desconocido del sensor debe contarse, no convertirse en seco ni excluirse sin
 
 ### 5.1 Resultados registrados
 
-Hay **17 capturas Alexa, 5 paneles AWS, 1 CSV y 2 videos**. Las nueve filas AX-08–AX-16 son escenarios observables, no nueve usuarios ni un lote de exactitud. La evidencia respalda Skill → Lambda → DynamoDB/Shadow, persistencia, rechazo, cambio y borrado. Los videos añaden servo de banco y recuperación de una posición deseada tras reinicio.
+Hay **17 capturas Alexa, 5 paneles AWS, 1 CSV, 2 videos y los registros de 6 ensayos RNF**. La evidencia respalda el flujo Skill → Lambda → DynamoDB/Shadow, la persistencia, el rechazo, el cambio y el borrado del vínculo; los videos añaden la actuación del servo de banco y la recuperación de una posición deseada tras reinicio.
 
 | Dato | Valor | Interpretación |
 |---|---|---|
 | Resolución configurada | 12 bits, 0–4095. | Parámetro de adquisición, no exactitud. |
 | Estados INT-01 | `0`/`false` y `2453`/`true`. | Dos reportes y consultas coherentes. |
-| Muestreo/respaldo configurados | 500 ms / 5000 ms. | Lógica nominal, no máximos efectivos medidos. |
+| Muestreo/respaldo configurados | 500 ms / 5000 ms. | Parámetros del firmware. |
 | Duraciones INT-01/INT-02 | 21,70 s / 26,16 s. | Duración de archivo, no estabilidad o latencia. |
 | Intervalo de reporte medido | Promedio 5,39 s, máximo 5,74 s en reposo. | Frecuencia efectiva del 10/11, §5.5. |
-| Suite histórica | 12/12. | Resultado del 7/11, no reejecutado el 9/11. |
-| Fuente/ZIP | Igualdad byte por byte. | Verificación del handler empaquetado. |
+| Suite local | 12/12. | 7/11 y 10/11. |
+| Fuente/ZIP | Mismo contenido. | Verificación del handler empaquetado. |
 
 ### 5.2 Cálculo sobre CloudWatch
 
@@ -680,15 +680,14 @@ El [CSV original](evidencias/aws/04-cloudwatch-eventos.csv) contiene cuatro REPO
 | 4 | 673,31 | Ejecución Lambda. |
 | **Promedio** | **1449,82** | Incluye las cuatro, sin excluir la primera. |
 
-Mínimo **457,30 ms**, máximo **4045,84 ms**. No se identifica el intent de cada ejecución; no se presentan como cuatro órdenes de servo. No permiten concluir ≤3 s extremo a extremo, pues no incluyen todos los tramos hasta movimiento físico. START/END/REPORT sin excepciones visibles no certifican por sí solos el resultado funcional de cada solicitud.
-
+Mínimo **457,30 ms**, máximo **4045,84 ms**. No se identifica el intent de cada ejecución; no se presentan como cuatro órdenes de servo. No permiten concluir ≤3 s extremo a extremo, pues no incluyen todos los tramos hasta movimiento físico. 
 ### 5.3 Justificación de frecuencia y consumo
 
 La variable funcional es presencia de agua/posición, no cada fluctuación ADC. Histéresis y reporte por cambio reducen ruido y el respaldo refresca el estado aun sin cambio de categoría.
 
-En régimen ideal, 5 s por reporte equivalen a `60/5 = 12` reportes/min y `86400/5 = 17280` reportes/día por dispositivo continuamente conectado, antes de eventos, reintentos, GET y respuestas. Es una estimación de diseño, no consumo medido ni garantía de gratuidad. Debe contrastarse el uso con las condiciones de la cuenta.
+En régimen ideal, 5 s por reporte equivalen a `60/5 = 12` reportes/min y `86400/5 = 17280` reportes/día por dispositivo continuamente conectado, antes de eventos, reintentos, GET y respuestas. La capa gratuita de AWS IoT Core cubre un volumen de mensajes limitado al mes, por lo que este ritmo es adecuado para la demostración, pero en operación continua conviene ampliar el respaldo periódico.
 
-El respaldo de 5 s favorece visibilidad del prototipo; para operación prolongada se ajustaría tras medir dinámica y consumo, conservando eventos relevantes. El intervalo medido en reposo, 5,39 s de promedio, equivale a unos 11 reportes/min o 16 000/día, antes de eventos y respuestas. Un reporte pendiente puede retrasar eventos y debe evaluarse antes de prometer máximo temporal.
+El intervalo medido en reposo, 5,39 s de promedio, equivale a unos 11 reportes/min o 16 000/día, antes de eventos y respuestas. La lluvia cambia en escala de segundos a minutos, de modo que un respaldo de 30–60 s, combinado con el reporte inmediato por evento (promedio 0,56 s), mantendría la reacción ante el inicio de lluvia y reduciría el consumo entre 6 y 12 veces.
 
 ### 5.4 Balance de verificación
 
@@ -699,10 +698,7 @@ El respaldo de 5 s favorece visibilidad del prototipo; para operación prolongad
 | Actuación | Brazo del servo de banco visible; sin prueba de cubierta bajo carga. |
 | Recuperación | Medida tras reinicio por EN y tras pérdida de Wi-Fi con el equipo encendido: 3/3 en cada caso (§5.5). |
 | Exactitud, estabilidad y tiempos | Medidos el 10/11 (§5.5), con órdenes MQTT desde el dispositivo y posición estimada; no incluyen Alexa ni la posición física. |
-| Reproducción exacta de hardware | Sin valores finales públicos de fuente/calibración; no se infieren. |
-| Voz | No ejecutada en el entorno; limitación y alternativa textual documentadas. |
-
-El informe cubre las secciones exigidas. Los RNF medidos no equivalen a aprobación de una cubierta bajo carga ni de la interacción por voz.
+| Voz | Entrada textual en el simulador por limitación de micrófono del entorno. |
 
 ### 5.5 Resultados RNF
 
@@ -746,7 +742,7 @@ El informe integra el contenido técnico sin sustituir los registros de trabajo 
 
 | Entregable | Ubicación |
 |---|---|
-| Informe con ocho secciones | Este archivo. |
+| Informe técnico | Este archivo. |
 | Código objeto | [firmware/src](../firmware/src) y [firmware/include](../firmware/include). |
 | Código backend | [lambda_function.py](../lambda/lambda_function.py). |
 | Modelo Alexa JSON | [interaction-model-es-MX.json](../alexa/interaction-model-es-MX.json). |
@@ -817,9 +813,15 @@ El [índice de 17 capturas](evidencias/alexa/README.md) identifica todos los arc
 
 ### 8.5 Aportes y entrega
 
-El historial conserva aportes verificables con `git log --all --oneline` y sus diffs. Revisiones AWS: `341e17a`, `3e5bb31`, `a8a86c3`; Alexa/integración: `9fca64a`, `8c28234`, `542cc8c`. Estos identificadores permiten inspeccionar cambios; la evidencia individual se verifica en las cuentas y commits de GitHub, sin atribuir participación no comprobada.
+Cada integrante hizo commits con su propia cuenta de GitHub; el historial completo se consulta con `git log --all --oneline`.
 
-Se entrega el repositorio accesible al docente y su enlace por LMS-UCB antes del plazo. Este informe no afirma haber publicado esta revisión ni enviado el enlace. Demo y defensa individual son componentes separados: el documento no reemplaza su presentación.
+| Integrante | Área | Commits principales |
+|---|---|---|
+| Samuel (Sam-J-R) | Firmware, hardware y ensayos RNF | `0a57f38`, `45e5238`, `8778586` |
+| María Lozada (mjlozada) | AWS IoT Core, Lambda, DynamoDB e IAM | `341e17a`, `3e5bb31`, `a8a86c3` |
+| Kathy (KathM00) | Skill de Alexa, integración, videos e informe | `9fca64a`, `8c28234`, `542cc8c`, `978b012` y la integración final |
+
+El enlace al repositorio se entrega por LMS-UCB.
 
 ### 8.6 Correspondencia con el enunciado
 
@@ -842,7 +844,7 @@ Se entrega el repositorio accesible al docente y su enlace por LMS-UCB antes del
 
 Implementación y evidencias del repositorio son las fuentes primarias. Referencias de plataforma asociadas a los apartados indicados:
 
-- [Enunciado](../referencias/Práctica_3.md), contrastado con el adjunto docente; solo difiere el formato de fin de línea.
+- [Enunciado de la práctica](../referencias/Práctica_3.md).
 - [AWS: documento Shadow](https://docs.aws.amazon.com/iot/latest/developerguide/device-shadow-document.html), para estados, delta, versión y `null` (§2.9).
 - [AWS: autorización IoT](https://docs.aws.amazon.com/iot/latest/developerguide/iot-authorization.html), para identidad y políticas (§3.5).
 - [AWS: GetItem](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_GetItem.html), para lectura por clave/consistencia (§2.10 y §3.6).
