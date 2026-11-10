@@ -35,7 +35,7 @@ El archivo de configuración del proyecto está en [interaction-model-es-MX.json
 
 ## Alcance de las evidencias
 
-Las capturas acreditan la configuración y las respuestas observadas en la Skill. El equipo confirmó además el funcionamiento conjunto con ESP32, sensor y servo, la revisión de Shadows y DynamoDB y la aplicación de una orden tras desconectar y volver a alimentar el ESP32, sin repetir el comando. Esas observaciones físicas se registran como resultado del ensayo comunicado por el equipo; las imágenes del simulador no son fotografías del mecanismo ni mediciones temporales.
+Las capturas acreditan la configuración y las respuestas observadas en la Skill. Los [dos videos de integración](../integracion/README.md) complementan este conjunto con el montaje de banco, actuación del servo y estados del Shadow. El segundo muestra la posición deseada pendiente y la convergencia posterior; el procedimiento confirmado por el equipo fue reconectar la alimentación sin repetir el comando. La revisión de DynamoDB cuenta con el conjunto AWS existente. Las capturas del simulador por sí solas no son fotografías del mecanismo ni mediciones temporales.
 
 Las pruebas utilizaron entrada textual porque el micrófono no estuvo operativo en el entorno utilizado. No se presentan como pruebas de reconocimiento de voz.
 

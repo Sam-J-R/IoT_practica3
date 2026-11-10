@@ -94,7 +94,9 @@ El equipo confirmó la ejecución de todos los intents. Las figuras permiten ins
 
 ## 6. Integración con el dispositivo y recuperación de orden
 
-Además de las pruebas iniciales con el Thing de prueba, el equipo confirmó el ensayo integrado con ESP32, sensor, servo, Shadows y base de datos. Se observaron consultas del sensor y control de apertura/cierre mediante el backend.
+Además de las pruebas iniciales con el Thing de prueba, el ensayo integrado con ESP32, sensor, servo y Shadow cuenta con [dos videos originales](evidencias/integracion/README.md). El equipo confirmó también la revisión de la base de datos. En el [video de funcionamiento](evidencias/integracion/01-funcionamiento-completo.mp4) se observan consultas del sensor, control de apertura/cierre, cambio de orientación del brazo del servo y estados correspondientes en AWS.
+
+Alrededor de 00:09–00:10, el Shadow muestra cubierta cerrada, `sensor_raw = 0` y `agua_detectada = false`. Hacia 00:15–00:16 muestra `sensor_raw = 2453` y `agua_detectada = true`; las consultas del simulador devuelven las respuestas negativa y afirmativa correspondientes.
 
 También se ensayó esta secuencia:
 
@@ -104,18 +106,20 @@ También se ensayó esta secuencia:
 4. Reconectar el ESP32.
 5. Observar la aplicación de la orden y la actualización de estado en AWS, sin repetir el comando.
 
+El [video de recuperación](evidencias/integracion/02-recuperacion-orden-reconexion.mp4) muestra hacia 00:08–00:09 `desired.cubierta = abierta`, `reported.cubierta = cerrada` y `delta.cubierta = abierta`. Hacia 00:22–00:24 se observa el giro del brazo del servo y al final se muestran `desired` y `reported` en `abierta`. El procedimiento confirmado por el equipo no repitió la orden.
+
 Este resultado corresponde a recuperación tras desconexión y nuevo arranque. El firmware, al conectar MQTT, solicita el Shadow y aplica la posición deseada vigente. No se equipara ese ensayo con una pérdida aislada de Wi-Fi manteniendo el dispositivo encendido.
 
-Las observaciones físicas de este apartado fueron comunicadas por el equipo después del ensayo. Las capturas adjuntas documentan la interfaz Alexa; no constituyen videos del movimiento ni registros de tiempo. El estado de cubierta reportado por el firmware es una estimación tras asentamiento, no una medición independiente de posición.
+Las capturas documentan la interfaz Alexa y los videos incorporan la observación del montaje de banco, el servo y los estados AWS. Se muestra el brazo del servo; no se presenta una prueba de carga de una cubierta instalada. El estado reportado por el firmware sigue siendo una estimación tras asentamiento, no una medición independiente de posición. Las marcas de los videos son referencias de navegación, no mediciones de latencia.
 
 ## 7. Relación con los requisitos
 
 | Requisito | Respaldo de esta entrega |
 |---|---|
-| RF3 | Ensayo integrado de actuación y recuperación comunicado por el equipo; soporte software `desired` → delta → aplicación → `reported`. |
-| RF4 | Consultas en español para ambos estados de agua, ejecutadas por texto. |
-| RF5 | Solicitudes de apertura/cierre desde la Skill y ensayo físico comunicado. |
-| RF6 | Consulta de cubierta según `reported`. |
+| RF3 | Video INT-02: `desired` diferente de `reported`, movimiento del servo y convergencia final. |
+| RF4 | Captura 14 y video INT-01: consultas en español y estados de sensor en AWS, ejecutadas por texto. |
+| RF5 | Captura 15 y video INT-01: solicitudes de apertura/cierre y actuación del servo de banco. |
+| RF6 | Captura 14 y video INT-01: consulta de cubierta y estados reportados. |
 | RF7 | Vinculación y conservación entre conversaciones. |
 | RF8 | Guía sin vínculo y consulta posterior con asociación persistida; el backend resuelve por `userId`. |
 | RF9 | Rechazo de identificador inexistente, cambio válido y eliminación del vínculo. |
@@ -148,6 +152,7 @@ El enlace identifica la revisión concreta utilizada como referencia. Así se co
 ## 10. Evidencias y archivos de configuración
 
 - [Índice de las 17 capturas](evidencias/alexa/README.md).
+- [Índice y marcas de tiempo de los dos videos](evidencias/integracion/README.md).
 - [Modelo de interacción JSON](../alexa/interaction-model-es-MX.json).
 - [Contrato del sistema](CONTRATO.md).
 - [Backend Lambda](../lambda/lambda_function.py).

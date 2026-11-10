@@ -1,17 +1,17 @@
 # Matriz de pruebas y evidencias — sin resultados inventados
 
-Actualización Alexa e integración: 9/11/2026. Las capturas de respuestas, las pruebas directas AWS, las observaciones físicas comunicadas y las mediciones tienen alcances distintos. El [registro Alexa](ALEXA.md) identifica resultados y fuentes.
+Actualización Alexa e integración: 9/11/2026. Las capturas de respuestas, los [videos de integración](evidencias/integracion/README.md), las pruebas directas AWS y las mediciones tienen alcances distintos. El [registro Alexa](ALEXA.md) identifica resultados y fuentes.
 
 ## Funcionales
 
 | ID | Escenario | Evidencia exigible | Estado |
 |---|---|---|---|
-| RF1 | Leer sensor analógico en condiciones conocidas | Serie + referencia de ensayo | Lecturas de banco registradas; el equipo confirmó el ensayo integrado. Las capturas Alexa muestran clasificación seca y con agua; el error físico se evalúa por separado. |
-| RF2 | Sensor y actuador en `reported` periódico | Shadow y tiempos | Revisión de Shadows e integración confirmada por el equipo; la frecuencia efectiva requiere timestamps y cálculo propio. |
-| RF3 | desired → delta → servo → reported | Observación del mecanismo y AWS | Integración y aplicación de orden tras reconectar el ESP32 confirmadas por el equipo; alcance descrito en ALEXA.md. |
-| RF4 | Alexa consulta presencia de agua | Respuesta y estado de referencia | Ejecutado por texto: respuestas seca/con agua en captura 14. |
-| RF5 | Alexa solicita abrir/cerrar | Respuesta y observación del servo | Solicitudes aceptadas en captura 15; movimiento integrado confirmado por el equipo. |
-| RF6 | Alexa consulta cubierta | Respuesta sobre reported | Captura 14 informa cubierta cerrada según el último reporte. |
+| RF1 | Leer sensor analógico en condiciones conocidas | Serie + referencia de ensayo | INT-01 muestra `sensor_raw = 0`/`false` y `2453`/`true`; el error físico se evalúa con referencia independiente. |
+| RF2 | Sensor y actuador en `reported` periódico | Shadow y tiempos | INT-01 muestra actualizaciones de sensor y cubierta; la frecuencia efectiva se determina con timestamps consecutivos. |
+| RF3 | desired → delta → servo → reported | Observación del mecanismo y AWS | INT-02 muestra orden pendiente, giro del servo y convergencia final; procedimiento de reinicio confirmado por el equipo. |
+| RF4 | Alexa consulta presencia de agua | Respuesta y estado de referencia | Captura 14 e INT-01: respuestas negativa/afirmativa coherentes con estados del Shadow. Entrada textual. |
+| RF5 | Alexa solicita abrir/cerrar | Respuesta y observación del servo | Captura 15 e INT-01: solicitudes y actuación del servo en el montaje de banco. |
+| RF6 | Alexa consulta cubierta | Respuesta sobre reported | Captura 14 e INT-01: consulta y estado reportado de cubierta. |
 | RF7 | Vinculación persiste entre sesiones | Vincular, detener, abrir y consultar | Capturas 10 y 11: vínculo confirmado y conservado entre conversaciones. |
 | RF8 | Sin vínculo guía; con vínculo resuelve por userId | Respuestas y DynamoDB | Captura 09 muestra guía; 10 y 11 muestran operaciones con vínculo. AWS documenta resolución por usuario. |
 | RF9 | Validar, cambiar y eliminar vínculo | Casos positivos/negativos | Captura 12: inexistente rechazado; 13: eliminación; 16: cambio válido al Thing físico. |
@@ -26,7 +26,16 @@ Las capturas se consultan en el [índice de evidencias Alexa](evidencias/alexa/R
 | Exactitud | Definir error adecuado a variable física/categórica y referencia verificable | 20 observaciones de referencia; reportar fallos | No medido |
 | Respuesta | Referencia del enunciado ≤3 s de voz a actuador | En este entorno: medir desde envío textual hasta posición final y declarar la modalidad | No se atribuye un tiempo a las capturas funcionales |
 | Frecuencia | Evento + respaldo cada 5 s (propuesta) | Timestamps Shadow/MQTT | No medido |
-| Reconexión | Recuperar conexión y desired vigente | Desconectar, ordenar y reconectar | El equipo confirmó aplicación tras reconectar la alimentación, sin repetir comando. No se registró tiempo numérico; se distingue de pérdida aislada de Wi-Fi. |
+| Reconexión | Recuperar conexión y desired vigente | Desconectar, ordenar y reconectar | INT-02 muestra delta pendiente, actuación y convergencia. Procedimiento: reconectar alimentación sin repetir comando, confirmado por el equipo. Las marcas del video no son una medición formal de recuperación ni una prueba aislada de pérdida de Wi-Fi. |
+
+## Evidencias audiovisuales de integración
+
+| ID | Archivo | Resultado observado | Referencias aproximadas |
+|---|---|---|---|
+| INT-01 | [Funcionamiento completo](evidencias/integracion/01-funcionamiento-completo.mp4) | Consultas y control del servo; estados de agua y cubierta en Shadow. | 00:06–00:10: actuación/cierre; 00:13–00:21: consultas y estados del sensor. |
+| INT-02 | [Recuperación de orden](evidencias/integracion/02-recuperacion-orden-reconexion.mp4) | `desired = abierta` mientras `reported = cerrada`, giro del servo y convergencia en abierta. | 00:08–00:09: delta; 00:22–00:24: giro; 00:25–00:26: estado final. |
+
+Las marcas localizan escenas y no se registran como latencia del sistema. El [índice audiovisual](evidencias/integracion/README.md) detalla condiciones y alcance; se observa el brazo del servo de banco, sin atribuir prueba de carga de una cubierta instalada.
 
 ## Pruebas locales de código (no sustituyen AWS real)
 
