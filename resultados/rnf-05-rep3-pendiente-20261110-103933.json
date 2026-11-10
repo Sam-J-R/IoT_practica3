@@ -1,0 +1,43 @@
+{
+  "state": {
+    "desired": {
+      "welcome": "aws-iot",
+      "cubierta": "cerrada"
+    },
+    "reported": {
+      "welcome": "aws-iot",
+      "sensor_raw": 0,
+      "agua_detectada": false,
+      "cubierta": "abierta"
+    },
+    "delta": {
+      "cubierta": "cerrada"
+    }
+  },
+  "metadata": {
+    "desired": {
+      "welcome": {
+        "timestamp": 1794089484
+      },
+      "cubierta": {
+        "timestamp": 1794321751
+      }
+    },
+    "reported": {
+      "welcome": {
+        "timestamp": 1794089484
+      },
+      "sensor_raw": {
+        "timestamp": 1794321742
+      },
+      "agua_detectada": {
+        "timestamp": 1794321742
+      },
+      "cubierta": {
+        "timestamp": 1794321742
+      }
+    }
+  },
+  "version": 1605,
+  "timestamp": 1794321751
+}

@@ -20,6 +20,12 @@ public:
   void reportar(unsigned long ahora, int raw, int agua, Posicion cubierta);
   // Reporta solo ADC, sin borrar ni confirmar la posicion de la cubierta.
   void reportarSensor(unsigned long ahora, int raw);
+#ifdef MODO_ENSAYO_RNF
+  // Publica desired.cubierta con el mismo formato que usa Lambda.
+  bool solicitarDesired(Posicion destino);
+  // Pide el documento completo; la respuesta se imprime en el monitor serie.
+  void consultarShadow();
+#endif
 
 private:
   // Eventos internos para no mover el servo dentro del callback MQTT.

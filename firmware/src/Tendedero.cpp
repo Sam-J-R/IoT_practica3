@@ -71,6 +71,69 @@ void muestrear(unsigned long ahora) {
   }
   Serial.printf("[SENSOR] ms=%lu raw=%d agua=%d\n", ahora, raw, agua);
 }
+
+#ifdef MODO_ENSAYO_RNF
+// Comandos de ensayo por monitor serie: abrir | cerrar | estado | wifi_off | wifi_on.
+// abrir/cerrar publican desired en el Shadow (como Lambda); la orden vuelve
+// como delta desde AWS, de modo que el recorrido por la nube se conserva.
+bool wifiCortado = false;   // wifi_off: corte de red con el ESP32 encendido.
+bool esperandoWifi = false; // wifi_on: avisar cuando vuelva la asociacion.
+
+void atenderConsola(unsigned long ahora) {
+  static String linea;
+  if (esperandoWifi && WiFi.status() == WL_CONNECTED) {
+    esperandoWifi = false;
+    Serial.printf("[ENSAYO] wifi conectado ip=%s ms=%lu\n", WiFi.localIP().toString().c_str(), ahora);
+  }
+  static bool relojListo = false;
+  if (integracion && !relojListo && time(nullptr) >= RELOJ_MINIMO) {
+    relojListo = true;
+    Serial.printf("[ENSAYO] reloj NTP listo ms=%lu\n", ahora);
+  }
+  // Diagnostico: si tras el arranque no hay red, recordarlo cada 10 s.
+  static unsigned long ultimoAviso = 0;
+  if (integracion && !wifiCortado && WiFi.status() != WL_CONNECTED && ahora - ultimoAviso >= 10000) {
+    ultimoAviso = ahora;
+    Serial.printf("[ENSAYO] sin wifi estado=%d ms=%lu\n", static_cast<int>(WiFi.status()), ahora);
+  }
+  while (Serial.available() > 0) {
+    const char c = static_cast<char>(Serial.read());
+    if (c == '\r') continue;
+    if (c != '\n') {
+      if (linea.length() < 32) linea += c;
+      continue;
+    }
+    linea.trim();
+    linea.toLowerCase();
+    if (linea == "abrir" || linea == "cerrar") {
+      const bool ok = integracion &&
+          shadow.solicitarDesired(linea == "abrir" ? Posicion::Abierta : Posicion::Cerrada);
+      Serial.printf("[ENSAYO] orden %s %s ms=%lu\n", linea.c_str(),
+                    ok ? "publicada" : "NO publicada (sin MQTT)", ahora);
+    } else if (linea == "estado") {
+      if (integracion) shadow.consultarShadow();
+      Serial.printf("[ENSAYO] consulta de Shadow ms=%lu\n", ahora);
+    } else if (linea == "wifi_off" && integracion) {
+      WiFi.setAutoReconnect(false);
+      WiFi.disconnect();
+      wifiCortado = true;
+      esperandoWifi = false;
+      Serial.printf("[ENSAYO] wifi cortado ms=%lu\n", ahora);
+    } else if (linea == "wifi_on" && integracion) {
+      if (wifiCortado) {
+        WiFi.setAutoReconnect(true);
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+        wifiCortado = false;
+        esperandoWifi = true;
+      }
+      Serial.printf("[ENSAYO] wifi restableciendo ms=%lu\n", ahora);
+    } else if (linea.length() > 0) {
+      Serial.printf("[ENSAYO] comando desconocido: %s\n", linea.c_str());
+    }
+    linea = "";
+  }
+}
+#endif
 }
 
 void setup() {
@@ -80,6 +143,9 @@ void setup() {
   // No se intenta AWS ni se da una orden al servo.
   integracion = calibracionValida() && credencialesConfiguradas() && servo.iniciar();
   muestrear(millis());
+#ifdef MODO_ENSAYO_RNF
+  Serial.println("[ENSAYO] Firmware de ensayo RNF: comandos abrir | cerrar | estado | wifi_off | wifi_on");
+#endif
   if (!integracion) {
     Serial.println("[P3] Solo ADC. Completar calibracion y secretos locales para habilitar TLS y servo");
     return;
@@ -89,6 +155,9 @@ void setup() {
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   configTime(0, 0, "pool.ntp.org");
+#ifdef MODO_ENSAYO_RNF
+  esperandoWifi = true;
+#endif
   ultimoIntentoMqtt = millis() - REINTENTO_RED_MS;
 }
 
@@ -106,6 +175,10 @@ void loop() {
     mqttIniciado = shadow.iniciar(AWS_IOT_ENDPOINT, AWS_IOT_THING_NAME, AWS_CA_PEM,
                                  AWS_CLIENT_CERT_PEM, AWS_CLIENT_KEY_PEM);
   }
+
+#ifdef MODO_ENSAYO_RNF
+  atenderConsola(ahora);
+#endif
 
   // Paso 3: procesar deltas del Shadow. Aqui puede llegar una orden al servo.
   shadow.atender(ahora, servo);

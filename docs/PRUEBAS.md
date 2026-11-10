@@ -1,6 +1,6 @@
 # Matriz de pruebas y evidencias — sin resultados inventados
 
-Actualización Alexa e integración: 9/11/2026. Las capturas de respuestas, los [videos de integración](evidencias/integracion/README.md), las pruebas directas AWS y las mediciones tienen alcances distintos. El [registro Alexa](ALEXA.md) identifica resultados y fuentes.
+Actualización RNF: 10/11/2026, ensayos automatizados ([resultados](RESULTADOS_RNF.md)). Actualización Alexa e integración: 9/11/2026. Las capturas de respuestas, los [videos de integración](evidencias/integracion/README.md), las pruebas directas AWS y las mediciones tienen alcances distintos. El [registro Alexa](ALEXA.md) identifica resultados y fuentes.
 
 ## Funcionales
 
@@ -20,13 +20,18 @@ Las capturas se consultan en el [índice de evidencias Alexa](evidencias/alexa/R
 
 ## No funcionales
 
+Ensayos automatizados del 10/11/2026 con `ensayo_rnf.py` y el firmware `tendedero_ensayo`. La tabla completa, con condiciones, discusión e incidencias, está en [RESULTADOS_RNF.md](RESULTADOS_RNF.md); los datos crudos están en [`resultados/`](../resultados/INDICE.md). Las órdenes las publica el propio ESP32 en `desired`, sin Alexa ni Lambda.
+
 | RNF | Objetivo de trabajo | Método | Resultado |
 |---|---|---|---|
-| Estabilidad | 15 min sin reset/bloqueo (referencia docente ≥10 min) | Monitor serie + captura continua | No medido |
-| Exactitud | Definir error adecuado a variable física/categórica y referencia verificable | 20 observaciones de referencia; reportar fallos | No medido |
-| Respuesta | Referencia del enunciado ≤3 s de voz a actuador | En este entorno: medir desde envío textual hasta posición final y declarar la modalidad | No se atribuye un tiempo a las capturas funcionales |
-| Frecuencia | Evento + respaldo cada 5 s (propuesta) | Timestamps Shadow/MQTT | No medido |
-| Reconexión | Recuperar conexión y desired vigente | Desconectar, ordenar y reconectar | INT-02 muestra delta pendiente, actuación y convergencia. Procedimiento: reconectar alimentación sin repetir comando, confirmado por el equipo. Las marcas del video no son una medición formal de recuperación ni una prueba aislada de pérdida de Wi-Fi. |
+| Estabilidad | 15 min sin reset/bloqueo (referencia docente ≥10 min) | Log serie continuo; orden o consulta cada 30 s | **Cumple.** 15,0 min, 15/15 órdenes, 14/14 consultas, 0 reinicios, 0 bloqueos. [rnf-01](../resultados/rnf-01-estabilidad-20261110-094834.md) |
+| Exactitud | ≤5 % de errores en ≥20 observaciones independientes; 0 falsos negativos | 20 observaciones físicas en orden aleatorio, 3 s de estabilización | **Cumple:** 20/20, 0 FP, 0 FN. Referencia: toalla mojada y secado, rehechos en cada observación. Umbrales 200/800 estimados; solo se validaron condiciones extremas. [rnf-03](../resultados/rnf-03-sensor-20261110-104652.md) |
+| Respuesta | ≤3 s hasta posición final | 10 órdenes alternadas, orden MQTT desde el dispositivo | **Cumple en la modalidad ensayada:** promedio 2,19 s, máximo 2,42 s hasta la posición estimada. No incluye Alexa ni Lambda. [rnf-02](../resultados/rnf-02-respuesta-20261110-094834.md) |
+| Frecuencia | Periódico ≤6 s; evento ≤1 s sin reporte pendiente | `reported aceptado` del ESP32, en reposo y con carga | **Periódico cumple** (reposo: máximo 5,74 s). **Evento no cumple:** 14/15 en ≤1 s, máximo 1,033 s. Con consultas de ensayo cada 60 s, máximo periódico 6,97 s. [Reposo](../resultados/rnf-04-frecuencia-20261110-111031.md), [con carga](../resultados/rnf-04-frecuencia-20261110-094834.md) |
+| Reconexión (reinicio) | Aplicar `desired` sin repetir orden; ≤30 s | Reset por RTS/EN; el PC deja la orden mientras el ESP32 está fuera de línea | **Cumple:** 3/3, máximo 9,67 s. Un intento previo falló porque la red no estaba disponible. [rnf-05](../resultados/rnf-05-reinicio-20261110-103933.md) |
+| Reconexión (Wi-Fi) | Ídem, con el equipo encendido | Desasociación `wifi_off`/`wifi_on` | **Cumple:** 3/3, máximo 7,69 s. [rnf-06](../resultados/rnf-06-reconexion-wifi-20261110-101936.md) |
+
+INT-02 se conserva como evidencia cualitativa de recuperación tras reinicio con orden enviada desde Alexa.
 
 ## Evidencias audiovisuales de integración
 
@@ -59,6 +64,26 @@ No introducir agua cerca de la alimentación sin aprobación y metodología segu
 - Un Thing inexistente fue rechazado sin sustituir la vinculación válida.
 - CloudWatch no mostró errores en las ejecuciones revisadas. La captura se conserva como evidencia.
 - Estas pruebas directas AWS se complementan con las pruebas Alexa e integración registradas el 9/11 en [ALEXA.md](ALEXA.md).
+
+### Tabla consolidada del backend desplegado
+
+| ID | Prueba realizada | Resultado esperado | Resultado observado | Estado | Evidencia |
+|---|---|---|---|---|---|
+| AWS-BE-01 | Ejecutar `LaunchRequest` | Cargar ASK SDK y devolver bienvenida | La invocación terminó con `Succeeded` y devolvió la respuesta de bienvenida | Aprobada | Ejecución directa y CloudWatch |
+| AWS-BE-02 | Vincular un usuario de prueba con `tendedero-prueba2` | Validar el Thing y persistir `userId → thingName` | `DescribeThing` aceptó el identificador y DynamoDB creó el ítem con fecha | Aprobada | Panel DynamoDB y ejecución directa |
+| AWS-BE-03 | Consultar agua con usuario vinculado | Leer `reported.agua_detectada` del Shadow correcto | La respuesta cambió de acuerdo con el booleano simulado del Shadow | Aprobada | Ejecución directa y Shadow de prueba |
+| AWS-BE-04 | Solicitar cerrar la cubierta | Escribir `desired.cubierta = cerrada` | El Shadow mostró la orden deseada y Lambda respondió que fue solicitada | Aprobada | Ejecución directa y Shadow de prueba |
+| AWS-BE-05 | Consultar cubierta | Informar el último estado reportado y, si corresponde, una orden pendiente | `PruebaConsultarCubierta` terminó con `Succeeded` y respondió que la cubierta estaba abierta, coherente con el Shadow capturado | Aprobada | [`05-backend-shadow-respuesta-lambda.png`](evidencias/aws/05-backend-shadow-respuesta-lambda.png) |
+| AWS-BE-06 | Simular que el dispositivo alcanzó la posición | Hacer converger `reported.cubierta` con `desired.cubierta` | Al actualizar `reported`, dejó de existir diferencia pendiente | Aprobada | Shadow de prueba |
+| AWS-BE-07 | Intentar vincular un Thing inexistente | Rechazarlo sin reemplazar la vinculación válida | Lambda indicó que no estaba registrado y conservó el vínculo anterior | Aprobada | Ejecución directa |
+| AWS-BE-08 | Usar dos usuarios vinculados a Things distintos | Resolver cada solicitud por su propio `userId` | Las consultas se dirigieron al Thing vinculado de cada usuario sin cruce | Aprobada | Dos ítems DynamoDB y ejecuciones directas |
+| AWS-BE-09 | Cambiar la vinculación de un usuario | Sobrescribir el `thingName` para la misma clave | DynamoDB conservó un solo vínculo activo para el usuario con el nuevo Thing | Aprobada | Ejecución directa y DynamoDB |
+| AWS-BE-10 | Desvincular un usuario | Eliminar el ítem y exigir nueva vinculación | El ítem fue eliminado y las operaciones posteriores solicitaron vincular | Aprobada | Ejecución directa |
+| AWS-BE-11 | Revisar invocaciones en CloudWatch | No encontrar excepciones ni `AccessDenied` | Se observaron eventos `START`, `END` y `REPORT` sin errores en el periodo revisado | Aprobada | [`04-cloudwatch-ejecuciones-lambda.png`](evidencias/aws/04-cloudwatch-ejecuciones-lambda.png) y [`04-cloudwatch-eventos.csv`](evidencias/aws/04-cloudwatch-eventos.csv) |
+
+Las pruebas AWS-BE validan el backend y el enrutamiento por usuario. RF4–RF9
+solo se consideran completos cuando los mismos casos se ejecuten desde la Skill
+real; RF2, RF3 y RF5 requieren además el ESP32 y el actuador físico.
 
 ## Informe Markdown obligatorio
 

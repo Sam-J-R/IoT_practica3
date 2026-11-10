@@ -13,6 +13,18 @@ bool temaIgual(const esp_mqtt_event_t& mensaje, const String& tema) {
          memcmp(mensaje.topic, tema.c_str(), tema.length()) == 0;
 }
 
+#ifdef MODO_ENSAYO_RNF
+const char* nombre(Posicion p) {
+  return p == Posicion::Abierta ? "abierta" : (p == Posicion::Cerrada ? "cerrada" : "desconocida");
+}
+
+const char* cubiertaDe(const cJSON* estado, const char* seccion) {
+  const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(
+      cJSON_GetObjectItemCaseSensitive(estado, seccion), "cubierta"));
+  return texto ? texto : "null";
+}
+#endif
+
 Posicion posicionDe(const cJSON* estado) {
   const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(estado, "cubierta"));
   if (texto && strcmp(texto, "abierta") == 0) return Posicion::Abierta;
@@ -98,6 +110,12 @@ void ClienteShadow::decodificar(const esp_mqtt_event_t& mensaje) {
     if (!cJSON_IsNumber(version) || version->valuedouble < 1 ||
         version->valuedouble > UINT32_MAX) return;
     const uint32_t v = static_cast<uint32_t>(version->valuedouble);
+#ifdef MODO_ENSAYO_RNF
+    if (temaIgual(mensaje, getAceptado_)) {
+      Serial.printf("[SHADOW] get v=%lu desired=%s reported=%s\n", static_cast<unsigned long>(v),
+                    cubiertaDe(estado, "desired"), cubiertaDe(estado, "reported"));
+    }
+#endif
     if (temaIgual(mensaje, delta_)) {
       encolar({Tipo::Delta, posicionDe(estado), v});
     } else {
@@ -141,6 +159,12 @@ void ClienteShadow::pedirShadow() {
 void ClienteShadow::aplicar(const Evento& evento, unsigned long ahora, ServoCubierta* servo) {
   // Solo los perfiles con servo real pasan un puntero valido.
   version_ = evento.version;
+#ifdef MODO_ENSAYO_RNF
+  if (servo && evento.posicion != Posicion::Desconocida) {
+    Serial.printf("[SERVO] orden entregada destino=%s v=%lu ms=%lu\n", nombre(evento.posicion),
+                  static_cast<unsigned long>(evento.version), ahora);
+  }
+#endif
   if (servo) servo->solicitar(evento.posicion, ahora);
 }
 
@@ -165,6 +189,10 @@ void ClienteShadow::procesar(const Evento& evento, unsigned long ahora, ServoCub
       Serial.println("[MQTT] Desconectado");
       break;
     case Tipo::Delta:
+#ifdef MODO_ENSAYO_RNF
+      Serial.printf("[SHADOW] delta recibido destino=%s v=%lu ms=%lu\n", nombre(evento.posicion),
+                    static_cast<unsigned long>(evento.version), ahora);
+#endif
       // Versiones evitan aplicar una orden antigua despues de una nueva.
       if (sincronizado_) {
         if (evento.version > version_) aplicar(evento, ahora, servo);
@@ -270,3 +298,19 @@ void ClienteShadow::reportarSensor(unsigned long ahora, int raw) {
     Serial.println("[SHADOW] Error al enviar el ADC. Se reintentara.");
   }
 }
+
+#ifdef MODO_ENSAYO_RNF
+bool ClienteShadow::solicitarDesired(Posicion destino) {
+  // Mismo payload que Lambda (sin clientToken): AWS genera el delta y el
+  // firmware lo procesa por el camino normal, igual que una orden de Alexa.
+  if (!cliente_ || !conectado_ || destino == Posicion::Desconocida) return false;
+  char payload[80];
+  snprintf(payload, sizeof(payload), "{\"state\":{\"desired\":{\"cubierta\":\"%s\"}}}",
+           nombre(destino));
+  return esp_mqtt_client_enqueue(cliente_, update_.c_str(), payload, 0, 1, 0, true) >= 0;
+}
+
+void ClienteShadow::consultarShadow() {
+  if (cliente_ && conectado_) pedirShadow();
+}
+#endif

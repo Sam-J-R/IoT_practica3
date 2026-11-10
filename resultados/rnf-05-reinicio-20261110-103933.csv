@@ -1,0 +1,4 @@
+rep,inicial,orden,incidencia,deteccion,desired_durante,reported_durante,red,mqtt,shadow,servo,aceptado,convergencia,repetida,pendiente_ok,durante,conv
+1,abierta,cerrada,,,cerrada,abierta,0.01,4.67,6.31,7.3,7.95,True,no,True,cerrada/abierta,sí
+2,cerrada,abierta,,,abierta,cerrada,0.01,4.36,5.52,6.52,6.95,True,no,True,abierta/cerrada,sí
+3,abierta,cerrada,,,cerrada,abierta,0.01,6.79,8.43,9.43,9.67,True,no,True,cerrada/abierta,sí
