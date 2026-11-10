@@ -1,20 +1,22 @@
 # Matriz de pruebas y evidencias — sin resultados inventados
 
-Estado actualizado el 8/11/2026. **«Parcial»** significa que hay una prueba física aislada, una prueba de nube o una simulación, no que el requisito esté aprobado de extremo a extremo.
+Actualización Alexa e integración: 9/11/2026. Las capturas de respuestas, los [videos de integración](evidencias/integracion/README.md), las pruebas directas AWS y las mediciones tienen alcances distintos. El [registro Alexa](ALEXA.md) identifica resultados y fuentes.
 
 ## Funcionales
 
 | ID | Escenario | Evidencia exigible | Estado |
 |---|---|---|---|
-| RF1 | Leer sensor analógico en entorno seco/con estímulo controlado | Serie + referencia de ensayo | Parcial: lectura seca `raw=0` y prueba ADC `raw=4095` documentadas; falta caracterizar sensor frente al estímulo |
-| RF2 | Sensor y actuador en `reported` periódico | Captura Shadow y tiempos | Pendiente |
-| RF3 | Lambda modifica desired → delta → servo → reported | Traza AWS + observación en la demo | Parcial: Lambda escribió `desired` real y el Thing de prueba simuló `reported`; falta ESP32 y servo en la cadena |
-| RF4 | Alexa consulta presencia de agua | Simulador voz/texto + Shadow | Parcial: Lambda leyó `reported.agua_detectada`; no se adjuntó evidencia de este intent desde el simulador Alexa |
-| RF5 | Alexa ordena abrir/cerrar | Simulador + servo | Parcial: Lambda escribió `desired.cubierta`; no se adjuntó evidencia del intent Alexa ni del movimiento físico |
-| RF6 | Alexa consulta estado cubierta | Simulador + reported | Parcial: la Skill real consultó por texto `reported.cubierta` del Thing simulado; falta la cadena física |
-| RF7 | Vinculación persiste entre sesiones | DynamoDB y dos sesiones | Parcial: la vinculación desde el simulador se persistió; no se documentaron dos sesiones Alexa reales |
-| RF8 | Sin vinculación: guía; con vinculación: resolve por userId | Logs y respuestas | Parcial: el `userId` real del simulador se resolvió mediante DynamoDB; falta demostrar el conjunto completo de sesiones |
-| RF9 | Thing inexistente, cambiar y desvincular | Casos positivos/negativos | Parcial: Thing inexistente rechazado y operaciones de vinculación ejercitadas directamente; falta evidencia desde Alexa |
+| RF1 | Leer sensor analógico en condiciones conocidas | Serie + referencia de ensayo | INT-01 muestra `sensor_raw = 0`/`false` y `2453`/`true`; el error físico se evalúa con referencia independiente. |
+| RF2 | Sensor y actuador en `reported` periódico | Shadow y tiempos | INT-01 muestra actualizaciones de sensor y cubierta; la frecuencia efectiva se determina con timestamps consecutivos. |
+| RF3 | desired → delta → servo → reported | Observación del mecanismo y AWS | INT-02 muestra orden pendiente, giro del servo y convergencia final; procedimiento de reinicio confirmado por el equipo. |
+| RF4 | Alexa consulta presencia de agua | Respuesta y estado de referencia | Captura 14 e INT-01: respuestas negativa/afirmativa coherentes con estados del Shadow. Entrada textual. |
+| RF5 | Alexa solicita abrir/cerrar | Respuesta y observación del servo | Captura 15 e INT-01: solicitudes y actuación del servo en el montaje de banco. |
+| RF6 | Alexa consulta cubierta | Respuesta sobre reported | Captura 14 e INT-01: consulta y estado reportado de cubierta. |
+| RF7 | Vinculación persiste entre sesiones | Vincular, detener, abrir y consultar | Capturas 10 y 11: vínculo confirmado y conservado entre conversaciones. |
+| RF8 | Sin vínculo guía; con vínculo resuelve por userId | Respuestas y DynamoDB | Captura 09 muestra guía; 10 y 11 muestran operaciones con vínculo. AWS documenta resolución por usuario. |
+| RF9 | Validar, cambiar y eliminar vínculo | Casos positivos/negativos | Captura 12: inexistente rechazado; 13: eliminación; 16: cambio válido al Thing físico. |
+
+Las capturas se consultan en el [índice de evidencias Alexa](evidencias/alexa/README.md). La entrada fue textual debido a la limitación de micrófono del entorno; no se presenta como reconocimiento de voz. El [registro AWS existente](https://github.com/Sam-J-R/IoT_practica3/blob/a8a86c3f56a39b063bacd5fe4cc651dabfe73232/docs/PRUEBAS.md) conserva las pruebas directas y el enrutamiento entre Things sin duplicar sus archivos.
 
 ## No funcionales
 
@@ -22,9 +24,18 @@ Estado actualizado el 8/11/2026. **«Parcial»** significa que hay una prueba f�
 |---|---|---|---|
 | Estabilidad | 15 min sin reset/bloqueo (referencia docente ≥10 min) | Monitor serie + captura continua | No medido |
 | Exactitud | Definir error adecuado a variable física/categórica y referencia verificable | 20 observaciones de referencia; reportar fallos | No medido |
-| Respuesta | Intentar ≤3 s de voz a actuador físico | 10 órdenes; cronómetro, timestamps y tabla de mediciones | No medido |
+| Respuesta | Referencia del enunciado ≤3 s de voz a actuador | En este entorno: medir desde envío textual hasta posición final y declarar la modalidad | No se atribuye un tiempo a las capturas funcionales |
 | Frecuencia | Evento + respaldo cada 5 s (propuesta) | Timestamps Shadow/MQTT | No medido |
-| Reconexión | Wi-Fi/MQTT automático, desired pendiente aplicado | Desconectar, ordenar offline, reconectar | Wi-Fi local probado; MQTT y recuperación `desired` no medidos |
+| Reconexión | Recuperar conexión y desired vigente | Desconectar, ordenar y reconectar | INT-02 muestra delta pendiente, actuación y convergencia. Procedimiento: reconectar alimentación sin repetir comando, confirmado por el equipo. Las marcas del video no son una medición formal de recuperación ni una prueba aislada de pérdida de Wi-Fi. |
+
+## Evidencias audiovisuales de integración
+
+| ID | Archivo | Resultado observado | Referencias aproximadas |
+|---|---|---|---|
+| INT-01 | [Funcionamiento completo](evidencias/integracion/01-funcionamiento-completo.mp4) | Consultas y control del servo; estados de agua y cubierta en Shadow. | 00:06–00:10: actuación/cierre; 00:13–00:21: consultas y estados del sensor. |
+| INT-02 | [Recuperación de orden](evidencias/integracion/02-recuperacion-orden-reconexion.mp4) | `desired = abierta` mientras `reported = cerrada`, giro del servo y convergencia en abierta. | 00:08–00:09: delta; 00:22–00:24: giro; 00:25–00:26: estado final. |
+
+Las marcas localizan escenas y no se registran como latencia del sistema. El [índice audiovisual](evidencias/integracion/README.md) detalla condiciones y alcance; se observa el brazo del servo de banco, sin atribuir prueba de carga de una cubierta instalada.
 
 ## Pruebas locales de código (no sustituyen AWS real)
 
@@ -47,39 +58,7 @@ No introducir agua cerca de la alimentación sin aprobación y metodología segu
 - `ConsultarCubiertaIntent` distinguió estado reportado y orden pendiente.
 - Un Thing inexistente fue rechazado sin sustituir la vinculación válida.
 - CloudWatch no mostró errores en las ejecuciones revisadas. La captura se conserva como evidencia.
-- Estas pruebas directas no sustituyen el conjunto completo del simulador ni el ESP32 real.
-
-## Pruebas desde la Skill Alexa (8/11/2026)
-
-| ID | Prueba | Resultado | Estado |
-|---|---|---|---|
-| AX-01 | Invocar la Skill mediante el endpoint Lambda con trigger restringido | Alexa alcanzó `tendedero-inteligente-alexa` y recibió respuestas del backend | Aprobada |
-| AX-02 | Vincular por texto «prueba dos» | Alexa normalizó inicialmente el slot como `prueba 2`; tras ampliar `THING_ALIASES_JSON`, Lambda resolvió `tendedero-prueba2` y vinculó el usuario | Aprobada |
-| AX-03 | Ejecutar `PruebaConsultarCubierta` sobre el usuario vinculado | La ejecución terminó con `Succeeded` y respondió que la cubierta estaba abierta, coherente con `reported.cubierta` | Aprobada |
-
-La prueba AX-02 documenta por qué el mapa final conserva variantes con palabras
-y dígitos. Estas pruebas validan Alexa→Lambda→DynamoDB/Shadow, no el movimiento
-del ESP32 físico.
-
-### Tabla consolidada del backend desplegado
-
-| ID | Prueba realizada | Resultado esperado | Resultado observado | Estado | Evidencia |
-|---|---|---|---|---|---|
-| AWS-BE-01 | Ejecutar `LaunchRequest` | Cargar ASK SDK y devolver bienvenida | La invocación terminó con `Succeeded` y devolvió la respuesta de bienvenida | Aprobada | Ejecución directa y CloudWatch |
-| AWS-BE-02 | Vincular un usuario de prueba con `tendedero-prueba2` | Validar el Thing y persistir `userId → thingName` | `DescribeThing` aceptó el identificador y DynamoDB creó el ítem con fecha | Aprobada | Panel DynamoDB y ejecución directa |
-| AWS-BE-03 | Consultar agua con usuario vinculado | Leer `reported.agua_detectada` del Shadow correcto | La respuesta cambió de acuerdo con el booleano simulado del Shadow | Aprobada | Ejecución directa y Shadow de prueba |
-| AWS-BE-04 | Solicitar cerrar la cubierta | Escribir `desired.cubierta = cerrada` | El Shadow mostró la orden deseada y Lambda respondió que fue solicitada | Aprobada | Ejecución directa y Shadow de prueba |
-| AWS-BE-05 | Consultar cubierta | Informar el último estado reportado y, si corresponde, una orden pendiente | `PruebaConsultarCubierta` terminó con `Succeeded` y respondió que la cubierta estaba abierta, coherente con el Shadow capturado | Aprobada | [`05-backend-shadow-respuesta-lambda.png`](evidencias/aws/05-backend-shadow-respuesta-lambda.png) |
-| AWS-BE-06 | Simular que el dispositivo alcanzó la posición | Hacer converger `reported.cubierta` con `desired.cubierta` | Al actualizar `reported`, dejó de existir diferencia pendiente | Aprobada | Shadow de prueba |
-| AWS-BE-07 | Intentar vincular un Thing inexistente | Rechazarlo sin reemplazar la vinculación válida | Lambda indicó que no estaba registrado y conservó el vínculo anterior | Aprobada | Ejecución directa |
-| AWS-BE-08 | Usar dos usuarios vinculados a Things distintos | Resolver cada solicitud por su propio `userId` | Las consultas se dirigieron al Thing vinculado de cada usuario sin cruce | Aprobada | Dos ítems DynamoDB y ejecuciones directas |
-| AWS-BE-09 | Cambiar la vinculación de un usuario | Sobrescribir el `thingName` para la misma clave | DynamoDB conservó un solo vínculo activo para el usuario con el nuevo Thing | Aprobada | Ejecución directa y DynamoDB |
-| AWS-BE-10 | Desvincular un usuario | Eliminar el ítem y exigir nueva vinculación | El ítem fue eliminado y las operaciones posteriores solicitaron vincular | Aprobada | Ejecución directa |
-| AWS-BE-11 | Revisar invocaciones en CloudWatch | No encontrar excepciones ni `AccessDenied` | Se observaron eventos `START`, `END` y `REPORT` sin errores en el periodo revisado | Aprobada | [`04-cloudwatch-ejecuciones-lambda.png`](evidencias/aws/04-cloudwatch-ejecuciones-lambda.png) y [`04-cloudwatch-eventos.csv`](evidencias/aws/04-cloudwatch-eventos.csv) |
-
-Las pruebas AWS-BE validan el backend y el enrutamiento por usuario. RF4–RF9
-solo se consideran completos cuando los mismos casos se ejecuten desde la Skill
-real; RF2, RF3 y RF5 requieren además el ESP32 y el actuador físico.
+- Estas pruebas directas AWS se complementan con las pruebas Alexa e integración registradas el 9/11 en [ALEXA.md](ALEXA.md).
 
 ## Informe Markdown obligatorio
 
@@ -101,4 +80,4 @@ real; RF2, RF3 y RF5 requieren además el ESP32 y el actuador físico.
 - **Respuesta**. Grabar ≥10 órdenes alternadas con audio y cubierta visible. Medir desde fin de la frase hasta posición mecánica final y registrar también el inicio de movimiento si se distingue. Informar n, mediana, máximo y cantidad que supera la referencia de 3 s. La aceptación de `reported` es una marca de telemetría separada.
 - **Frecuencia**. Capturar `update/accepted` en régimen estable y al cambiar la clasificación o posición. Calcular intervalos consecutivos y latencia de evento. Muestreo configurado a 500 ms, intento por evento y respaldo 5 s después de la aceptación previa. En régimen ideal, 5 s entre reportes representan hasta unos 12 intentos periódicos por minuto o 17 280 al día para un dispositivo conectado continuamente, antes de eventos, reintentos y mensajes de respuesta. Registrar volumen observado y contrastarlo con la configuración de cuenta vigente.
 - **Reconexión**. Registrar pérdida Wi-Fi/MQTT, orden Alexa en ausencia, `desired` pendiente, vuelta de Wi-Fi, nueva sesión MQTT, `get`, movimiento y convergencia. Medir desde retorno de red hasta movimiento y aceptación, sin repetir la orden. Repetir si se puede aislar solo la pérdida de MQTT.
-- **RF4–RF9**. Probar el modelo es-MX por texto y voz, guardar frase reconocida y respuesta. Demostrar dos usuarios en sesiones distintas y dos Things, incluido identificador inexistente, cambio, desvinculación y ruta de comandos aislada. Redactar identificadores completos en capturas.
+- **RF4–RF9**. Conservar las frases y respuestas del modelo es-MX. Las capturas adjuntas acreditan pruebas por texto por la limitación de micrófono del entorno. Distinguir pruebas directas AWS de interacciones del simulador y ocultar identificadores completos de usuario.

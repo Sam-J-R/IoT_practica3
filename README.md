@@ -68,6 +68,9 @@ Las pruebas locales utilizan el SDK incluido en `lambda/lambda_deployment_p3.zip
 
 - Estado verificado y pendientes: [`docs/ESTADO.md`](docs/ESTADO.md).
 - Guía operativa de la responsable AWS: [`docs/GUIA_AWS.md`](docs/GUIA_AWS.md).
+- Configuración y resultados de Alexa: [`docs/ALEXA.md`](docs/ALEXA.md).
+- Capturas de configuración y pruebas de Alexa: [`docs/evidencias/alexa/README.md`](docs/evidencias/alexa/README.md).
+- Videos de funcionamiento y recuperación de orden: [`docs/evidencias/integracion/README.md`](docs/evidencias/integracion/README.md).
 - Guía de integración y demo: [`docs/GUIA_INTEGRACION.md`](docs/GUIA_INTEGRACION.md).
 - Matriz de requisitos y pruebas: [`docs/PRUEBAS.md`](docs/PRUEBAS.md).
 - Informe técnico: [`docs/INFORME.md`](docs/INFORME.md).

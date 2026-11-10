@@ -1,6 +1,6 @@
 # Informe técnico — Práctica 3 IoT AWS + Alexa
 
-> **Borrador técnico actualizado 8/11/2026.** El backend AWS está desplegado y probado mediante eventos directos de Lambda. El trigger restringido está configurado y la Skill vinculó y consultó el Thing simulado desde el simulador. Hay pruebas físicas parciales del sensor, Wi-Fi y servo; la integración con el ESP32 y los requisitos no funcionales todavía no tienen validación integral.
+> **Actualización de Alexa e integración: 9/11/2026.** Se documentan configuración y operaciones del simulador mediante 17 capturas y [dos videos de integración](evidencias/integracion/README.md). Se observan actuación del servo de banco, valores del sensor en el Shadow y convergencia de una orden pendiente después del retorno a operación. Las observaciones funcionales se distinguen de las mediciones RNF. Véase [ALEXA.md](ALEXA.md).
 
 ## 1. Caso de uso y requerimientos
 
@@ -26,53 +26,44 @@ Declarar explícitamente objetivos, unidad, método y resultados medidos. No cop
 
 ## 3. Desarrollo e implementación
 
-- [Diagnóstico de sensor](../firmware/src/SensorTest.cpp) y [orquestador Shadow](../firmware/src/Tendedero.cpp) son perfiles separados. [SensorAgua](../firmware/include/SensorAgua.h) muestrea GPIO34 cada 500 ms. La histéresis admite respuesta ascendente o descendente, pero **sus umbrales finales aún no están documentados ni validados físicamente**. La muestra cruda se reporta en cuentas ADC.
-- [ServoCubierta](../firmware/include/ServoCubierta.h) genera PWM en D26 solo después de una orden válida, con pulsos, frecuencia y asentamiento del montaje calibrado. Durante un movimiento o antes de la primera orden, la posición local es desconocida. Al cumplirse el asentamiento se reporta una estimación, pendiente de contrastar con el mecanismo durante la demostración presencial.
-- [ClienteShadow](../firmware/src/ClienteShadow.cpp) prepara MQTT en TLS mutuo sobre 8883, después de sincronizar reloj por SNTP. Se suscribe a `delta`, respuestas de `get` y respuestas de `update`. En cada conexión solicita el Shadow clásico y aplica la orden vigente. Usa la versión para descartar deltas antiguos y `clientToken` para correlacionar la aceptación de cada reporte. Registra fallos inmediatos de suscripción/publicación y reintenta recuperación. Publica al cambiar la clasificación o posición y periódicamente. Un campo desconocido se retira con `null`; Alexa responde que aún no hay clasificación o posición disponible. **Esta lógica está implementada, pero aún no se ha demostrado contra AWS real.**
-- [Lambda](../lambda/lambda_function.py) usa `context.System.user.userId`, con lectura consistente de la tabla. Valida el Thing con `DescribeThing` antes de escribir o reemplazar una vinculación. Usa `reported` para consultas y escribe `desired.cubierta` para órdenes. El mapa de alias incluye `prueba dos`, `prueba 2`, `tendedero prueba dos` y `tendedero prueba 2`, porque durante la prueba Alexa normalizó «dos» como `2`.
+- [Diagnóstico de sensor](../firmware/src/SensorTest.cpp) y [orquestador Shadow](../firmware/src/Tendedero.cpp) son perfiles separados. [SensorAgua](../firmware/include/SensorAgua.h) muestrea GPIO34 cada 500 ms. La histéresis admite respuesta ascendente o descendente. Las capturas Alexa muestran clasificación seca y con agua; los umbrales locales y el error físico son datos del ensayo del sensor. La muestra cruda se reporta en cuentas ADC.
+- [ServoCubierta](../firmware/include/ServoCubierta.h) genera PWM en D26 solo después de una orden válida, con pulsos, frecuencia y asentamiento del montaje calibrado. Durante un movimiento o antes de la primera orden, la posición local es desconocida. Al cumplirse el asentamiento se reporta una estimación; los videos muestran el cambio de orientación del brazo del servo en el ensayo de banco. No existe realimentación independiente de posición ni se atribuye a la grabación una prueba de carga de una cubierta instalada.
+- [ClienteShadow](../firmware/src/ClienteShadow.cpp) prepara MQTT en TLS mutuo sobre 8883, después de sincronizar reloj por SNTP. Se suscribe a `delta`, respuestas de `get` y respuestas de `update`. En cada conexión solicita el Shadow clásico y aplica la orden vigente. Usa la versión para descartar deltas antiguos y `clientToken` para correlacionar la aceptación de cada reporte. Registra fallos inmediatos de suscripción/publicación y reintenta recuperación. Publica al cambiar la clasificación o posición y periódicamente. Un campo desconocido se retira con `null`. El equipo confirmó actuación integrada y recuperación de una orden tras reconectar el ESP32, sin repetir la solicitud.
+- [Lambda](../lambda/lambda_function.py) usa `context.System.user.userId`, con lectura consistente de la tabla. Valida el Thing con `DescribeThing` antes de escribir o reemplazar una vinculación. Usa `reported` para consultas y escribe `desired.cubierta` para órdenes. El mapa de alias configurado permite vincular nombres hablados de varios Things.
 - Las [plantillas de AWS](../aws) limitan el certificado a los tópicos del Thing físico y el rol de Lambda a tres operaciones IoT y tres operaciones sobre la tabla. En la cuenta de la práctica, el analizador IAM mostró acceso IoT nulo al restringir por ARN, por lo que se usó `Resource: "*"` solo para `DescribeThing`, `GetThingShadow` y `UpdateThingShadow`; en producción se usarían los ARN exactos de los dos Things. El [modelo Alexa es-MX](../alexa/interaction-model-es-MX.json) usa `AMAZON.SearchQuery` para captar el alias; documentar las frases reconocidas en la Skill real. Los PEM y datos Wi-Fi van en el archivo local ignorado por Git.
-- En `us-east-2` se desplegaron `tendedero-inteligente`, `tendedero-prueba2`, la tabla `tendedero_vinculaciones`, el rol de ejecución y la función `tendedero-inteligente-alexa`. El trigger Alexa Skills Kit está limitado al Skill ID real. La Skill usa el ARN como endpoint y la prueba por texto confirmó vinculación y consulta de cubierta sobre `tendedero-prueba2`.
+- En `us-east-2` se desplegaron `tendedero-inteligente`, `tendedero-prueba2`, la tabla `tendedero_vinculaciones`, el rol de ejecución y la función `tendedero-inteligente-alexa`. El conjunto AWS publicado documenta el trigger restringido al Skill ID. La captura del endpoint y las respuestas del simulador acreditan la conexión de la Skill.
+- [Configuración y validación de Alexa](ALEXA.md): Skill Custom es-MX, backend propio, alias para variantes `dos`/`2` y operaciones de vinculación, persistencia, consulta, control, rechazo de inexistente, cambio válido y eliminación. Las [17 capturas](evidencias/alexa/README.md) se conservan con sus nombres originales. La entrada fue textual porque el micrófono no estuvo operativo en el entorno utilizado.
 
 ## 4. Pruebas y validaciones
 
-Llenar la matriz `docs/PRUEBAS.md` con capturas, fechas, métricas y errores. Registrar al menos:
+La matriz [PRUEBAS.md](PRUEBAS.md), el [registro Alexa](ALEXA.md) y el [índice audiovisual](evidencias/integracion/README.md) distinguen respuestas capturadas, observación del montaje, condiciones del ensayo comunicadas y mediciones. Las métricas se registran con los siguientes criterios:
 
 - Exactitud: metodología de referencia (consulta pendiente al docente para sensor sin agua).
 - Reporte por evento y periódico con timestamps.
 - Latencias extremo a extremo Alexa → servo (n≥10 recomendable), no solo Lambda → Shadow.
 - 15 minutos de estabilidad objetivo.
 - Reconexión Wi-Fi y MQTT, comando deseado pendiente aplicado.
-- RF7–RF9 con usuario sin vínculo, Thing inexistente, cambio y borrado de vínculo.
+- RF7–RF9 documentados con capturas de usuario sin vínculo, persistencia, Thing inexistente, cambio válido y borrado de vínculo.
 
 ## 5. Resultados
 
-Se documentaron 27 muestras secas `raw=0`, 12 muestras del ADC a `raw=4095` con estímulo de 3V3 limitado por resistencia y reconexión Wi-Fi local. Samuel confirmó el movimiento físico correcto del servo, pero todavía debe anexar parámetros, log y fotografía del montaje; el movimiento se verificará en la demostración. La suite local ejercitó el handler con dos usuarios y AWS simulado. Además, la Lambda desplegada validó un Thing real, persistió la vinculación, leyó `reported`, escribió `desired`, detectó una orden pendiente y rechazó un Thing inexistente; CloudWatch no mostró errores en las ejecuciones revisadas. La Skill real invocó Lambda desde el simulador, vinculó el alias reconocido y consultó la cubierta simulada. Los cuatro perfiles del firmware compilaron correctamente, pero aún no se han cargado y validado como sistema integrado. Quedan por validar la voz si el equipo la presenta, ESP32→AWS, latencia, reconexión MQTT/Shadow y exactitud con referencia autorizada.
+El registro previo incluye 27 muestras secas `raw=0`, 12 muestras del ADC a `raw=4095` con estímulo eléctrico y reconexión Wi-Fi local. La suite simulada ejercitó el handler con dos usuarios. La Lambda desplegada validó Things, persistió vínculos, leyó `reported` y escribió `desired`. El [conjunto AWS ya publicado](https://github.com/Sam-J-R/IoT_practica3/blob/a8a86c3f56a39b063bacd5fe4cc651dabfe73232/docs/EVIDENCIAS_AWS.md) conserva sus paneles, CSV y resultados directos.
 
-### Evidencias AWS consolidadas
+La actualización Alexa incorpora respuestas reales del simulador, persistencia entre conversaciones, rechazo de identificador inexistente, eliminación y cambio válido de `tendedero-prueba2` a `tendedero-inteligente`. El video INT-01 incorpora la observación del servo y del Shadow, con dos estados del sensor: `raw = 0`/`agua_detectada = false` y `raw = 2453`/`agua_detectada = true`. Las respuestas del simulador son coherentes con esos estados.
 
-![AWS IoT Core: Things y asociaciones del certificado](evidencias/aws/01-iot-core-things-certificado.png)
+INT-02 muestra `desired.cubierta = abierta`, `reported.cubierta = cerrada` y delta de apertura; luego se observa el giro del servo y al final ambos estados en `abierta`. El equipo confirmó que desconectó y reconectó el cable del ESP32 sin repetir la orden. Se documenta recuperación tras nuevo arranque, diferenciada de una interrupción aislada de Wi-Fi.
 
-*Figura AWS-1. Things del proyecto y asociaciones del certificado activo. El ID de cuenta y el identificador del certificado fueron redactados.*
+### Evidencias audiovisuales
 
-![DynamoDB: tabla y vinculaciones persistidas](evidencias/aws/02-dynamodb-tabla-vinculaciones.png)
+- [INT-01 — Funcionamiento completo, 21,70 s](evidencias/integracion/01-funcionamiento-completo.mp4): simulador, servo, consultas de sensor y estados AWS.
+- [INT-02 — Recuperación de orden, 26,16 s](evidencias/integracion/02-recuperacion-orden-reconexion.mp4): delta pendiente, actuación y convergencia final.
+- [Índice con marcas de tiempo y alcance](evidencias/integracion/README.md).
 
-*Figura AWS-2. Tabla de vinculaciones e ítems creados por Lambda; los `userId` aparecen truncados.*
-
-![Lambda e IAM](evidencias/aws/03-lambda-iam-configuracion.png)
-
-*Figura AWS-3. Función desplegada, runtime, handler y políticas asociadas al rol.*
-
-![CloudWatch Lambda](evidencias/aws/04-cloudwatch-ejecuciones-lambda.png)
-
-*Figura AWS-4. Eventos de las invocaciones revisadas sin excepciones visibles. Los resultados funcionales se resumen en la tabla AWS-BE de `docs/PRUEBAS.md`.*
-
-![Shadow de prueba y respuesta de Lambda](evidencias/aws/05-backend-shadow-respuesta-lambda.png)
-
-*Figura AWS-5. Shadow clásico simulado de `tendedero-prueba2` y respuesta satisfactoria de `PruebaConsultarCubierta`, coherente con `reported.cubierta = abierta`.*
+Los archivos se conservan originales. Sus duraciones y marcas de navegación no se utilizan como valores de latencia, exactitud o estabilidad.
 
 ## 6. Conclusiones
 
-Las pruebas confirman que Alexa invoca Lambda y consulta/controla el Shadow simulado mediante AWS. Todavía no permiten afirmar que Alexa mueve el dispositivo físico; esa conclusión requiere la demostración integrada con el ESP32.
+Las pruebas documentadas respaldan la configuración de Alexa y sus operaciones sobre el Thing vinculado, incluida persistencia y cambio de objeto. Los videos complementan las capturas con actuación del servo de banco, consulta de estados y convergencia de una posición solicitada durante la desconexión, conforme al procedimiento de nuevo arranque confirmado por el equipo. Se distingue entre solicitud, estado reportado estimado y observación física. La modalidad utilizada fue textual por la limitación de micrófono del entorno.
 
 ## 7. Recomendaciones
 
@@ -80,5 +71,8 @@ La realimentación de posición permitiría distinguir entre el movimiento estim
 
 ## 8. Anexos
 
-Diagrama de circuito final, fotografías del prototipo, pruebas y capturas AWS/Alexa, exportaciones de configuraciones, evidencia de commits propios por cada integrante.
+- [Capturas de configuración y pruebas Alexa](evidencias/alexa/README.md).
+- [Videos de integración y recuperación](evidencias/integracion/README.md).
+- [Evidencias AWS ya publicadas](https://github.com/Sam-J-R/IoT_practica3/blob/a8a86c3f56a39b063bacd5fe4cc651dabfe73232/docs/EVIDENCIAS_AWS.md).
+- [Diagramas del sistema](DIAGRAMAS.md) y [conexiones](../hardware/CONEXIONES.md).
 
