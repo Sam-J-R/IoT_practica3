@@ -78,7 +78,7 @@ Ejemplo simplificado del Shadow:
 - Servo: señal en GPIO26, fuente DC regulada adecuada, GND común; **no alimentarlo desde GPIO o 3V3**.
 - Ya informó que el servo se movió correctamente en prueba local. Faltan documentar fuente, pulsos, tiempo y recorrido con la cubierta.
 - Configurará archivos locales `secrets.h` y `calibracion_local.h`, que **no deben subirse ni enviarse en el ZIP**.
-- Probará el ESP32 con AWS real y guardará videos/logs de RF1–RF3 y métricas.
+- Probará el ESP32 con AWS real, guardará logs/fotografías de RF1–RF3 y preparará el movimiento físico para la demostración presencial.
 
 ### Compañera AWS — IoT Core, Lambda y DynamoDB
 
@@ -86,7 +86,7 @@ Ejemplo simplificado del Shadow:
 2. Crear/asociar certificado y política IoT. Usar `aws/iot-certificate-policy.template.json` como plantilla, reemplazando los identificadores de ejemplo.
 3. Compartir **solo por un canal seguro** con Samuel el endpoint Data-ATS, Thing, CA, certificado y clave privada del dispositivo.
 4. Crear tabla DynamoDB `tendedero_vinculaciones` con `userId` (String) como clave de partición.
-5. Desplegar `lambda/lambda_deployment_p3.zip`, con handler `lambda_function.lambda_handler` y rol IAM apropiado. Configurar `IOT_ENDPOINT` sin protocolo, `DDB_BINDINGS_TABLE=tendedero_vinculaciones` y `THING_ALIASES_JSON={"tendedero inteligente":"tendedero-inteligente","prueba dos":"tendedero-prueba2"}`.
+5. Desplegar `lambda/lambda_deployment_p3.zip`, con handler `lambda_function.lambda_handler` y rol IAM apropiado. Configurar `IOT_ENDPOINT` sin protocolo, `DDB_BINDINGS_TABLE=tendedero_vinculaciones` y `THING_ALIASES_JSON={"tendedero inteligente":"tendedero-inteligente","prueba dos":"tendedero-prueba2","prueba 2":"tendedero-prueba2","tendedero prueba dos":"tendedero-prueba2","tendedero prueba 2":"tendedero-prueba2"}`.
 6. Probar **dos usuarios y dos Things distintos**, cambio de vínculo, Thing inexistente y desvinculación. El backend **no usa un Thing único para todos**.
 
 ### Compañera Alexa — Skill
@@ -101,7 +101,7 @@ Ejemplo simplificado del Shadow:
 
 **Confirmado:** lectura ADC seca y prueba eléctrica del GPIO34 documentadas; Wi-Fi local con reconexión; Samuel confirmó movimiento del servo; código Lambda con **12/12 pruebas locales** (incluye validaciones estáticas del proyecto) y AWS simulados.
 
-**Pendiente:** Thing y certificados definitivos, conexiones MQTT TLS reales, Lambda/DynamoDB desplegadas, Skill funcionando en consola, ensayo de agua con referencia, `delta`→servo→`reported`, reconexión del Shadow, latencia, estabilidad y evidencias finales.
+**Estado actual:** IoT Core, los dos Things, certificado y política del Thing físico, DynamoDB, IAM y Lambda están desplegados. El trigger restringido al Skill ID está configurado y la Skill vinculó el Thing de prueba y consultó su cubierta desde el simulador. La conexión MQTT TLS del ESP32, el ensayo de agua con referencia, `delta`→servo→`reported`, reconexión, latencia y estabilidad corresponden a la integración física.
 
 **Importante:** no hay archivos reales de credenciales ni calibración en este paquete. Si lo abres y compilas sin configurarlos, el programa final solo permite leer ADC y no controla AWS/servo. Es una protección intencional.
 
