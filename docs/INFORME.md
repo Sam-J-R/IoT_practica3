@@ -4,7 +4,7 @@
 
 **Actividad:** Integración de un objeto inteligente con Alexa mediante MQTT y AWS IoT Core
 
-**Integrantes:** Samuel ([Sam-J-R](https://github.com/Sam-J-R)) — hardware, firmware y ensayos RNF · María Lozada ([mjlozada](https://github.com/mjlozada)) — AWS IoT Core, Lambda y DynamoDB · Kathy ([KathM00](https://github.com/KathM00)) — Skill de Alexa, integración e informe
+**Integrantes:** Samuel Jarro Rodriguez ([Sam-J-R](https://github.com/Sam-J-R)) — hardware, firmware y ensayos RNF · María Jesús Lozada Peralta ([mjlozada](https://github.com/mjlozada)) — AWS IoT Core, Lambda y DynamoDB · Katherine Montaño Mejia ([KathM00](https://github.com/KathM00)) — Skill de Alexa, integración e informe
 
 **Fecha:** 10 de noviembre de 2026 · **Repositorio:** [github.com/Sam-J-R/IoT_practica3](https://github.com/Sam-J-R/IoT_practica3)
 
