@@ -116,7 +116,7 @@ La política desplegada permite únicamente `DescribeThing`, `GetThingShadow` y 
 |---|---|
 | `IOT_ENDPOINT` | Endpoint ATS sin protocolo ni puerto |
 | `DDB_BINDINGS_TABLE` | `tendedero_vinculaciones` |
-| `THING_ALIASES_JSON` | `{"tendedero inteligente":"tendedero-inteligente","prueba dos":"tendedero-prueba2"}` |
+| `THING_ALIASES_JSON` | `{"tendedero inteligente":"tendedero-inteligente","prueba dos":"tendedero-prueba2","prueba 2":"tendedero-prueba2","tendedero prueba dos":"tendedero-prueba2","tendedero prueba 2":"tendedero-prueba2"}` |
 
 No crear manualmente `AWS_REGION`: Lambda la proporciona y debe indicar `us-east-2`.
 
@@ -142,12 +142,12 @@ Compartir con la responsable Alexa:
 - locale: `es-MX`;
 - nombre de invocación: `tendedero inteligente`;
 - modelo `alexa/interaction-model-es-MX.json`;
-- alias hablados: `tendedero inteligente` y `prueba dos`;
+- alias hablados: `tendedero inteligente`, `prueba dos`, `prueba 2`, `tendedero prueba dos` y `tendedero prueba 2`;
 - lista de intents y frases que deben probarse.
 
 No compartir con ella la clave privada, certificado del ESP32, Wi-Fi ni archivos `secrets.h`.
 
-La responsable Alexa debe devolver el **Skill ID**. Con ese valor, la responsable AWS agrega a Lambda el trigger **Alexa Skills Kit** con verificación del Skill ID. Después, la responsable Alexa pega el ARN de Lambda como endpoint predeterminado y construye el modelo.
+La responsable Alexa devolvió el **Skill ID** y la responsable AWS agregó a Lambda el trigger **Alexa Skills Kit** con verificación de ese identificador. La Skill usa el ARN de Lambda como endpoint predeterminado; una prueba desde el simulador confirmó la vinculación y la consulta de cubierta sobre `tendedero-prueba2`.
 
 ## 11. Evidencias que debe conservar la responsable AWS
 
@@ -160,8 +160,10 @@ Guardar capturas o exportaciones, ocultando datos sensibles, de:
 5. Tabla, clave `userId`, modo `PAY_PER_REQUEST` e ítems creados por Lambda.
 6. Rol y política IAM de Lambda.
 7. Configuración de Lambda, variables y trigger con Skill ID.
-8. Shadows de ambos Things.
+8. Shadow simulado de `tendedero-prueba2`; el Shadow físico corresponde a la integración con el ESP32 y a la demostración.
 9. CloudWatch Logs de vincular, consultar, cambiar y desvincular.
 10. Prueba de dos usuarios sin cruce de Things.
 
 Registrar los resultados en `docs/PRUEBAS.md` y las configuraciones finales en `docs/INFORME.md`. Cada captura debe tener fecha, escenario y resultado, no solo mostrar que el recurso existe.
+
+La lista detallada, los nombres recomendados y las reglas de redacción están en [`EVIDENCIAS_AWS.md`](EVIDENCIAS_AWS.md).

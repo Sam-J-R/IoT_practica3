@@ -45,7 +45,11 @@ class LambdaTests(unittest.TestCase):
         modules = {"boto3": boto3, "botocore": botocore, "botocore.exceptions": exceptions}
         env = {
             "IOT_ENDPOINT": "endpoint.example",
-            "THING_ALIASES_JSON": json.dumps({"grupo uno": "tendedero-uno", "grupo dos": "tendedero-dos"}),
+            "THING_ALIASES_JSON": json.dumps({
+                "grupo uno": "tendedero-uno",
+                "grupo dos": "tendedero-dos",
+                "grupo 2": "tendedero-dos",
+            }),
         }
         with patch.dict(sys.modules, modules), patch.dict(os.environ, env):
             with patch.object(sys, "path", [str(ROOT / "lambda/lambda_deployment_p3.zip"), *sys.path]):
@@ -98,7 +102,7 @@ class LambdaTests(unittest.TestCase):
 
         self.assertIn("objeto registrado", self.ask("A", "CambiarThingIntent", "inexistente"))
         self.assertEqual(self.bindings["A"]["thingName"], "tendedero-uno")
-        self.ask("A", "CambiarThingIntent", "grupo dos")
+        self.ask("A", "CambiarThingIntent", "grupo 2")
         self.assertIn("cerrada", self.ask("A", "ConsultarCubiertaIntent"))
         self.ask("A", "AbrirCubiertaIntent")
         self.assertEqual(self.shadows["tendedero-dos"]["desired"]["cubierta"], "abierta")
