@@ -1,20 +1,22 @@
 # Matriz de pruebas y evidencias — sin resultados inventados
 
-Estado actualizado el 7/11/2026. **«Parcial»** significa que hay una prueba física aislada o una prueba local simulada, no que el requisito esté aprobado de extremo a extremo.
+Actualización Alexa e integración: 9/11/2026. Las capturas de respuestas, las pruebas directas AWS, las observaciones físicas comunicadas y las mediciones tienen alcances distintos. El [registro Alexa](ALEXA.md) identifica resultados y fuentes.
 
 ## Funcionales
 
 | ID | Escenario | Evidencia exigible | Estado |
 |---|---|---|---|
-| RF1 | Leer sensor analógico en entorno seco/con estímulo controlado | Serie + referencia de ensayo | Parcial: lectura seca `raw=0` y prueba ADC `raw=4095` documentadas; falta caracterizar sensor frente al estímulo |
-| RF2 | Sensor y actuador en `reported` periódico | Captura Shadow y tiempos | Pendiente |
-| RF3 | Lambda modifica desired → delta → servo → reported | Traza AWS + video servo | Parcial: Lambda escribió `desired` real y el Thing de prueba simuló `reported`; falta ESP32 y servo en la cadena |
-| RF4 | Alexa consulta presencia de agua | Simulador voz/texto + Shadow | Parcial: Lambda leyó el Shadow real mediante evento directo; falta Alexa |
-| RF5 | Alexa ordena abrir/cerrar | Simulador + servo | Parcial: Lambda escribió `desired.cubierta`; falta Alexa y movimiento físico |
-| RF6 | Alexa consulta estado cubierta | Simulador + reported | Parcial: Lambda distinguió estado reportado y orden pendiente; falta Alexa |
-| RF7 | Vinculación persiste entre sesiones | DynamoDB y dos sesiones | Parcial: persistencia verificada entre invocaciones directas; falta probar sesiones Alexa reales |
-| RF8 | Sin vinculación: guía; con vinculación: resolve por userId | Logs y respuestas | Parcial: enrutamiento por `userId` ejercitado directamente; falta Alexa real |
-| RF9 | Thing inexistente, cambiar y desvincular | Casos positivos/negativos | Parcial: Thing inexistente rechazado y operaciones de vinculación ejercitadas directamente; falta evidencia desde Alexa |
+| RF1 | Leer sensor analógico en condiciones conocidas | Serie + referencia de ensayo | Lecturas de banco registradas; el equipo confirmó el ensayo integrado. Las capturas Alexa muestran clasificación seca y con agua; el error físico se evalúa por separado. |
+| RF2 | Sensor y actuador en `reported` periódico | Shadow y tiempos | Revisión de Shadows e integración confirmada por el equipo; la frecuencia efectiva requiere timestamps y cálculo propio. |
+| RF3 | desired → delta → servo → reported | Observación del mecanismo y AWS | Integración y aplicación de orden tras reconectar el ESP32 confirmadas por el equipo; alcance descrito en ALEXA.md. |
+| RF4 | Alexa consulta presencia de agua | Respuesta y estado de referencia | Ejecutado por texto: respuestas seca/con agua en captura 14. |
+| RF5 | Alexa solicita abrir/cerrar | Respuesta y observación del servo | Solicitudes aceptadas en captura 15; movimiento integrado confirmado por el equipo. |
+| RF6 | Alexa consulta cubierta | Respuesta sobre reported | Captura 14 informa cubierta cerrada según el último reporte. |
+| RF7 | Vinculación persiste entre sesiones | Vincular, detener, abrir y consultar | Capturas 10 y 11: vínculo confirmado y conservado entre conversaciones. |
+| RF8 | Sin vínculo guía; con vínculo resuelve por userId | Respuestas y DynamoDB | Captura 09 muestra guía; 10 y 11 muestran operaciones con vínculo. AWS documenta resolución por usuario. |
+| RF9 | Validar, cambiar y eliminar vínculo | Casos positivos/negativos | Captura 12: inexistente rechazado; 13: eliminación; 16: cambio válido al Thing físico. |
+
+Las capturas se consultan en el [índice de evidencias Alexa](evidencias/alexa/README.md). La entrada fue textual debido a la limitación de micrófono del entorno; no se presenta como reconocimiento de voz. El [registro AWS existente](https://github.com/Sam-J-R/IoT_practica3/blob/a8a86c3f56a39b063bacd5fe4cc651dabfe73232/docs/PRUEBAS.md) conserva las pruebas directas y el enrutamiento entre Things sin duplicar sus archivos.
 
 ## No funcionales
 
@@ -22,9 +24,9 @@ Estado actualizado el 7/11/2026. **«Parcial»** significa que hay una prueba f�
 |---|---|---|---|
 | Estabilidad | 15 min sin reset/bloqueo (referencia docente ≥10 min) | Monitor serie + captura continua | No medido |
 | Exactitud | Definir error adecuado a variable física/categórica y referencia verificable | 20 observaciones de referencia; reportar fallos | No medido |
-| Respuesta | Intentar ≤3 s de voz a actuador físico | 10 órdenes; video con inicio/fin y cronometraje | No medido |
+| Respuesta | Referencia del enunciado ≤3 s de voz a actuador | En este entorno: medir desde envío textual hasta posición final y declarar la modalidad | No se atribuye un tiempo a las capturas funcionales |
 | Frecuencia | Evento + respaldo cada 5 s (propuesta) | Timestamps Shadow/MQTT | No medido |
-| Reconexión | Wi-Fi/MQTT automático, desired pendiente aplicado | Desconectar, ordenar offline, reconectar | Wi-Fi local probado; MQTT y recuperación `desired` no medidos |
+| Reconexión | Recuperar conexión y desired vigente | Desconectar, ordenar y reconectar | El equipo confirmó aplicación tras reconectar la alimentación, sin repetir comando. No se registró tiempo numérico; se distingue de pérdida aislada de Wi-Fi. |
 
 ## Pruebas locales de código (no sustituyen AWS real)
 
@@ -47,7 +49,7 @@ No introducir agua cerca de la alimentación sin aprobación y metodología segu
 - `ConsultarCubiertaIntent` distinguió estado reportado y orden pendiente.
 - Un Thing inexistente fue rechazado sin sustituir la vinculación válida.
 - CloudWatch no mostró errores en las ejecuciones revisadas. La captura se conserva como evidencia.
-- Estas pruebas no sustituyen el simulador de Alexa ni el ESP32 real.
+- Estas pruebas directas AWS se complementan con las pruebas Alexa e integración registradas el 9/11 en [ALEXA.md](ALEXA.md).
 
 ## Informe Markdown obligatorio
 
@@ -69,4 +71,4 @@ No introducir agua cerca de la alimentación sin aprobación y metodología segu
 - **Respuesta**. Grabar ≥10 órdenes alternadas con audio y cubierta visible. Medir desde fin de la frase hasta posición mecánica final y registrar también el inicio de movimiento si se distingue. Informar n, mediana, máximo y cantidad que supera la referencia de 3 s. La aceptación de `reported` es una marca de telemetría separada.
 - **Frecuencia**. Capturar `update/accepted` en régimen estable y al cambiar la clasificación o posición. Calcular intervalos consecutivos y latencia de evento. Muestreo configurado a 500 ms, intento por evento y respaldo 5 s después de la aceptación previa. En régimen ideal, 5 s entre reportes representan hasta unos 12 intentos periódicos por minuto o 17 280 al día para un dispositivo conectado continuamente, antes de eventos, reintentos y mensajes de respuesta. Registrar volumen observado y contrastarlo con la configuración de cuenta vigente.
 - **Reconexión**. Registrar pérdida Wi-Fi/MQTT, orden Alexa en ausencia, `desired` pendiente, vuelta de Wi-Fi, nueva sesión MQTT, `get`, movimiento y convergencia. Medir desde retorno de red hasta movimiento y aceptación, sin repetir la orden. Repetir si se puede aislar solo la pérdida de MQTT.
-- **RF4–RF9**. Probar el modelo es-MX por texto y voz, guardar frase reconocida y respuesta. Demostrar dos usuarios en sesiones distintas y dos Things, incluido identificador inexistente, cambio, desvinculación y ruta de comandos aislada. Redactar identificadores completos en capturas.
+- **RF4–RF9**. Conservar las frases y respuestas del modelo es-MX. Las capturas adjuntas acreditan pruebas por texto por la limitación de micrófono del entorno. Distinguir pruebas directas AWS de interacciones del simulador y ocultar identificadores completos de usuario.

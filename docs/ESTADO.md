@@ -1,6 +1,6 @@
-# Estado de la Práctica 3 (7 de noviembre de 2026)
+# Estado de la Práctica 3 (actualización de integración: 9 de noviembre de 2026)
 
-Este documento diferencia pruebas reales, verificaciones de código y tareas todavía pendientes. **No equivale a una demo completa en AWS.**
+Este documento diferencia capturas inspeccionables, ensayos comunicados por el equipo y mediciones. La actualización de Alexa se detalla en [ALEXA.md](ALEXA.md), con [17 capturas](evidencias/alexa/README.md).
 
 ## Confirmado
 
@@ -14,16 +14,18 @@ Este documento diferencia pruebas reales, verificaciones de código y tareas tod
 - Código de firmware MQTT TLS/Shadow preparado. `lambda/lambda_deployment_p3.zip` contiene la misma versión de `lambda_function.py` que el código fuente.
 - Backend AWS desplegado en `us-east-2`: Things `tendedero-inteligente` y `tendedero-prueba2`, certificado activo del Thing físico, política IoT, endpoint ATS, tabla `tendedero_vinculaciones`, rol IAM y Lambda `tendedero-inteligente-alexa`.
 - Pruebas directas desde Lambda satisfactorias: arranque del handler, vinculación persistente, consulta del sensor, escritura de `desired.cubierta`, consulta de cubierta, rechazo de Thing inexistente y desvinculación. El Thing de prueba permitió simular la convergencia `desired`/`reported`.
-- CloudWatch no mostró errores en las ejecuciones verificadas; se conservó captura como evidencia. El ARN de Lambda y el modelo fueron entregados a la responsable Alexa; falta recibir el Skill ID y configurar el trigger restringido.
+- CloudWatch no mostró errores en las ejecuciones AWS verificadas. El conjunto AWS publicado registra el trigger restringido al Skill ID; la captura del endpoint y las respuestas del simulador acreditan la conexión de la Skill al backend.
+- Skill Custom es-MX configurada con backend propio. Se documentaron apertura, guía sin vínculo, vinculación, persistencia entre conversaciones, rechazo de Thing inexistente, desvinculación, consultas del sensor y cubierta, apertura/cierre y cambio válido de `tendedero-prueba2` a `tendedero-inteligente`.
+- El equipo confirmó la integración completa con ESP32, sensor, servo, Shadows y base de datos. También confirmó la aplicación de una orden enviada mientras el ESP32 estaba desconectado, después de volver a conectarlo y sin repetir la solicitud. Es un ensayo de recuperación tras nuevo arranque; las capturas Alexa no se presentan como una grabación del movimiento.
+- Las pruebas del simulador se realizaron por texto porque el micrófono no estuvo operativo en el entorno utilizado. Se registra esa modalidad y no se atribuye validación de reconocimiento de voz.
 
-## Aún no demostrado
+## Alcance de los registros técnicos
 
-1. Clasificación del sensor `agua_detectada`: falta umbral calibrado y referencia física/ensayo autorizado. El estímulo eléctrico prueba ADC, no exactitud para agua/lluvia.
-2. Valores finales de `calibracion_local.h`: por seguridad no se incluyen datos no verificados ni se adjunta ese archivo local. La plantilla permanece desactivada.
-3. Conexión del ESP32 a AWS IoT Core real por TLS; lectura `get`, recepción `delta`, publicación `reported` y recuperación de `desired` pendiente. Los recursos AWS ya existen, pero falta probarlos desde el dispositivo físico.
-4. Skill Alexa conectada al backend y validada con voz/texto real. DynamoDB y Lambda ya están desplegadas y probadas mediante eventos directos.
-5. RF1–RF9 completos de extremo a extremo; estabilidad ≥10 min, exactitud, latencia objetivo ≤3 s, frecuencia efectiva y reconexión MQTT con Shadow.
-6. Fotografías, videos, logs y capturas de AWS/Alexa para el informe; commits por cada integrante y repositorio final accesible.
+1. Se observaron respuestas para ambas clasificaciones del sensor. Los valores numéricos de umbrales y el error de clasificación requieren su propio registro de medición; una consulta satisfactoria no mide exactitud.
+2. `calibracion_local.h` y los secretos del dispositivo no se publican; las plantillas permanecen desactivadas por diseño.
+3. El ensayo comunicado acredita actuación integrada y recuperación de la posición deseada tras reconectar la alimentación. No se confunde con un ensayo aislado de pérdida de Wi-Fi manteniendo el ESP32 encendido.
+4. Las operaciones Alexa se documentan mediante entrada textual. Los registros funcionales no proporcionan por sí solos valores de latencia, estabilidad ni frecuencia efectiva.
+5. La [matriz de pruebas](PRUEBAS.md) distingue objetivos de medición, resultados funcionales y observaciones del ensayo sin atribuir valores no medidos.
 
 ## Responsabilidades acordadas
 
