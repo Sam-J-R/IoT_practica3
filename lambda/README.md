@@ -1,33 +1,46 @@
-# Lambda Alexa — backend desplegado y probado en AWS
+# Backend Lambda — desplegado y probado en AWS
 
-La función `tendedero-inteligente-alexa` está desplegada en `us-east-2` y fue
-verificada mediante eventos directos de Lambda. Las pruebas comprobaron carga
-del handler, vinculación persistente, consulta del Shadow, escritura de
-`desired.cubierta`, cambio de Thing, rechazo de un Thing inexistente y
-desvinculación. CloudWatch no mostró errores en las ejecuciones revisadas.
+La función `tendedero-inteligente-alexa` está desplegada en `us-east-2`. Las pruebas directas comprobaron carga del handler, vinculación persistente, consultas del Shadow, escritura de `desired.cubierta`, cambio de Thing, rechazo de uno inexistente y desvinculación. CloudWatch conserva las ejecuciones revisadas.
 
-Esto valida el backend AWS, pero no sustituye la prueba extremo a extremo con
-la Skill de Alexa ni la conexión física del ESP32.
+Fuente: [lambda_function.py](lambda_function.py). Dependencias declaradas: [requirements.txt](requirements.txt). Paquete entregado: [lambda_deployment_p3.zip](lambda_deployment_p3.zip).
 
-- Región acordada: `us-east-2`; IoT Core, Lambda y DynamoDB deben permanecer en esa región.
-- Requiere `IOT_ENDPOINT` sin `https://` y `DDB_BINDINGS_TABLE=tendedero_vinculaciones`. Lambda proporciona `AWS_REGION` automáticamente.
-- Alias verificados: `THING_ALIASES_JSON={"tendedero inteligente":"tendedero-inteligente","prueba dos":"tendedero-prueba2","prueba 2":"tendedero-prueba2","tendedero prueba dos":"tendedero-prueba2","tendedero prueba 2":"tendedero-prueba2"}`. Las variantes con dígito se añadieron porque Alexa normalizó «dos» como `2` durante la prueba real.
-- Handler: `lambda_function.lambda_handler`, Python 3.11 o runtime compatible.
-- IAM: `iot:DescribeThing` para validar nombre, `iot:GetThingShadow`/`iot:UpdateThingShadow` y `dynamodb:GetItem`/`PutItem`/`DeleteItem` sobre la tabla.
-- Trigger Alexa Skills Kit configurado y restringido al Skill ID real de la compañera Alexa.
-- Dependencias ASK SDK deben instalarse en la raíz del ZIP de despliegue junto a `lambda_function.py` (o como layer), como en el ejemplo del docente.
-- Se incluye `lambda_deployment_p3.zip` generado a partir del paquete del docente con este `lambda_function.py` en la raíz. Si cambia el fuente, se debe reconstruir el ZIP antes de subirlo. Elegir un runtime compatible (la plantilla del docente contiene archivos preparados con Python 3.11).
-- `userId` viene de la solicitud Alexa; cada intent de consulta/control lo resuelve en DynamoDB antes de hablar con Shadow. No hay Thing fijo.
-- `VincularThingIntent` y `CambiarThingIntent` comparten implementación; el segundo reemplaza vínculo.
-- Permisos IAM y alias fueron probados mediante invocaciones directas en AWS. Todavía falta validar el reconocimiento de voz/texto desde la Skill y la cadena completa hasta el ESP32.
+Las pruebas directas del backend se distinguen de las pruebas de la Skill y del dispositivo físico. La documentación de esas etapas se conserva en [ALEXA.md](../docs/ALEXA.md), el [informe consolidado](../docs/INFORME.md) y los [videos de integración](../docs/evidencias/integracion/README.md). El [manual AWS](../docs/GUIA_AWS.md) y la [documentación original de evidencias AWS](../docs/EVIDENCIAS_AWS.md) mantienen el procedimiento y su respaldo.
 
+## Parámetros de despliegue
 
-## Configuración realizada y cierre de la integración
+- Función: `tendedero-inteligente-alexa`; región `us-east-2` para IoT Core, Lambda y DynamoDB.
+- Runtime documentado: Python 3.11, arquitectura `x86_64`.
+- Handler: `lambda_function.lambda_handler`.
+- `IOT_ENDPOINT`: hostname ATS sin protocolo ni puerto.
+- `DDB_BINDINGS_TABLE`: `tendedero_vinculaciones`.
+- `AWS_REGION`: proporcionada automáticamente por Lambda.
+- Rol con `iot:DescribeThing`, `iot:GetThingShadow`, `iot:UpdateThingShadow` y `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:DeleteItem`, además de logging.
+- Trigger Alexa Skills Kit configurado y restringido al Skill ID.
 
-1. **Realizado — AWS IoT Core.** Están creados el Thing físico y el Thing de prueba. El certificado activo del Thing físico está asociado al Thing y a su política IoT.
-2. **Realizado — DynamoDB.** La tabla `tendedero_vinculaciones` usa `userId` String como clave de partición y Lambda crea `thingName` y `fechaVinculacion` en cada ítem.
-3. **Realizado — Lambda.** El ZIP, handler, rol, variables de entorno y pruebas directas están configurados. Cuando se modifique `lambda_function.py`, se debe reconstruir el ZIP y volver a desplegarlo.
-4. **Realizado — trigger Alexa.** La responsable Alexa entregó el Skill ID y Lambda tiene un trigger **Alexa Skills Kit** restringido a ese identificador.
-5. **Realizado parcialmente — Skill.** La Skill invocó la Lambda desde el simulador, vinculó `prueba dos` después de ampliar los alias y consultó correctamente la cubierta del Shadow simulado. La demostración física y cualquier prueba de voz adicional se documentan por separado.
+Mapa de alias verificado, incluidas las variantes con dígitos observadas en el slot de Alexa:
 
-Las capturas y exportaciones deben ocultar claves, certificados privados e identificadores completos de usuarios. La lista detallada está en `docs/EVIDENCIAS_AWS.md`.
+```json
+{
+  "tendedero inteligente": "tendedero-inteligente",
+  "prueba dos": "tendedero-prueba2",
+  "prueba 2": "tendedero-prueba2",
+  "tendedero prueba dos": "tendedero-prueba2",
+  "tendedero prueba 2": "tendedero-prueba2"
+}
+```
+
+## Configuración realizada
+
+1. Things físico y de prueba creados; certificado activo del físico asociado al Thing y a la política IoT.
+2. Tabla con `userId` String como clave; Lambda añade `thingName` y `fechaVinculacion` a cada ítem.
+3. ZIP, handler, variables y rol configurados y ejercitados mediante eventos directos.
+4. Skill ID recibido y trigger restringido a ese identificador.
+5. Skill conectada al backend. La vinculación y consulta del Thing simulado verificaron el mapa de alias; las pruebas posteriores del simulador y montaje de banco están documentadas por separado en el informe y las evidencias de integración.
+
+`userId` se obtiene de la solicitud y se resuelve en DynamoDB en cada consulta/control: no hay Thing fijo. `VincularThingIntent` y `CambiarThingIntent` comparten implementación, que valida existencia antes de crear o reemplazar el vínculo.
+
+## Mantener el paquete
+
+El ZIP debe contener el handler y ASK SDK en su raíz, o usar una capa adecuada. El fuente y su copia dentro del ZIP deben coincidir. Si cambia el código, reconstruir y desplegar el paquete; no sustituir solo el fuente del repositorio.
+
+Las versiones de `requirements.txt` no están fijadas. Reconstruir con paquetes diferentes requiere verificar compatibilidad con el runtime y repetir las pruebas. No incluir `.venv`, claves, certificados privados, credenciales ni identificadores completos de usuarios en las evidencias.

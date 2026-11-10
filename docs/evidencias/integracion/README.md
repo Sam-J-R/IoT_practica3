@@ -53,7 +53,7 @@ Estos archivos no contienen una serie de mediciones de latencia, estabilidad o e
 
 ## Documentos relacionados
 
-- [Configuración y pruebas Alexa](../../ALEXA.md).
+- [Informe técnico, pruebas y resultados](../../INFORME.md).
+- [Documentación de Alexa](../../ALEXA.md).
 - [Matriz de pruebas](../../PRUEBAS.md).
-- [Informe técnico](../../INFORME.md).
 - [Capturas del simulador](../alexa/README.md).

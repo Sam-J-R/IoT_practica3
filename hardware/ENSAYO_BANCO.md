@@ -1,4 +1,6 @@
-# Ensayo de banco de Samuel
+# Procedimiento de ensayo de banco
+
+Guía operativa de diagnóstico y calibración. Los resultados consolidados y las limitaciones de medición están en [INFORME.md](../docs/INFORME.md). Las tablas vacías de este procedimiento son formularios, no resultados.
 
 ## 1. Diagnóstico y serie
 
@@ -31,7 +33,7 @@ pio device monitor -d firmware -b 115200
 
 ## 3. Servo y parámetros
 
-La etiqueta informada por Samuel es TowerPro MG90S. Samuel confirmó el 7/11 que su unidad se movió correctamente en la prueba local, pero aún falta registrar la tensión, pulsos, tiempos y recorrido del mecanismo en el informe. Antes de repetir, revisar el pinout, la frecuencia PWM y la fuente regulada apropiada para los picos de corriente. [Ficha TowerPro MG90S](https://towerpro.com.tw/product/mg90s-3/).
+La unidad fue identificada en el registro como TowerPro MG90S y los videos muestran actuación de banco. Para reproducir el montaje se necesitan tensión, pulsos, tiempos y recorrido medidos. Antes de repetir, revisar pinout, frecuencia PWM y fuente regulada adecuada a los picos de corriente. [Ficha de referencia TowerPro MG90S](https://towerpro.com.tw/product/mg90s-3/).
 
 Ensayar primero sin acoplar la cubierta, con un comprobador de servos compatible y dentro del rango de la unidad. Después acoplar la cubierta sin forzar topes. Medir pulsos de apertura y cierre en µs, frecuencia y tiempo de asentamiento con carga. Registrar tensión y capacidad de fuente, caídas durante el movimiento y compatibilidad de señal. Cortar alimentación si se atasca o zumba sostenidamente. Una vez validado, conectar D26 a la entrada de señal compatible y unir el negativo de la fuente externa con GND del ESP32.
 

@@ -6,7 +6,8 @@ La Skill utiliza **Custom** y **Provision your own backend resources**. En Build
 
 ## Documentación y evidencias
 
-- [Configuración, vinculación, alias y resultados](../docs/ALEXA.md).
+- [Documentación de Alexa: configuración, vinculación, alias y resultados](../docs/ALEXA.md).
+- [Informe técnico consolidado](../docs/INFORME.md).
 - [Índice de las 17 capturas](../docs/evidencias/alexa/README.md).
 - [Contrato de integración](../docs/CONTRATO.md).
 - [Backend Python](../lambda/lambda_function.py).
