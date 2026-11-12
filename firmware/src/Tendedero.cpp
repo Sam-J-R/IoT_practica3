@@ -24,7 +24,7 @@
 #endif
 
 namespace {
-constexpr unsigned long REINTENTO_RED_MS = 10000;
+constexpr unsigned long REINTENTO_RED_MS = 10000; // Reintento de conexion Wi-Fi o MQTT cada 10 s.
 constexpr time_t RELOJ_MINIMO = 1704067200; // 2024-01-01 UTC, descarta un reloj sin SNTP.
 SensorAgua sensor;
 ServoCubierta servo(SERVO_ABIERTA_US, SERVO_CERRADA_US, SERVO_FRECUENCIA_HZ,
@@ -57,7 +57,7 @@ bool credencialesConfiguradas() {
          AWS_CA_PEM[0] && AWS_CLIENT_CERT_PEM[0] && AWS_CLIENT_KEY_PEM[0];
 }
 
-void muestrear(unsigned long ahora) {
+void muestrear(unsigned long ahora) {//lee y procesa si hay agua o no, con histeresis
   raw = sensor.leerRaw();
   ultimaLectura = ahora;
   if (integracion) {
@@ -65,8 +65,9 @@ void muestrear(unsigned long ahora) {
     // Evita que pequenas variaciones en el ADC cambien el estado repetidamente.
     const bool desdeSeco = sensor.detectar(raw, false, UMBRAL_SECO, UMBRAL_AGUA);
     const bool desdeAgua = sensor.detectar(raw, true, UMBRAL_SECO, UMBRAL_AGUA);
-    if (agua >= 0 || desdeSeco == desdeAgua) {
-      agua = agua == 1 ? desdeAgua : desdeSeco;
+    //si dan resultados distintos, la lectura cayo en la zona intermedia de los umbrales. 
+    if (agua >= 0 || desdeSeco == desdeAgua) { 
+      agua = agua == 1 ? desdeAgua : desdeSeco; //si habia agua entonces verifica el umbral desdeAgua, si estaba seco verifica el umbral desdeSeco
     }
   }
   Serial.printf("[SENSOR] ms=%lu raw=%d agua=%d\n", ahora, raw, agua);
@@ -89,7 +90,7 @@ void setup() {
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   configTime(0, 0, "pool.ntp.org");
-  ultimoIntentoMqtt = millis() - REINTENTO_RED_MS;
+  ultimoIntentoMqtt = millis() - REINTENTO_RED_MS; // fuerza un intento inmediato de MQTT
 }
 
 void loop() {
@@ -122,6 +123,6 @@ void loop() {
 
   // Paso 5: informar a AWS (por cambio o como respaldo periodico).
   shadow.reportar(ahora, raw, agua, cubierta);
-  delay(1);
+  delay(1);// cede CPU a Wi-Fi y MQTT
 }
 

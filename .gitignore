@@ -17,7 +17,7 @@ include/secrets.h
 *.bak
 firmware/.pio/
 .vscode/
-
+output/pdf
 calibracion_local.h
 
 # Capturas originales sin redactar; solo se versionan los paneles sanitizados.

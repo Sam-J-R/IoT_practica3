@@ -5,7 +5,7 @@ namespace {
 SensorAgua sensor;
 unsigned long ultimaLectura = 0;
 }
-
+//PRUEBA DE LAS LECTURAS DEL SENSOR
 void setup() {
   Serial.begin(115200);
   sensor.iniciar();
@@ -14,7 +14,7 @@ void setup() {
 
 void loop() {
   const unsigned long ahora = millis();
-  if (ahora - ultimaLectura >= INTERVALO_SENSOR_MS) {
+  if (ahora - ultimaLectura >= INTERVALO_SENSOR_MS) {//cada 500ms
     ultimaLectura = ahora;
     Serial.printf("[SENSOR] ms=%lu raw=%d\n", ahora, sensor.leerRaw());
   }

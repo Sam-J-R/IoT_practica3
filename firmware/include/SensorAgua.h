@@ -8,8 +8,8 @@ class SensorAgua {
 public:
   void iniciar() {
     pinMode(PIN_AGUA_ANALOGICO, INPUT);
-    analogReadResolution(12);
-    analogSetPinAttenuation(PIN_AGUA_ANALOGICO, ADC_11db);
+    analogReadResolution(12); // pide una lectura de 12 bits(0..4095)
+    analogSetPinAttenuation(PIN_AGUA_ANALOGICO, ADC_11db);//ajuste del rango de señal electrica
   }
 
   int leerRaw() const {
@@ -21,11 +21,13 @@ public:
   // hasta cruzar el umbral contrario (histeresis).
   // Los sensores pueden subir o bajar su lectura cuando se humedecen.
   bool detectar(int raw, bool estado, int umbralSeco, int umbralAgua) const {
-    if (umbralAgua < umbralSeco) {
+    if (umbralAgua < umbralSeco) { //algunos sensores suben su lectura al humedecerse, otros bajan
       raw = -raw;
       umbralSeco = -umbralSeco;
       umbralAgua = -umbralAgua;
     }
     return estado ? raw > umbralSeco : raw >= umbralAgua;
+    //si antes habia agua, se considera que sigue habiendo agua hasta que la lectura baje del umbral seco
+    //si antes estaba seco, se considera que sigue estando seco hasta que la lectura suba del umbral de agua
   }
 };

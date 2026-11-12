@@ -24,7 +24,7 @@ public:
 private:
   // Eventos internos para no mover el servo dentro del callback MQTT.
   enum class Tipo { Conectado, Desconectado, Delta, Get, SinShadow, ErrorGet,
-                    ReporteAceptado, ReporteRechazado };
+                    ReporteAceptado, ReporteRechazado }; //avisos sobre lo ocurrido
   struct Evento {
     Tipo tipo;
     Posicion posicion = Posicion::Desconocida;
@@ -42,12 +42,13 @@ private:
   void aplicar(const Evento& evento, unsigned long ahora, ServoCubierta* servo);
 
   esp_mqtt_client_handle_t cliente_ = nullptr;
-  QueueHandle_t cola_ = nullptr;
+  QueueHandle_t cola_ = nullptr; //fila temporal de eventos a procesar
+  //nombres de topicos MQTT para este Thing
   String get_, getAceptado_, getRechazado_;
   String update_, delta_, updateAceptado_, updateRechazado_;
   bool conectado_ = false;
-  bool sincronizado_ = false;
-  Evento deltaPendiente_{Tipo::Delta};
+  bool sincronizado_ = false; //indica que recupero el estado del Shadow tras perder la conexion
+  Evento deltaPendiente_{Tipo::Delta}; //orden delta
   uint32_t version_ = 0;
   uint32_t sesion_ = 0;
   uint32_t secuencia_ = 0;
@@ -56,6 +57,8 @@ private:
   unsigned long ultimoGet_ = 0;
   unsigned long ultimoEnvio_ = 0;
   unsigned long ultimoAceptado_ = 0;
+  
+  //guardan los valores que salieron reportados y fueron aceptados por AWS, para decidir cuando publicar de nuevo.
   int aguaEnviada_ = -1;
   Posicion cubiertaEnviada_ = Posicion::Desconocida;
   int aguaAceptada_ = -1;

@@ -13,6 +13,7 @@ bool temaIgual(const esp_mqtt_event_t& mensaje, const String& tema) {
          memcmp(mensaje.topic, tema.c_str(), tema.length()) == 0;
 }
 
+//busca el campo cubierta en el JSON y devuelve la enumeracion correspondiente
 Posicion posicionDe(const cJSON* estado) {
   const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(estado, "cubierta"));
   if (texto && strcmp(texto, "abierta") == 0) return Posicion::Abierta;
@@ -33,7 +34,7 @@ bool ClienteShadow::iniciar(const char* endpoint, const char* thing, const char*
   delta_ = update_ + "/delta";
   updateAceptado_ = update_ + "/accepted";
   updateRechazado_ = update_ + "/rejected";
-  cola_ = xQueueCreate(24, sizeof(Evento));
+  cola_ = xQueueCreate(24, sizeof(Evento)); //cola para 24 eventos de shadow
   if (!cola_) return false;
 
   const String uri = String("mqtts://") + endpoint + ":8883";
@@ -47,10 +48,11 @@ bool ClienteShadow::iniciar(const char* endpoint, const char* thing, const char*
   config.out_buffer_size = 1024;
   config.reconnect_timeout_ms = REINTENTO_MS;
   sesion_ = esp_random();
-  cliente_ = esp_mqtt_client_init(&config);
+  cliente_ = esp_mqtt_client_init(&config); //inicializa el cliente MQTT con la configuracion
   if (cliente_ &&
       esp_mqtt_client_register_event(cliente_, MQTT_EVENT_ANY, recibir, this) == ESP_OK &&
       esp_mqtt_client_start(cliente_) == ESP_OK) {
+        //recibir como funcion de aviso 
     return true;
   }
 
@@ -64,6 +66,9 @@ bool ClienteShadow::iniciar(const char* endpoint, const char* thing, const char*
 void ClienteShadow::recibir(void* contexto, esp_event_base_t, int32_t id, void* datos) {
   // El callback MQTT puede ejecutarse fuera del loop principal.
   // Solo encola avisos: el servo se maneja luego desde atender().
+  //Si hay conexión o desconexión, coloca un evento en la cola. 
+  //Si llegó un mensaje, llama a decodificar(). 
+  //Si hubo un error de transporte, lo imprime en el monitor serie.
   auto& shadow = *static_cast<ClienteShadow*>(contexto);
   if (id == MQTT_EVENT_CONNECTED) shadow.encolar({Tipo::Conectado});
   if (id == MQTT_EVENT_DISCONNECTED) shadow.encolar({Tipo::Desconectado});
@@ -81,6 +86,7 @@ void ClienteShadow::encolar(const Evento& evento) {
   }
 }
 
+//entender el json y encolar eventos de shadow
 void ClienteShadow::decodificar(const esp_mqtt_event_t& mensaje) {
   // Primero averiguamos si llego un delta, una respuesta a GET o un ACK.
   // Un mensaje incompleto se ignora para no interpretar JSON truncado.
@@ -144,6 +150,7 @@ void ClienteShadow::aplicar(const Evento& evento, unsigned long ahora, ServoCubi
   if (servo) servo->solicitar(evento.posicion, ahora);
 }
 
+//decide que hacer segun el tipo de evento
 void ClienteShadow::procesar(const Evento& evento, unsigned long ahora, ServoCubierta* servo) {
   switch (evento.tipo) {
     case Tipo::Conectado:
@@ -228,9 +235,13 @@ void ClienteShadow::reportar(unsigned long ahora, int raw, int agua, Posicion cu
   // Si un envio no obtiene aceptacion, se reintenta con espera de 5 s.
   if (!sincronizado_) return;
   if (reportePendiente_ && ahora - ultimoEnvio_ < REINTENTO_MS) return;
+  //verifica si agua y cubierta son iguales a los valores aceptados por AWS 
+  //y si han pasado menos de 5 segundos desde el último reporte aceptado. 
+  //Si es así, no se envía un nuevo reporte.
   if (!primerReporte_ && agua == aguaAceptada_ && cubierta == cubiertaAceptada_ &&
       ahora - ultimoAceptado_ < INTERVALO_REPORTE_MS) return;
 
+  //convierte los estados a valores JSON
   const char* valorAgua = agua < 0 ? "null" : (agua ? "true" : "false");
   const char* valorCubierta = "null";
   if (cubierta == Posicion::Abierta) valorCubierta = "\"abierta\"";

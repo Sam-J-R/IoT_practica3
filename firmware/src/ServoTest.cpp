@@ -8,11 +8,12 @@
 #include "calibracion.example.h"
 #endif
 
+//PRUEBA DEL SERVOMOTOR
 namespace {
 ServoCubierta servo(SERVO_ABIERTA_US, SERVO_CERRADA_US, SERVO_FRECUENCIA_HZ,
                     SERVO_ASENTAMIENTO_MS);
-bool listo = false;
-Posicion anterior = Posicion::Desconocida;
+bool listo = false;//si el servo esta listo
+Posicion anterior = Posicion::Desconocida; //para solo mostrar cuando cambia la estimacion de posicion
 
 bool parametrosValidos() {
   return SERVO_FRECUENCIA_HZ > 0 && SERVO_ASENTAMIENTO_MS > 0 &&
@@ -47,7 +48,7 @@ void loop() {
 
   const unsigned long ahora = millis();
   while (Serial.available() > 0) {
-    const char orden = static_cast<char>(Serial.read());
+    const char orden = static_cast<char>(Serial.read()); //lee caracteres del monitor serie
     if (orden == 'A' || orden == 'a') {
       servo.solicitar(Posicion::Abierta, ahora);
       Serial.println("[SERVO] Solicitada apertura");

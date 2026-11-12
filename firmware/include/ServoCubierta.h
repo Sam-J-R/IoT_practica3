@@ -14,24 +14,26 @@ public:
         asentamientoMs_(asentamientoMs) {}
 
   bool iniciar() {
-    return ledcSetup(CANAL, hz_, BITS) > 0;
+    return ledcSetup(CANAL, hz_, BITS) > 0; // prepara la señal, pero no envia aun
   }
 
+  //ordenar una posicion
   void solicitar(Posicion posicion, unsigned long ahora) {
     // Nunca mover con una orden desconocida ni repetir el mismo destino.
     if (posicion == Posicion::Desconocida || posicion == destino_) {
       return;
     }
-    const int pulsoUs = posicion == Posicion::Abierta ? abiertaUs_ : cerradaUs_;
-    const uint32_t duty = (static_cast<uint64_t>(pulsoUs) * hz_ * (1UL << BITS)) / 1000000UL;
-    if (destino_ == Posicion::Desconocida) {
+    const int pulsoUs = posicion == Posicion::Abierta ? abiertaUs_ : cerradaUs_; // escoge el pulso correspondiente
+    const uint32_t duty = (static_cast<uint64_t>(pulsoUs) * hz_ * (1UL << BITS)) / 1000000UL; //convierte la duracion del pulso a un valor de duty cycle para ledcWrite
+    if (destino_ == Posicion::Desconocida) { // si es la primera vez que se mueve, conecta el pin al canal
       ledcAttachPin(PIN_SERVO_PWM, CANAL);
     }
-    ledcWrite(CANAL, duty);
+    ledcWrite(CANAL, duty); //envia la señal 
     destino_ = posicion;
     inicioMs_ = ahora;
   }
-
+  
+  // decidir si se ha alcanzado la posicion ordenada, o si aun esta en movimiento
   Posicion estimada(unsigned long ahora) const {
     // Se considera alcanzado el destino al pasar el tiempo calibrado.
     // Si el mecanismo esta atascado, este metodo NO puede detectarlo.
