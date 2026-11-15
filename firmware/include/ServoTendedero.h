@@ -3,14 +3,16 @@
 #include <Arduino.h>
 #include "config.h"
 
-enum class Posicion { Desconocida, Abierta, Cerrada };
+// Expuesto: el brazo deja el tendedero fuera del techo.
+// Resguardado: el brazo gira el tendedero hasta debajo del techo.
+enum class Posicion { Desconocida, Expuesto, Resguardado };
 
-// Controla la cubierta con pulsos PWM. NO mide la posicion real del servo.
-class ServoCubierta {
+// Mueve el brazo del tendedero con pulsos PWM. NO mide la posicion real del servo.
+class ServoTendedero {
 public:
   // Los extremos se configuran en microsegundos (us), NO en grados.
-  ServoCubierta(int abiertaUs, int cerradaUs, int hz, unsigned long asentamientoMs)
-      : abiertaUs_(abiertaUs), cerradaUs_(cerradaUs), hz_(hz),
+  ServoTendedero(int expuestoUs, int resguardadoUs, int hz, unsigned long asentamientoMs)
+      : expuestoUs_(expuestoUs), resguardadoUs_(resguardadoUs), hz_(hz),
         asentamientoMs_(asentamientoMs) {}
 
   bool iniciar() {
@@ -22,7 +24,7 @@ public:
     if (posicion == Posicion::Desconocida || posicion == destino_) {
       return;
     }
-    const int pulsoUs = posicion == Posicion::Abierta ? abiertaUs_ : cerradaUs_;
+    const int pulsoUs = posicion == Posicion::Expuesto ? expuestoUs_ : resguardadoUs_;
     const uint32_t duty = (static_cast<uint64_t>(pulsoUs) * hz_ * (1UL << BITS)) / 1000000UL;
     if (destino_ == Posicion::Desconocida) {
       ledcAttachPin(PIN_SERVO_PWM, CANAL);
@@ -41,8 +43,8 @@ public:
 private:
   static constexpr int CANAL = 0;
   static constexpr int BITS = 16;
-  int abiertaUs_;
-  int cerradaUs_;
+  int expuestoUs_;
+  int resguardadoUs_;
   int hz_;
   unsigned long asentamientoMs_;
   Posicion destino_ = Posicion::Desconocida;

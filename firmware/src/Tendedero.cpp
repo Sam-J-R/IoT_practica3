@@ -1,14 +1,16 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <time.h>
+#include "CalibracionSensor.h"
 #include "ClienteShadow.h"
 #include "SensorAgua.h"
 
 // PROGRAMA FINAL DEL ESP32
 // 1. Lee el sensor de agua cada 500 ms.
 // 2. Se conecta a AWS IoT Core usando MQTT seguro (TLS).
-// 3. ClienteShadow recibe ordenes de Alexa por el Device Shadow y mueve el servo.
-// 4. Publica el sensor y la posicion ESTIMADA del servo en reported.
+// 3. ClienteShadow recibe ordenes de Alexa por el Device Shadow: mover el
+//    tendedero (expuesto / resguardado) o calibrar el sensor (seco / mojado).
+// 4. Publica el sensor, la posicion ESTIMADA del servo y los umbrales en reported.
 // IMPORTANTE: leer agua NO mueve el servo automaticamente.
 
 #if __has_include("calibracion_local.h")
@@ -27,8 +29,9 @@ namespace {
 constexpr unsigned long REINTENTO_RED_MS = 10000;
 constexpr time_t RELOJ_MINIMO = 1704067200; // 2024-01-01 UTC, descarta un reloj sin SNTP.
 SensorAgua sensor;
-ServoCubierta servo(SERVO_ABIERTA_US, SERVO_CERRADA_US, SERVO_FRECUENCIA_HZ,
-                    SERVO_ASENTAMIENTO_MS);
+CalibracionSensor calibracion;
+ServoTendedero servo(SERVO_EXPUESTO_US, SERVO_RESGUARDADO_US, SERVO_FRECUENCIA_HZ,
+                     SERVO_ASENTAMIENTO_MS);
 ClienteShadow shadow;
 bool integracion = false; // Solo se activa con credenciales y calibracion validas.
 bool mqttIniciado = false;
@@ -36,20 +39,14 @@ unsigned long ultimaLectura = 0;
 unsigned long ultimoIntentoMqtt = 0;
 int raw = 0;
 int agua = -1; // -1 = no sabemos; 0 = seco; 1 = se detecta agua.
-Posicion cubierta = Posicion::Desconocida;
+Posicion posicion = Posicion::Desconocida;
 
-bool calibracionValida() {
-  const bool sensorValido =
-      UMBRAL_SECO >= 0 && UMBRAL_SECO <= 4095 &&
-      UMBRAL_AGUA >= 0 && UMBRAL_AGUA <= 4095 && UMBRAL_SECO != UMBRAL_AGUA;
-
-  const bool servoValido =
-      SERVO_FRECUENCIA_HZ > 0 && SERVO_ASENTAMIENTO_MS > 0 &&
-      SERVO_ABIERTA_US > 0 && SERVO_CERRADA_US > 0 && SERVO_ABIERTA_US != SERVO_CERRADA_US &&
-      static_cast<uint64_t>(SERVO_ABIERTA_US) * SERVO_FRECUENCIA_HZ < 1000000 &&
-      static_cast<uint64_t>(SERVO_CERRADA_US) * SERVO_FRECUENCIA_HZ < 1000000;
-
-  return sensorValido && servoValido;
+bool servoValido() {
+  return SERVO_FRECUENCIA_HZ > 0 && SERVO_ASENTAMIENTO_MS > 0 &&
+         SERVO_EXPUESTO_US > 0 && SERVO_RESGUARDADO_US > 0 &&
+         SERVO_EXPUESTO_US != SERVO_RESGUARDADO_US &&
+         static_cast<uint64_t>(SERVO_EXPUESTO_US) * SERVO_FRECUENCIA_HZ < 1000000 &&
+         static_cast<uint64_t>(SERVO_RESGUARDADO_US) * SERVO_FRECUENCIA_HZ < 1000000;
 }
 
 bool credencialesConfiguradas() {
@@ -63,8 +60,11 @@ void muestrear(unsigned long ahora) {
   if (integracion) {
     // Histeresis: un umbral para entrar en "agua" y otro para volver a "seco".
     // Evita que pequenas variaciones en el ADC cambien el estado repetidamente.
-    const bool desdeSeco = sensor.detectar(raw, false, UMBRAL_SECO, UMBRAL_AGUA);
-    const bool desdeAgua = sensor.detectar(raw, true, UMBRAL_SECO, UMBRAL_AGUA);
+    // Los umbrales salen de la calibracion guardada, no de constantes compiladas.
+    const int umbralSeco = calibracion.umbralSeco();
+    const int umbralAgua = calibracion.umbralAgua();
+    const bool desdeSeco = sensor.detectar(raw, false, umbralSeco, umbralAgua);
+    const bool desdeAgua = sensor.detectar(raw, true, umbralSeco, umbralAgua);
     if (agua >= 0 || desdeSeco == desdeAgua) {
       agua = agua == 1 ? desdeAgua : desdeSeco;
     }
@@ -72,10 +72,43 @@ void muestrear(unsigned long ahora) {
   Serial.printf("[SENSOR] ms=%lu raw=%d agua=%d\n", ahora, raw, agua);
 }
 
+// Atiende un pedido de calibracion llegado por el Shadow. El usuario indico
+// la condicion (seco o mojado); aqui se mide el sensor y se guarda la referencia.
+void calibrar(Condicion condicion, uint64_t id) {
+  if (calibracion.yaAtendido(id)) return; // El mismo pedido no se repite.
+
+  // El id es la hora del pedido en milisegundos. Si llego tarde (por ejemplo,
+  // el equipo estaba apagado), no se mide: la condicion pudo haber cambiado.
+  const double edadMs = static_cast<double>(time(nullptr)) * 1000.0 - static_cast<double>(id);
+  if (edadMs > VIGENCIA_PEDIDO_CALIBRACION_MS) {
+    calibracion.caducar(condicion, id);
+    Serial.printf("[CALIBRACION] pedido caducado (%.0f s de antiguedad)\n", edadMs / 1000.0);
+    return;
+  }
+
+  long suma = 0;
+  for (int i = 0; i < MUESTRAS_CALIBRACION; ++i) {
+    suma += sensor.leerRaw();
+    delay(PAUSA_MUESTRA_CALIBRACION_MS);
+  }
+  const int promedio = static_cast<int>(suma / MUESTRAS_CALIBRACION);
+  const bool aplicada = calibracion.aplicar(condicion, id, promedio);
+  Serial.printf("[CALIBRACION] condicion=%s lectura=%d %s umbral_seco=%d umbral_agua=%d\n",
+                condicion == Condicion::Seco ? "seco" : "mojado", promedio,
+                aplicada ? "aplicada" : "rechazada",
+                calibracion.umbralSeco(), calibracion.umbralAgua());
+  if (aplicada) {
+    // Con umbrales nuevos, la clasificacion anterior deja de ser valida.
+    agua = -1;
+    muestrear(millis());
+  }
+}
+
 #ifdef MODO_ENSAYO_RNF
-// Comandos de ensayo por monitor serie: abrir | cerrar | estado | wifi_off | wifi_on.
-// abrir/cerrar publican desired en el Shadow (como Lambda); la orden vuelve
-// como delta desde AWS, de modo que el recorrido por la nube se conserva.
+// Comandos de ensayo por monitor serie:
+// exponer | resguardar | calibrar_seco | calibrar_mojado | estado | wifi_off | wifi_on.
+// Las ordenes se publican en desired (como Lambda) y vuelven como delta desde
+// AWS, de modo que el recorrido por la nube se conserva.
 bool wifiCortado = false;   // wifi_off: corte de red con el ESP32 encendido.
 bool esperandoWifi = false; // wifi_on: avisar cuando vuelva la asociacion.
 
@@ -105,11 +138,16 @@ void atenderConsola(unsigned long ahora) {
     }
     linea.trim();
     linea.toLowerCase();
-    if (linea == "abrir" || linea == "cerrar") {
+    if (linea == "exponer" || linea == "resguardar") {
       const bool ok = integracion &&
-          shadow.solicitarDesired(linea == "abrir" ? Posicion::Abierta : Posicion::Cerrada);
+          shadow.solicitarDesired(linea == "exponer" ? Posicion::Expuesto : Posicion::Resguardado);
       Serial.printf("[ENSAYO] orden %s %s ms=%lu\n", linea.c_str(),
                     ok ? "publicada" : "NO publicada (sin MQTT)", ahora);
+    } else if (linea == "calibrar_seco" || linea == "calibrar_mojado") {
+      const bool ok = integracion &&
+          shadow.solicitarCalibracion(linea == "calibrar_seco" ? Condicion::Seco : Condicion::Mojado);
+      Serial.printf("[ENSAYO] pedido %s %s ms=%lu\n", linea.c_str(),
+                    ok ? "publicado" : "NO publicado (sin MQTT)", ahora);
     } else if (linea == "estado") {
       if (integracion) shadow.consultarShadow();
       Serial.printf("[ENSAYO] consulta de Shadow ms=%lu\n", ahora);
@@ -139,17 +177,23 @@ void atenderConsola(unsigned long ahora) {
 void setup() {
   Serial.begin(115200);
   sensor.iniciar();
+  // Referencias guardadas por una calibracion anterior o, si no hay, de fabrica.
+  calibracion.iniciar(REFERENCIA_SECO_FABRICA, REFERENCIA_AGUA_FABRICA);
   // Seguridad: sin parametros validos, solo se leen valores ADC.
   // No se intenta AWS ni se da una orden al servo.
-  integracion = calibracionValida() && credencialesConfiguradas() && servo.iniciar();
+  integracion = calibracion.valida() && servoValido() && credencialesConfiguradas() &&
+                servo.iniciar();
   muestrear(millis());
 #ifdef MODO_ENSAYO_RNF
-  Serial.println("[ENSAYO] Firmware de ensayo RNF: comandos abrir | cerrar | estado | wifi_off | wifi_on");
+  Serial.println("[ENSAYO] Firmware de ensayo RNF: comandos exponer | resguardar | "
+                 "calibrar_seco | calibrar_mojado | estado | wifi_off | wifi_on");
 #endif
   if (!integracion) {
-    Serial.println("[P3] Solo ADC. Completar calibracion y secretos locales para habilitar TLS y servo");
+    Serial.println("[P4] Solo ADC. Completar calibracion y secretos locales para habilitar TLS y servo");
     return;
   }
+  Serial.printf("[CALIBRACION] umbral_seco=%d umbral_agua=%d\n", calibracion.umbralSeco(),
+                calibracion.umbralAgua());
 
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
@@ -180,21 +224,30 @@ void loop() {
   atenderConsola(ahora);
 #endif
 
-  // Paso 3: procesar deltas del Shadow. Aqui puede llegar una orden al servo.
+  // Paso 3: procesar deltas del Shadow. Aqui puede llegar una orden al servo
+  // o un pedido de calibracion del sensor.
   shadow.atender(ahora, servo);
+  Condicion condicion = Condicion::Ninguna;
+  uint64_t idCalibracion = 0;
+  if (shadow.tomarPedidoCalibracion(condicion, idCalibracion)) {
+    calibrar(condicion, idCalibracion);
+  }
 
   // Paso 4: solo despues del tiempo de movimiento se estima la posicion.
-  // No hay sensor fisico que confirme si la cubierta se atasco.
+  // No hay sensor fisico que confirme si el brazo se atasco.
   const Posicion estimada = servo.estimada(ahora);
-  if (estimada != cubierta) {
-    cubierta = estimada;
-    if (cubierta != Posicion::Desconocida) {
+  if (estimada != posicion) {
+    posicion = estimada;
+    if (posicion != Posicion::Desconocida) {
       Serial.printf("[SERVO] Posicion estimada tras espera ms=%lu\n", ahora);
     }
   }
 
   // Paso 5: informar a AWS (por cambio o como respaldo periodico).
-  shadow.reportar(ahora, raw, agua, cubierta);
+  Telemetria telemetria;
+  telemetria.lecturaAdc = raw;
+  telemetria.agua = agua;
+  telemetria.posicion = posicion;
+  shadow.reportar(ahora, telemetria, calibracion.estado());
   delay(1);
 }
-

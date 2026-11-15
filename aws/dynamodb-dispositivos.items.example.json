@@ -1,0 +1,12 @@
+[
+  {
+    "thingName": {"S": "tendedero-inteligente"},
+    "codigoVinculacion": {"S": "483920"},
+    "fechaAlta": {"S": "2026-11-14T00:00:00Z"}
+  },
+  {
+    "thingName": {"S": "tendedero-prueba2"},
+    "codigoVinculacion": {"S": "715204"},
+    "fechaAlta": {"S": "2026-11-14T00:00:00Z"}
+  }
+]

@@ -3,6 +3,7 @@
 #include <cJSON.h>
 #include <esp_system.h>
 #include <memory>
+#include <time.h>
 
 namespace {
 constexpr unsigned long REINTENTO_MS = 5000;
@@ -13,23 +14,48 @@ bool temaIgual(const esp_mqtt_event_t& mensaje, const String& tema) {
          memcmp(mensaje.topic, tema.c_str(), tema.length()) == 0;
 }
 
-#ifdef MODO_ENSAYO_RNF
-const char* nombre(Posicion p) {
-  return p == Posicion::Abierta ? "abierta" : (p == Posicion::Cerrada ? "cerrada" : "desconocida");
+const char* nombre(Condicion c) {
+  return c == Condicion::Seco ? "seco" : (c == Condicion::Mojado ? "mojado" : "ninguna");
 }
 
-const char* cubiertaDe(const cJSON* estado, const char* seccion) {
+const char* nombre(ResultadoCalibracion r) {
+  if (r == ResultadoCalibracion::Aplicada) return "aplicada";
+  if (r == ResultadoCalibracion::Rechazada) return "rechazada";
+  return r == ResultadoCalibracion::Caducada ? "caducada" : "fabrica";
+}
+
+#ifdef MODO_ENSAYO_RNF
+const char* nombre(Posicion p) {
+  if (p == Posicion::Expuesto) return "expuesto";
+  return p == Posicion::Resguardado ? "resguardado" : "desconocida";
+}
+
+const char* posicionTexto(const cJSON* estado, const char* seccion) {
   const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(
-      cJSON_GetObjectItemCaseSensitive(estado, seccion), "cubierta"));
+      cJSON_GetObjectItemCaseSensitive(estado, seccion), "posicion"));
   return texto ? texto : "null";
 }
 #endif
 
 Posicion posicionDe(const cJSON* estado) {
-  const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(estado, "cubierta"));
-  if (texto && strcmp(texto, "abierta") == 0) return Posicion::Abierta;
-  if (texto && strcmp(texto, "cerrada") == 0) return Posicion::Cerrada;
+  const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(estado, "posicion"));
+  if (texto && strcmp(texto, "expuesto") == 0) return Posicion::Expuesto;
+  if (texto && strcmp(texto, "resguardado") == 0) return Posicion::Resguardado;
   return Posicion::Desconocida;
+}
+
+// Lee calibracion_solicitada {condicion, id}. Si falta o esta incompleta,
+// deja condicion = Ninguna e id = 0 (no hay pedido).
+void pedidoDe(const cJSON* estado, Condicion& condicion, uint64_t& id) {
+  const cJSON* pedido = cJSON_GetObjectItemCaseSensitive(estado, "calibracion_solicitada");
+  const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(pedido, "condicion"));
+  const cJSON* numero = cJSON_GetObjectItemCaseSensitive(pedido, "id");
+  condicion = Condicion::Ninguna;
+  id = 0;
+  if (!texto || !cJSON_IsNumber(numero) || numero->valuedouble < 1) return;
+  if (strcmp(texto, "seco") == 0) condicion = Condicion::Seco;
+  if (strcmp(texto, "mojado") == 0) condicion = Condicion::Mojado;
+  if (condicion != Condicion::Ninguna) id = static_cast<uint64_t>(numero->valuedouble);
 }
 }
 
@@ -113,14 +139,15 @@ void ClienteShadow::decodificar(const esp_mqtt_event_t& mensaje) {
 #ifdef MODO_ENSAYO_RNF
     if (temaIgual(mensaje, getAceptado_)) {
       Serial.printf("[SHADOW] get v=%lu desired=%s reported=%s\n", static_cast<unsigned long>(v),
-                    cubiertaDe(estado, "desired"), cubiertaDe(estado, "reported"));
+                    posicionTexto(estado, "desired"), posicionTexto(estado, "reported"));
     }
 #endif
-    if (temaIgual(mensaje, delta_)) {
-      encolar({Tipo::Delta, posicionDe(estado), v});
-    } else {
-      encolar({Tipo::Get, posicionDe(cJSON_GetObjectItemCaseSensitive(estado, "desired")), v});
-    }
+    // El delta trae solo lo que difiere; el GET trae "desired" completo.
+    const bool esDelta = temaIgual(mensaje, delta_);
+    const cJSON* deseado = esDelta ? estado : cJSON_GetObjectItemCaseSensitive(estado, "desired");
+    Evento evento{esDelta ? Tipo::Delta : Tipo::Get, posicionDe(deseado), v};
+    pedidoDe(deseado, evento.condicion, evento.idCalibracion);
+    encolar(evento);
     return;
   }
 
@@ -156,7 +183,7 @@ void ClienteShadow::pedirShadow() {
   }
 }
 
-void ClienteShadow::aplicar(const Evento& evento, unsigned long ahora, ServoCubierta* servo) {
+void ClienteShadow::aplicar(const Evento& evento, unsigned long ahora, ServoTendedero* servo) {
   // Solo los perfiles con servo real pasan un puntero valido.
   version_ = evento.version;
 #ifdef MODO_ENSAYO_RNF
@@ -165,10 +192,25 @@ void ClienteShadow::aplicar(const Evento& evento, unsigned long ahora, ServoCubi
                   static_cast<unsigned long>(evento.version), ahora);
   }
 #endif
-  if (servo) servo->solicitar(evento.posicion, ahora);
+  if (!servo) return;
+  servo->solicitar(evento.posicion, ahora);
+  // La calibracion la ejecuta el programa principal (necesita leer el ADC).
+  if (evento.condicion != Condicion::Ninguna && evento.idCalibracion != 0) {
+    hayPedido_ = true;
+    condicionPedida_ = evento.condicion;
+    idPedido_ = evento.idCalibracion;
+  }
 }
 
-void ClienteShadow::procesar(const Evento& evento, unsigned long ahora, ServoCubierta* servo) {
+bool ClienteShadow::tomarPedidoCalibracion(Condicion& condicion, uint64_t& id) {
+  if (!hayPedido_) return false;
+  hayPedido_ = false;
+  condicion = condicionPedida_;
+  id = idPedido_;
+  return true;
+}
+
+void ClienteShadow::procesar(const Evento& evento, unsigned long ahora, ServoTendedero* servo) {
   switch (evento.tipo) {
     case Tipo::Conectado:
       // Al reconectar hay que leer desired otra vez: pudo cambiar sin Wi-Fi.
@@ -178,6 +220,7 @@ void ClienteShadow::procesar(const Evento& evento, unsigned long ahora, ServoCub
       deltaPendiente_ = {Tipo::Delta};
       primerReporte_ = true;
       reportePendiente_ = 0;
+      calibracionAceptada_ = 0;
       suscribir();
       ultimoGet_ = ahora;
       pedirShadow();
@@ -217,7 +260,8 @@ void ClienteShadow::procesar(const Evento& evento, unsigned long ahora, ServoCub
       // Solo aqui marcamos la telemetria como aceptada por AWS.
       if (reportePendiente_ && evento.reporte == reportePendiente_) {
         aguaAceptada_ = aguaEnviada_;
-        cubiertaAceptada_ = cubiertaEnviada_;
+        posicionAceptada_ = posicionEnviada_;
+        calibracionAceptada_ = calibracionEnviada_;
         ultimoAceptado_ = ahora;
         primerReporte_ = false;
         reportePendiente_ = 0;
@@ -233,11 +277,11 @@ void ClienteShadow::procesar(const Evento& evento, unsigned long ahora, ServoCub
   }
 }
 
-void ClienteShadow::atender(unsigned long ahora, ServoCubierta& servo) {
+void ClienteShadow::atender(unsigned long ahora, ServoTendedero& servo) {
   atender(ahora, &servo);
 }
 
-void ClienteShadow::atender(unsigned long ahora, ServoCubierta* servo) {
+void ClienteShadow::atender(unsigned long ahora, ServoTendedero* servo) {
   // Ejecutado en el loop: procesa la cola y, si es necesario, recupera GET.
   if (!cliente_) return;
   Evento evento{Tipo::Desconectado};
@@ -251,36 +295,56 @@ void ClienteShadow::atender(unsigned long ahora, ServoCubierta* servo) {
   }
 }
 
-void ClienteShadow::reportar(unsigned long ahora, int raw, int agua, Posicion cubierta) {
-  // Publicamos tras cambios relevantes o cada 5 s como respaldo.
+void ClienteShadow::reportar(unsigned long ahora, const Telemetria& telemetria,
+                             const EstadoCalibracion& calibracion) {
+  // Publicamos tras cambios relevantes o como respaldo periodico.
   // Si un envio no obtiene aceptacion, se reintenta con espera de 5 s.
   if (!sincronizado_) return;
   if (reportePendiente_ && ahora - ultimoEnvio_ < REINTENTO_MS) return;
-  if (!primerReporte_ && agua == aguaAceptada_ && cubierta == cubiertaAceptada_ &&
+  const bool calibracionNueva = calibracion.revision != calibracionAceptada_;
+  if (!primerReporte_ && !calibracionNueva && telemetria.agua == aguaAceptada_ &&
+      telemetria.posicion == posicionAceptada_ &&
       ahora - ultimoAceptado_ < INTERVALO_REPORTE_MS) return;
 
-  const char* valorAgua = agua < 0 ? "null" : (agua ? "true" : "false");
-  const char* valorCubierta = "null";
-  if (cubierta == Posicion::Abierta) valorCubierta = "\"abierta\"";
-  if (cubierta == Posicion::Cerrada) valorCubierta = "\"cerrada\"";
+  const char* valorAgua = telemetria.agua < 0 ? "null" : (telemetria.agua ? "true" : "false");
+  const char* valorPosicion = "null";
+  if (telemetria.posicion == Posicion::Expuesto) valorPosicion = "\"expuesto\"";
+  if (telemetria.posicion == Posicion::Resguardado) valorPosicion = "\"resguardado\"";
+
+  // Umbrales vigentes y, si hubo un pedido, su confirmacion. Repetir en
+  // reported lo pedido en desired hace desaparecer el delta de ese pedido.
+  char bloque[224] = "";
+  if (calibracionNueva) {
+    const int usados = snprintf(bloque, sizeof(bloque),
+                                ",\"calibracion\":{\"umbral_seco\":%d,\"umbral_agua\":%d,"
+                                "\"estado\":\"%s\"}",
+                                calibracion.umbralSeco, calibracion.umbralAgua,
+                                nombre(calibracion.resultado));
+    if (calibracion.id != 0 && usados > 0 && usados < static_cast<int>(sizeof(bloque))) {
+      snprintf(bloque + usados, sizeof(bloque) - usados,
+               ",\"calibracion_solicitada\":{\"condicion\":\"%s\",\"id\":%.0f}",
+               nombre(calibracion.condicion), static_cast<double>(calibracion.id));
+    }
+  }
 
   const uint32_t reporte = ++secuencia_;
-  char payload[192];
+  char payload[448];
   snprintf(payload, sizeof(payload),
-           "{\"state\":{\"reported\":{\"sensor_raw\":%d,\"agua_detectada\":%s,"
-           "\"cubierta\":%s}},\"clientToken\":\"%lu-%lu\"}",
-           raw, valorAgua, valorCubierta, static_cast<unsigned long>(sesion_),
-           static_cast<unsigned long>(reporte));
+           "{\"state\":{\"reported\":{\"lectura_adc\":%d,\"agua_detectada\":%s,"
+           "\"posicion\":%s%s}},\"clientToken\":\"%lu-%lu\"}",
+           telemetria.lecturaAdc, valorAgua, valorPosicion, bloque,
+           static_cast<unsigned long>(sesion_), static_cast<unsigned long>(reporte));
   ultimoEnvio_ = ahora;
   reportePendiente_ = reporte;
-  aguaEnviada_ = agua;
-  cubiertaEnviada_ = cubierta;
+  aguaEnviada_ = telemetria.agua;
+  posicionEnviada_ = telemetria.posicion;
+  calibracionEnviada_ = calibracionNueva ? calibracion.revision : calibracionAceptada_;
   if (esp_mqtt_client_enqueue(cliente_, update_.c_str(), payload, 0, 0, 0, true) < 0) {
     Serial.println("[SHADOW] Error al enviar reported. Se reintentara.");
   }
 }
 
-void ClienteShadow::reportarSensor(unsigned long ahora, int raw) {
+void ClienteShadow::reportarSensor(unsigned long ahora, int lecturaAdc) {
   if (!sincronizado_) return;
   if (reportePendiente_ && ahora - ultimoEnvio_ < REINTENTO_MS) return;
   if (!primerReporte_ && ahora - ultimoAceptado_ < INTERVALO_REPORTE_MS) return;
@@ -288,12 +352,13 @@ void ClienteShadow::reportarSensor(unsigned long ahora, int raw) {
   const uint32_t reporte = ++secuencia_;
   char payload[144];
   snprintf(payload, sizeof(payload),
-           "{\"state\":{\"reported\":{\"sensor_raw\":%d}},\"clientToken\":\"%lu-%lu\"}",
-           raw, static_cast<unsigned long>(sesion_), static_cast<unsigned long>(reporte));
+           "{\"state\":{\"reported\":{\"lectura_adc\":%d}},\"clientToken\":\"%lu-%lu\"}",
+           lecturaAdc, static_cast<unsigned long>(sesion_), static_cast<unsigned long>(reporte));
   ultimoEnvio_ = ahora;
   reportePendiente_ = reporte;
   aguaEnviada_ = -1;
-  cubiertaEnviada_ = Posicion::Desconocida;
+  posicionEnviada_ = Posicion::Desconocida;
+  calibracionEnviada_ = calibracionAceptada_;
   if (esp_mqtt_client_enqueue(cliente_, update_.c_str(), payload, 0, 0, 0, true) < 0) {
     Serial.println("[SHADOW] Error al enviar el ADC. Se reintentara.");
   }
@@ -305,8 +370,19 @@ bool ClienteShadow::solicitarDesired(Posicion destino) {
   // firmware lo procesa por el camino normal, igual que una orden de Alexa.
   if (!cliente_ || !conectado_ || destino == Posicion::Desconocida) return false;
   char payload[80];
-  snprintf(payload, sizeof(payload), "{\"state\":{\"desired\":{\"cubierta\":\"%s\"}}}",
+  snprintf(payload, sizeof(payload), "{\"state\":{\"desired\":{\"posicion\":\"%s\"}}}",
            nombre(destino));
+  return esp_mqtt_client_enqueue(cliente_, update_.c_str(), payload, 0, 1, 0, true) >= 0;
+}
+
+bool ClienteShadow::solicitarCalibracion(Condicion condicion) {
+  // Igual que Lambda: el id es la hora actual en milisegundos (reloj NTP).
+  if (!cliente_ || !conectado_ || condicion == Condicion::Ninguna) return false;
+  char payload[128];
+  snprintf(payload, sizeof(payload),
+           "{\"state\":{\"desired\":{\"calibracion_solicitada\":"
+           "{\"condicion\":\"%s\",\"id\":%.0f}}}}",
+           nombre(condicion), static_cast<double>(time(nullptr)) * 1000.0);
   return esp_mqtt_client_enqueue(cliente_, update_.c_str(), payload, 0, 1, 0, true) >= 0;
 }
 
