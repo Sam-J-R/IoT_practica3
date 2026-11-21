@@ -1,0 +1,14 @@
+{
+  "state": {
+    "reported": {
+      "posicion": "expuesto",
+      "agua_detectada": false,
+      "lectura_adc": 0,
+      "calibracion": {
+        "umbral_seco": 200,
+        "umbral_agua": 600,
+        "estado": "fabrica"
+      }
+    }
+  }
+}

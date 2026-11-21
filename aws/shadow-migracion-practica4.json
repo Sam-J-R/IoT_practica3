@@ -1,0 +1,11 @@
+{
+  "state": {
+    "desired": {
+      "cubierta": null
+    },
+    "reported": {
+      "cubierta": null,
+      "sensor_raw": null
+    }
+  }
+}

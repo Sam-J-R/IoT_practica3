@@ -1,0 +1,12 @@
+orden,comando,t_envio_s,t_inicio_giro_s,t_posicion_final_s,envio_a_posicion_final_s,envio_a_respuesta_alexa_s,lambda,cumple_3s
+0,cierra la cubierta,1.90,8.30,8.37,6.47,6.47,frio (primera invocacion),no
+1,abre la cubierta,18.33,19.90,20.03,1.70,1.70,activa,si
+2,cierra la cubierta,29.03,30.56,30.70,1.67,1.77,activa,si
+3,abre la cubierta,38.13,39.80,39.93,1.80,1.77,activa,si
+4,cierra la cubierta,47.70,49.20,49.33,1.63,1.67,activa,si
+5,abre la cubierta,57.60,59.27,59.40,1.80,2.20,activa,si
+6,cierra la cubierta,67.03,68.66,68.80,1.77,1.70,activa,si
+7,abre la cubierta,77.40,78.93,79.07,1.67,1.60,activa,si
+8,cierra la cubierta,87.93,89.60,89.70,1.77,1.77,activa,si
+9,abre la cubierta,102.50,103.87,104.03,1.53,1.60,activa,si
+10,cierra la cubierta,111.73,113.30,113.43,1.70,1.60,activa,si

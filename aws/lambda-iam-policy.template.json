@@ -1,0 +1,31 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AccessThingRegistryAndShadows",
+      "Effect": "Allow",
+      "Action": [
+        "iot:DescribeThing",
+        "iot:GetThingShadow",
+        "iot:UpdateThingShadow"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PersistUserBindings",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-2:ACCOUNT_ID:table/tendedero_vinculaciones"
+    },
+    {
+      "Sid": "FindDeviceByBindingCode",
+      "Effect": "Allow",
+      "Action": "dynamodb:Query",
+      "Resource": "arn:aws:dynamodb:us-east-2:ACCOUNT_ID:table/tendedero_dispositivos/index/codigoVinculacion-index"
+    }
+  ]
+}
