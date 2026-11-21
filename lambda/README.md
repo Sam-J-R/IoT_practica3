@@ -33,4 +33,4 @@ Esta versión se verificó con las pruebas locales de `tests/`, que usan AWS sim
 
 El ZIP contiene el handler y el ASK SDK en su raíz. El fuente y su copia dentro del ZIP deben coincidir: la prueba `test_deployment_zip_matches_source` lo comprueba. Si cambia el código, hay que reemplazar `lambda_function.py` dentro del ZIP y volver a desplegarlo; no basta con cambiar el fuente del repositorio.
 
-Las versiones de `requirements.txt` no están fijadas. Reconstruir con paquetes diferentes requiere verificar la compatibilidad con el runtime y repetir las pruebas. No incluir `.venv`, claves, certificados privados, credenciales ni identificadores completos de usuarios.
+Las versiones de `requirements.txt` están fijadas a las que contiene el ZIP (`ask-sdk-core` 1.19.0 y `ask-sdk-model` 1.82.0). `boto3` no se empaqueta porque lo provee el runtime de Lambda. Reconstruir con otras versiones requiere verificar la compatibilidad con el runtime y repetir las pruebas. No incluir `.venv`, claves, certificados privados, credenciales ni identificadores completos de usuarios.

@@ -188,6 +188,69 @@ class LambdaTests(unittest.TestCase):
         # La posicion del tendedero no se toca al calibrar.
         self.assertNotIn("posicion", shadow["desired"])
 
+    def test_voz_convive_con_la_logica_automatica(self):
+        """P4: origen voz, rechazo de exponer con lluvia en automatico y posicion repetida."""
+        self.ask("A", "VincularThingIntent", codigo="111111")
+        shadow = self.shadows["tendedero-uno"]
+        self.ask("A", "ResguardarTendederoIntent")
+        self.assertEqual(shadow["desired"], {"posicion": "resguardado", "origen": "voz"})
+        # En automatico y con agua, exponer se rechaza sin escribir nada.
+        shadow["reported"].update({"posicion": "resguardado", "modo": "automatico", "agua_detectada": True})
+        self.assertIn("modo manual", self.ask("A", "ExponerTendederoIntent"))
+        self.assertEqual(shadow["desired"]["posicion"], "resguardado")
+        # Ya resguardado sin otra orden pendiente: no se escribe un desired que solo cambie el origen.
+        escrituras = self.data.update_thing_shadow.call_count
+        self.assertIn("ya está resguardado", self.ask("A", "ResguardarTendederoIntent"))
+        self.assertEqual(self.data.update_thing_shadow.call_count, escrituras)
+        # En manual, la voz manda aunque haya agua.
+        shadow["reported"]["modo"] = "manual"
+        self.assertIn("He solicitado", self.ask("A", "ExponerTendederoIntent"))
+        self.assertEqual(shadow["desired"]["posicion"], "expuesto")
+
+    def test_modo_y_espera_por_voz(self):
+        self.ask("A", "VincularThingIntent", codigo="111111")
+        shadow = self.shadows["tendedero-uno"]
+        self.assertIn("todavía no ha reportado su modo", self.ask("A", "ConsultarModoIntent"))
+        self.assertIn("modo automático", self.ask("A", "CambiarModoIntent", modo="automático"))
+        self.assertEqual(shadow["desired"]["modo"], "automatico")
+        self.assertIn("Qué modo", self.ask("A", "CambiarModoIntent", modo="turbo"))
+        self.assertIn("modo manual", self.ask("A", "CambiarModoIntent", modo="Manual"))
+        self.assertEqual(shadow["desired"]["modo"], "manual")
+        shadow["reported"].update({"modo": "automatico", "minutos_reexponer": 30})
+        respuesta = self.ask("A", "ConsultarModoIntent")
+        self.assertIn("modo automático", respuesta)
+        self.assertIn("30 minutos", respuesta)
+        self.assertIn("pendiente a modo manual", respuesta)
+        self.assertIn("45 minutos", self.ask("A", "ConfigurarEsperaIntent", minutos="45"))
+        self.assertEqual(shadow["desired"]["minutos_reexponer"], 45)
+        for fuera in ("2", "300", "?"):
+            self.assertIn("entre 5 y 240", self.ask("A", "ConfigurarEsperaIntent", minutos=fuera))
+        self.assertEqual(shadow["desired"]["minutos_reexponer"], 45)
+
+    def test_luz_por_voz(self):
+        self.ask("A", "VincularThingIntent", codigo="111111")
+        shadow = self.shadows["tendedero-uno"]
+        self.assertIn("no tiene la luz", self.ask("A", "EncenderLuzIntent"))
+        self.assertIn("no tiene el sensor de luz", self.ask("A", "ConsultarLuzIntent"))
+        self.assertNotIn("led", shadow.get("desired", {}))
+        # Con LDR y en automatico, la luz la decide el sensor.
+        shadow["reported"].update({"led": "encendido", "oscuro": True, "modo": "automatico"})
+        self.assertIn("la controla el sensor", self.ask("A", "ApagarLuzIntent"))
+        self.assertNotIn("led", shadow.get("desired", {}))
+        respuesta = self.ask("A", "ConsultarLuzIntent")
+        self.assertIn("Está oscuro", respuesta)
+        self.assertIn("encendida", respuesta)
+        # En manual se cumple, con origen_led voz.
+        shadow["reported"]["modo"] = "manual"
+        self.assertIn("apagar la luz", self.ask("A", "ApagarLuzIntent"))
+        self.assertEqual(shadow["desired"]["led"], "apagado")
+        self.assertEqual(shadow["desired"]["origen_led"], "voz")
+        # Sin LDR (oscuro ausente), la voz manda aunque el modo sea automatico.
+        del shadow["reported"]["oscuro"]
+        shadow["reported"]["modo"] = "automatico"
+        self.assertIn("encender la luz", self.ask("A", "EncenderLuzIntent"))
+        self.assertEqual(shadow["desired"]["led"], "encendido")
+
 
 if __name__ == "__main__":
     unittest.main()

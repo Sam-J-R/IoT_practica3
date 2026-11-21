@@ -1,0 +1,30 @@
+serie_estado,1795287508.936,2026-11-21T14:58:28.935,puerto abierto
+serie,1795287508.961,2026-11-21T14:58:28.961,ets Jul 29 2019 12:21:46
+serie,1795287508.962,2026-11-21T14:58:28.961,"rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)"
+serie,1795287508.962,2026-11-21T14:58:28.962,"configsip: 0, SPIWP:0xee"
+serie,1795287508.962,2026-11-21T14:58:28.962,"clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00"
+serie,1795287508.963,2026-11-21T14:58:28.962,"mode:DIO, clock div:2"
+serie,1795287508.963,2026-11-21T14:58:28.962,"load:0x3fff0030,len:1184"
+serie,1795287509.066,2026-11-21T14:58:29.066,"load:0x40078000,len:13232"
+serie,1795287509.067,2026-11-21T14:58:29.066,"load:0x40080400,len:3028"
+serie,1795287509.067,2026-11-21T14:58:29.067,entry 0x400805e4
+serie,1795287509.392,2026-11-21T14:58:29.392,[SENSOR] ms=34 raw=0 agua=0
+serie,1795287509.392,2026-11-21T14:58:29.392,[LUZ] ldr=no instalado led=instalado
+marca,1795287509.437,2026-11-21T14:58:29.436,prueba reconexion
+serie,1795287509.501,2026-11-21T14:58:29.500,[ENSAYO] Firmware de ensayo RNF: comandos exponer | resguardar | auto | manual | led_on | led_off | ldr_oscuro | ldr_claro | ldr_real | calibrar_seco | calibrar_mojado | estado | wifi_off | wifi_on
+serie,1795287509.501,2026-11-21T14:58:29.501,[CALIBRACION] umbral_seco=234 umbral_agua=698
+serie,1795287509.502,2026-11-21T14:58:29.501,[OPERACION] modo=automatico minutos_reexponer=30
+serie,1795287509.729,2026-11-21T14:58:29.729,[ENSAYO] wifi conectado ip=172.21.175.132 ms=265
+serie,1795287509.954,2026-11-21T14:58:29.953,[SENSOR] ms=534 raw=0 agua=0
+serie,1795287510.387,2026-11-21T14:58:30.387,[SENSOR] ms=1034 raw=0 agua=0
+serie,1795287510.932,2026-11-21T14:58:30.932,[SENSOR] ms=1534 raw=0 agua=0
+marca,1795287511.422,2026-11-21T14:58:31.422,envio wifi_off
+serie,1795287511.474,2026-11-21T14:58:31.473,[SENSOR] ms=2034 raw=0 agua=0
+serie,1795287511.474,2026-11-21T14:58:31.474,[ENSAYO] wifi cortado ms=2081
+serie,1795287511.904,2026-11-21T14:58:31.904,[SENSOR] ms=2534 raw=0 agua=0
+serie,1795287512.445,2026-11-21T14:58:32.444,[SENSOR] ms=3034 raw=0 agua=0
+serie,1795287512.881,2026-11-21T14:58:32.881,[SENSOR] ms=3534 raw=0 agua=0
+serie,1795287513.427,2026-11-21T14:58:33.427,[SENSOR] ms=4034 raw=0 agua=0
+serie,1795287513.970,2026-11-21T14:58:33.970,[SENSOR] ms=4534 raw=0 agua=0
+serie,1795287514.406,2026-11-21T14:58:34.405,[SENSOR] ms=5034 raw=0 agua=0
+serie_estado,1795287514.514,2026-11-21T14:58:34.514,puerto cerrado

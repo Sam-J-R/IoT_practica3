@@ -1,0 +1,116 @@
+PUERTO=COM3
+Processing tendedero_ensayo (platform: espressif32 @ 7.0.1; board: esp32doit-devkit-v1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32doit-devkit-v1.html
+PLATFORM: Espressif 32 (7.0.1) > DOIT ESP32 DEVKIT V1
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 33 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- WiFi @ 2.0.0
+|-- Preferences @ 2.0.0
+Building in release mode
+Retrieving maximum program size .pio\build\tendedero_ensayo\firmware.elf
+Checking size .pio\build\tendedero_ensayo\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  14.2% (used 46456 bytes from 327680 bytes)
+Flash: [=======   ]  72.2% (used 946653 bytes from 1310720 bytes)
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+Using manually specified: COM3
+Uploading .pio\build\tendedero_ensayo\firmware.bin
+esptool.py v4.11.0
+Serial port COM3
+Connecting....
+Chip is ESP32-D0WD-V3 (revision v3.1)
+Features: WiFi, BT, Dual Core, 240MHz, VRef calibration in efuse, Coding Scheme None
+Crystal is 40MHz
+MAC: 8c:94:df:7d:08:00
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00001000 to 0x00005fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+Flash will be erased from 0x0000e000 to 0x0000ffff...
+Flash will be erased from 0x00010000 to 0x000f8fff...
+SHA digest in image updated
+Compressed 17536 bytes to 12202...
+Writing at 0x00001000... (100 %)
+Wrote 17536 bytes (12202 compressed) at 0x00001000 in 0.5 seconds (effective 306.6 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 146...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (146 compressed) at 0x00008000 in 0.0 seconds (effective 709.1 kbit/s)...
+Hash of data verified.
+Compressed 8192 bytes to 47...
+Writing at 0x0000e000... (100 %)
+Wrote 8192 bytes (47 compressed) at 0x0000e000 in 0.1 seconds (effective 963.7 kbit/s)...
+Hash of data verified.
+Compressed 953232 bytes to 621009...
+Writing at 0x00010000... (2 %)
+Writing at 0x0001a7c0... (5 %)
+Writing at 0x00027c99... (7 %)
+Writing at 0x00031778... (10 %)
+Writing at 0x0003bfee... (13 %)
+Writing at 0x00041c95... (15 %)
+Writing at 0x000473e9... (18 %)
+Writing at 0x0004cbc2... (21 %)
+Writing at 0x00052367... (23 %)
+Writing at 0x00057aa8... (26 %)
+Writing at 0x0005cc56... (28 %)
+Writing at 0x00061f4b... (31 %)
+Writing at 0x000671b3... (34 %)
+Writing at 0x0006c580... (36 %)
+Writing at 0x000718bf... (39 %)
+Writing at 0x00076a3a... (42 %)
+Writing at 0x0007c1bd... (44 %)
+Writing at 0x000813e2... (47 %)
+Writing at 0x000866f5... (50 %)
+Writing at 0x0008b7c1... (52 %)
+Writing at 0x00090cdd... (55 %)
+Writing at 0x0009693e... (57 %)
+Writing at 0x0009bf0c... (60 %)
+Writing at 0x000a11fc... (63 %)
+Writing at 0x000a64e8... (65 %)
+Writing at 0x000ab8e6... (68 %)
+Writing at 0x000b0cae... (71 %)
+Writing at 0x000b637d... (73 %)
+Writing at 0x000bb9f3... (76 %)
+Writing at 0x000c124f... (78 %)
+Writing at 0x000c705a... (81 %)
+Writing at 0x000cc8cc... (84 %)
+Writing at 0x000d2fc5... (86 %)
+Writing at 0x000dbae4... (89 %)
+Writing at 0x000e3a14... (92 %)
+Writing at 0x000e8a8c... (94 %)
+Writing at 0x000ee419... (97 %)
+Writing at 0x000f3698... (100 %)
+Wrote 953232 bytes (621009 compressed) at 0x00010000 in 15.3 seconds (effective 499.2 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...
+========================= [SUCCESS] Took 22.78 seconds =========================
+
+Environment       Status    Duration
+----------------  --------  ------------
+tendedero_ensayo  SUCCESS   00:00:22.782
+========================= 1 succeeded in 00:00:22.782 =========================
+UPLOAD=0
+PROBAR=1 

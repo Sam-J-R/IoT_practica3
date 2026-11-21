@@ -1,0 +1,316 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Tendedero inteligente - Practica 4. Historico en DynamoDB, Lambdas de
+  almacenamiento, logica (R4) y supervisor (R2, R3), reglas de AWS IoT,
+  programacion con EventBridge y presupuesto con alerta de gasto.
+  No toca los recursos de la P3 (Thing, politica, Lambda de Alexa, tablas
+  tendedero_vinculaciones y tendedero_dispositivos).
+  Desplegar con tools/desplegar_p4.py (empaqueta el codigo de lambda/).
+
+Parameters:
+  NombreHistorico:
+    Type: String
+    Default: tendedero_historico
+  NombreDispositivos:
+    Type: String
+    Default: tendedero_dispositivos
+    Description: Tabla existente de la P3 (solo lectura con Scan).
+  PrefijoThing:
+    Type: String
+    Default: tendedero-
+    Description: Los permisos sobre el Shadow se limitan a thing/<prefijo>*.
+  IotEndpoint:
+    Type: String
+    Description: Endpoint ATS de datos (aws iot describe-endpoint --endpoint-type iot:Data-ATS).
+  CorreoAlertas:
+    Type: String
+    Default: ""
+    Description: Correo que recibe los avisos del presupuesto (vacio = sin presupuesto).
+  PresupuestoUsd:
+    Type: Number
+    Default: 5
+  FrecuenciaSupervisor:
+    Type: String
+    Default: rate(5 minutes)
+  LimiteMovimientosHora:
+    Type: Number
+    Default: 6
+  MinutosSinReporte:
+    Type: Number
+    Default: 3
+
+Conditions:
+  ConPresupuesto: !Not [!Equals [!Ref CorreoAlertas, ""]]
+
+Resources:
+  # ------------------------------------------------------------- DynamoDB
+  # Aprovisionada con 2/2 unidades: dentro de la capa gratuita permanente
+  # (25 RCU y 25 WCU). Un tendedero escribe ~1 lectura por minuto.
+  TablaHistorico:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref NombreHistorico
+      AttributeDefinitions:
+        - {AttributeName: thingName, AttributeType: S}
+        - {AttributeName: sk, AttributeType: S}
+      KeySchema:
+        - {AttributeName: thingName, KeyType: HASH}
+        - {AttributeName: sk, KeyType: RANGE}
+      BillingMode: PROVISIONED
+      ProvisionedThroughput: {ReadCapacityUnits: 2, WriteCapacityUnits: 2}
+      TimeToLiveSpecification: {AttributeName: ttl, Enabled: true}
+
+  # ------------------------------------------------------------- IAM
+  RolAlmacenamiento:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: tendedero-almacenamiento-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}
+      Policies:
+        - PolicyName: tendedero-almacenamiento
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: GuardarHistorico
+                Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt TablaHistorico.Arn
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/tendedero_almacenamiento:*
+
+  RolLogica:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: tendedero-logica-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}
+      Policies:
+        - PolicyName: tendedero-logica
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: LeerYAlertar
+                Effect: Allow
+                Action: [dynamodb:Query, dynamodb:PutItem]
+                Resource: !GetAtt TablaHistorico.Arn
+              - Sid: CambiarModo
+                Effect: Allow
+                Action: iot:UpdateThingShadow
+                Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/${PrefijoThing}*
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/tendedero_logica:*
+
+  RolSupervisor:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: tendedero-supervisor-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}
+      Policies:
+        - PolicyName: tendedero-supervisor
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListarTendederos
+                Effect: Allow
+                Action: dynamodb:Scan
+                Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${NombreDispositivos}
+              - Sid: LeerYAlertar
+                Effect: Allow
+                Action: [dynamodb:Query, dynamodb:PutItem]
+                Resource: !GetAtt TablaHistorico.Arn
+              - Sid: LeerYReexponer
+                Effect: Allow
+                Action: [iot:GetThingShadow, iot:UpdateThingShadow]
+                Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/${PrefijoThing}*
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/tendedero_supervisor:*
+
+  # ------------------------------------------------------------- Lambdas
+  # Code apunta a carpetas locales: "aws cloudformation package" las sube a S3.
+  LambdaAlmacenamiento:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: tendedero_almacenamiento
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Code: ../../lambda/almacenamiento
+      Role: !GetAtt RolAlmacenamiento.Arn
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          DDB_HISTORY_TABLE: !Ref TablaHistorico
+
+  LambdaLogica:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: tendedero_logica
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Code: ../../lambda/logica
+      Role: !GetAtt RolLogica.Arn
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          DDB_HISTORY_TABLE: !Ref TablaHistorico
+          IOT_ENDPOINT: !Ref IotEndpoint
+          LIMITE_MOVIMIENTOS_HORA: !Ref LimiteMovimientosHora
+
+  LambdaSupervisor:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: tendedero_supervisor
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Code: ../../lambda/supervisor
+      Role: !GetAtt RolSupervisor.Arn
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DDB_HISTORY_TABLE: !Ref TablaHistorico
+          DDB_DEVICES_TABLE: !Ref NombreDispositivos
+          IOT_ENDPOINT: !Ref IotEndpoint
+          MINUTOS_SIN_REPORTE: !Ref MinutosSinReporte
+
+  # ------------------------------------------------------------- Reglas de AWS IoT
+  # La misma SQL esta exportada en aws/reglas/ (la prueba tests/p4/test_plantilla.py
+  # verifica que coincidan).
+  ReglaLecturas:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: tendedero_lecturas
+      TopicRulePayload:
+        AwsIotSqlVersion: "2016-03-23"
+        RuleDisabled: false
+        Sql: >-
+          SELECT state.reported AS reported, topic(3) AS thingName, timestamp() AS ts
+          FROM '$aws/things/+/shadow/update/accepted'
+          WHERE NOT isUndefined(state.reported)
+        Actions:
+          - Lambda: {FunctionArn: !GetAtt LambdaAlmacenamiento.Arn}
+
+  ReglaCambios:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: tendedero_cambios
+      TopicRulePayload:
+        AwsIotSqlVersion: "2016-03-23"
+        RuleDisabled: false
+        Sql: >-
+          SELECT current.state.reported AS actual, previous.state.reported AS anterior,
+          topic(3) AS thingName, timestamp() AS ts
+          FROM '$aws/things/+/shadow/update/documents'
+          WHERE previous.state.reported.posicion <> current.state.reported.posicion
+          OR previous.state.reported.agua_detectada <> current.state.reported.agua_detectada
+          OR previous.state.reported.modo <> current.state.reported.modo
+          OR previous.state.reported.led <> current.state.reported.led
+          OR previous.state.reported.oscuro <> current.state.reported.oscuro
+        Actions:
+          - Lambda: {FunctionArn: !GetAtt LambdaAlmacenamiento.Arn}
+
+  ReglaMovimientos:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: tendedero_movimientos
+      TopicRulePayload:
+        AwsIotSqlVersion: "2016-03-23"
+        RuleDisabled: false
+        Sql: >-
+          SELECT current.state.reported AS actual, previous.state.reported AS anterior,
+          topic(3) AS thingName, timestamp() AS ts
+          FROM '$aws/things/+/shadow/update/documents'
+          WHERE previous.state.reported.posicion <> current.state.reported.posicion
+          AND current.state.reported.modo = 'automatico'
+        Actions:
+          - Lambda: {FunctionArn: !GetAtt LambdaLogica.Arn}
+
+  # Cada regla solo puede invocar su propia Lambda.
+  PermisoLecturas:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaAlmacenamiento
+      Action: lambda:InvokeFunction
+      Principal: iot.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt ReglaLecturas.Arn
+
+  PermisoCambios:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaAlmacenamiento
+      Action: lambda:InvokeFunction
+      Principal: iot.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt ReglaCambios.Arn
+
+  PermisoMovimientos:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaLogica
+      Action: lambda:InvokeFunction
+      Principal: iot.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !GetAtt ReglaMovimientos.Arn
+
+  # ------------------------------------------------------------- EventBridge
+  ProgramacionSupervisor:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: tendedero_supervisor_programado
+      ScheduleExpression: !Ref FrecuenciaSupervisor
+      State: ENABLED
+      Targets:
+        - {Id: supervisor, Arn: !GetAtt LambdaSupervisor.Arn}
+
+  PermisoProgramacion:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaSupervisor
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ProgramacionSupervisor.Arn
+
+  # ------------------------------------------------------------- Ahorro de creditos
+  # Presupuesto mensual de costo con aviso por correo al 80 % del gasto real y
+  # al 100 % del gasto pronosticado. Un presupuesto sin acciones no tiene costo.
+  # Se omite si CorreoAlertas queda vacio (p. ej. si la cuenta ya tiene uno).
+  Presupuesto:
+    Type: AWS::Budgets::Budget
+    Condition: ConPresupuesto
+    Properties:
+      Budget:
+        BudgetName: tendedero-p4-mensual
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: {Amount: !Ref PresupuestoUsd, Unit: USD}
+      NotificationsWithSubscribers:
+        - Notification: {NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 80, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref CorreoAlertas}]
+        - Notification: {NotificationType: FORECASTED, ComparisonOperator: GREATER_THAN, Threshold: 100, ThresholdType: PERCENTAGE}
+          Subscribers: [{SubscriptionType: EMAIL, Address: !Ref CorreoAlertas}]
+
+Outputs:
+  TablaHistorico:
+    Value: !Ref TablaHistorico
+  LambdaAlmacenamiento:
+    Value: !GetAtt LambdaAlmacenamiento.Arn
+  LambdaLogica:
+    Value: !GetAtt LambdaLogica.Arn
+  LambdaSupervisor:
+    Value: !GetAtt LambdaSupervisor.Arn

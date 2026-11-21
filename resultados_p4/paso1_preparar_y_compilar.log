@@ -1,0 +1,434 @@
+=== Fecha: s b 21/11/2026 14:40:29,63
+=== Python
+C:\Python314\python.exe
+C:\Users\SAM\.platformio\penv\Scripts\python.exe
+C:\Users\SAM\AppData\Local\Microsoft\WindowsApps\python.exe
+C:\Users\SAM\AppData\Local\Python\bin\python.exe
+Python 3.14.3
+=== Dependencias
+PIP=0
+=== g++
+INFORMACIàN: no se pudo encontrar ning£n archivo para los patrones dados.
+=== Puertos serie
+1 ports found
+COM3                
+    desc: Silicon Labs CP210x USB to UART Bridge (COM3)
+    hwid: USB VID:PID=10C4:EA60 SER=0001 LOCATION=1-1
+=== Puerto elegido
+COM3
+=== Pruebas sin hardware
+.................sssssss......sss....................................... [ 83%]
+..............                                                           [100%]
+76 passed, 10 skipped in 108.31s (0:01:48)
+PYTEST=0
+=== Compilacion de los 5 perfiles
+Processing sensor_test (platform: espressif32 @ 7.0.1; board: esp32doit-devkit-v1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32doit-devkit-v1.html
+PLATFORM: Espressif 32 (7.0.1) > DOIT ESP32 DEVKIT V1
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 33 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Compiling .pio\build\sensor_test\src\SensorTest.cpp.o
+Building .pio\build\sensor_test\bootloader.bin
+Generating partitions .pio\build\sensor_test\partitions.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 1 ELF section
+Successfully created esp32 image.
+Compiling .pio\build\sensor_test\FrameworkArduino\Esp.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\FirmwareMSC.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\FunctionalInterrupt.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\HWCDC.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\HardwareSerial.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\IPAddress.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\IPv6Address.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\MD5Builder.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\Print.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\Stream.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\StreamString.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\Tone.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\USB.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\USBCDC.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\USBMSC.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\WMath.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\WString.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\base64.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\cbuf.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-adc.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-bt.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-cpu.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-dac.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-gpio.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-i2c-slave.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-i2c.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-ledc.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-matrix.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-misc.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-psram.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-rgb-led.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-rmt.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-sigmadelta.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-spi.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-time.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-timer.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-tinyusb.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-touch.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\esp32-hal-uart.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\firmware_msc_fat.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\libb64\cdecode.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\libb64\cencode.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\main.cpp.o
+Compiling .pio\build\sensor_test\FrameworkArduino\stdlib_noniso.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\wiring_pulse.c.o
+Compiling .pio\build\sensor_test\FrameworkArduino\wiring_shift.c.o
+Archiving .pio\build\sensor_test\libFrameworkArduino.a
+Linking .pio\build\sensor_test\firmware.elf
+Retrieving maximum program size .pio\build\sensor_test\firmware.elf
+Checking size .pio\build\sensor_test\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   6.6% (used 21640 bytes from 327680 bytes)
+Flash: [==        ]  21.0% (used 275065 bytes from 1310720 bytes)
+Building .pio\build\sensor_test\firmware.bin with action:
+  "$PYTHONEXE" "$OBJCOPY" --chip esp32 elf2image --flash_mode ${__get_board_flash_mode(__env__)} --flash_freq ${__get_board_f_image(__env__)} --flash_size 4MB --elf-sha256-offset 0xb0 -o $TARGET $SOURCES
+Building .pio\build\sensor_test\firmware.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 2 ELF sections
+Successfully created esp32 image.
+========================= [SUCCESS] Took 15.97 seconds =========================
+
+Processing servo_test (platform: espressif32 @ 7.0.1; board: esp32doit-devkit-v1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32doit-devkit-v1.html
+PLATFORM: Espressif 32 (7.0.1) > DOIT ESP32 DEVKIT V1
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 33 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Compiling .pio\build\servo_test\src\ServoTest.cpp.o
+Building .pio\build\servo_test\bootloader.bin
+Generating partitions .pio\build\servo_test\partitions.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 1 ELF section
+Successfully created esp32 image.
+Compiling .pio\build\servo_test\FrameworkArduino\Esp.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\FirmwareMSC.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\FunctionalInterrupt.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\HWCDC.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\HardwareSerial.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\IPAddress.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\IPv6Address.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\MD5Builder.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\Print.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\Stream.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\StreamString.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\Tone.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\USB.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\USBCDC.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\USBMSC.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\WMath.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\WString.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\base64.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\cbuf.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-adc.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-bt.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-cpu.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-dac.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-gpio.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-i2c-slave.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-i2c.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-ledc.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-matrix.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-misc.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-psram.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-rgb-led.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-rmt.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-sigmadelta.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-spi.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-time.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-timer.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-tinyusb.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-touch.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\esp32-hal-uart.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\firmware_msc_fat.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\libb64\cdecode.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\libb64\cencode.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\main.cpp.o
+Compiling .pio\build\servo_test\FrameworkArduino\stdlib_noniso.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\wiring_pulse.c.o
+Compiling .pio\build\servo_test\FrameworkArduino\wiring_shift.c.o
+Archiving .pio\build\servo_test\libFrameworkArduino.a
+Linking .pio\build\servo_test\firmware.elf
+Retrieving maximum program size .pio\build\servo_test\firmware.elf
+Checking size .pio\build\servo_test\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   6.6% (used 21584 bytes from 327680 bytes)
+Flash: [==        ]  20.9% (used 274069 bytes from 1310720 bytes)
+Building .pio\build\servo_test\firmware.bin with action:
+  "$PYTHONEXE" "$OBJCOPY" --chip esp32 elf2image --flash_mode ${__get_board_flash_mode(__env__)} --flash_freq ${__get_board_f_image(__env__)} --flash_size 4MB --elf-sha256-offset 0xb0 -o $TARGET $SOURCES
+Building .pio\build\servo_test\firmware.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 2 ELF sections
+Successfully created esp32 image.
+========================= [SUCCESS] Took 14.94 seconds =========================
+
+Processing sensor_shadow_test (platform: espressif32 @ 7.0.1; board: esp32doit-devkit-v1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32doit-devkit-v1.html
+PLATFORM: Espressif 32 (7.0.1) > DOIT ESP32 DEVKIT V1
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 33 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- WiFi @ 2.0.0
+|-- Preferences @ 2.0.0
+Building in release mode
+Compiling .pio\build\sensor_shadow_test\src\ClienteShadow.cpp.o
+Compiling .pio\build\sensor_shadow_test\src\SensorShadowTest.cpp.o
+Building .pio\build\sensor_shadow_test\bootloader.bin
+Generating partitions .pio\build\sensor_shadow_test\partitions.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 1 ELF section
+Successfully created esp32 image.
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFi.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiAP.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiClient.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiGeneric.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiMulti.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiSTA.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiScan.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiServer.cpp.o
+Compiling .pio\build\sensor_shadow_test\libe23\WiFi\WiFiUdp.cpp.o
+Compiling .pio\build\sensor_shadow_test\lib690\Preferences\Preferences.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\Esp.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\FirmwareMSC.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\FunctionalInterrupt.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\HWCDC.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\HardwareSerial.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\IPAddress.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\IPv6Address.cpp.o
+Archiving .pio\build\sensor_shadow_test\lib690\libPreferences.a
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\MD5Builder.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\Print.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\Stream.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\StreamString.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\Tone.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\USB.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\USBCDC.cpp.o
+Archiving .pio\build\sensor_shadow_test\libe23\libWiFi.a
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\USBMSC.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\WMath.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\WString.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\base64.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\cbuf.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-adc.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-bt.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-cpu.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-dac.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-gpio.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-i2c-slave.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-i2c.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-ledc.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-matrix.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-misc.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-psram.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-rgb-led.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-rmt.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-sigmadelta.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-spi.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-time.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-timer.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-tinyusb.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-touch.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\esp32-hal-uart.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\firmware_msc_fat.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\libb64\cdecode.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\libb64\cencode.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\main.cpp.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\stdlib_noniso.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\wiring_pulse.c.o
+Compiling .pio\build\sensor_shadow_test\FrameworkArduino\wiring_shift.c.o
+Archiving .pio\build\sensor_shadow_test\libFrameworkArduino.a
+Linking .pio\build\sensor_shadow_test\firmware.elf
+Retrieving maximum program size .pio\build\sensor_shadow_test\firmware.elf
+Checking size .pio\build\sensor_shadow_test\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  14.1% (used 46076 bytes from 327680 bytes)
+Flash: [=======   ]  70.7% (used 927009 bytes from 1310720 bytes)
+Building .pio\build\sensor_shadow_test\firmware.bin with action:
+  "$PYTHONEXE" "$OBJCOPY" --chip esp32 elf2image --flash_mode ${__get_board_flash_mode(__env__)} --flash_freq ${__get_board_f_image(__env__)} --flash_size 4MB --elf-sha256-offset 0xb0 -o $TARGET $SOURCES
+Building .pio\build\sensor_shadow_test\firmware.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 27 ELF sections
+Successfully created esp32 image.
+========================= [SUCCESS] Took 26.11 seconds =========================
+
+Processing tendedero_shadow (platform: espressif32 @ 7.0.1; board: esp32doit-devkit-v1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32doit-devkit-v1.html
+PLATFORM: Espressif 32 (7.0.1) > DOIT ESP32 DEVKIT V1
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 33 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- WiFi @ 2.0.0
+|-- Preferences @ 2.0.0
+Building in release mode
+Compiling .pio\build\tendedero_shadow\src\ClienteShadow.cpp.o
+Compiling .pio\build\tendedero_shadow\src\Tendedero.cpp.o
+Building .pio\build\tendedero_shadow\bootloader.bin
+Generating partitions .pio\build\tendedero_shadow\partitions.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 1 ELF section
+Successfully created esp32 image.
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFi.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiAP.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiClient.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiGeneric.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiMulti.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiSTA.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiScan.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiServer.cpp.o
+Compiling .pio\build\tendedero_shadow\libe23\WiFi\WiFiUdp.cpp.o
+Compiling .pio\build\tendedero_shadow\lib690\Preferences\Preferences.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\Esp.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\FirmwareMSC.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\FunctionalInterrupt.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\HWCDC.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\HardwareSerial.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\IPAddress.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\IPv6Address.cpp.o
+Archiving .pio\build\tendedero_shadow\lib690\libPreferences.a
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\MD5Builder.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\Print.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\Stream.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\StreamString.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\Tone.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\USB.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\USBCDC.cpp.o
+Archiving .pio\build\tendedero_shadow\libe23\libWiFi.a
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\USBMSC.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\WMath.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\WString.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\base64.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\cbuf.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-adc.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-bt.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-cpu.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-dac.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-gpio.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-i2c-slave.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-i2c.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-ledc.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-matrix.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-misc.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-psram.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-rgb-led.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-rmt.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-sigmadelta.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-spi.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-time.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-timer.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-tinyusb.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-touch.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\esp32-hal-uart.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\firmware_msc_fat.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\libb64\cdecode.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\libb64\cencode.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\main.cpp.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\stdlib_noniso.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\wiring_pulse.c.o
+Compiling .pio\build\tendedero_shadow\FrameworkArduino\wiring_shift.c.o
+Archiving .pio\build\tendedero_shadow\libFrameworkArduino.a
+Linking .pio\build\tendedero_shadow\firmware.elf
+Retrieving maximum program size .pio\build\tendedero_shadow\firmware.elf
+Checking size .pio\build\tendedero_shadow\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  14.2% (used 46396 bytes from 327680 bytes)
+Flash: [=======   ]  71.8% (used 940961 bytes from 1310720 bytes)
+Building .pio\build\tendedero_shadow\firmware.bin with action:
+  "$PYTHONEXE" "$OBJCOPY" --chip esp32 elf2image --flash_mode ${__get_board_flash_mode(__env__)} --flash_freq ${__get_board_f_image(__env__)} --flash_size 4MB --elf-sha256-offset 0xb0 -o $TARGET $SOURCES
+Building .pio\build\tendedero_shadow\firmware.bin
+esptool.py v4.11.0
+Creating esp32 image...
+Merged 27 ELF sections
+Successfully created esp32 image.
+========================= [SUCCESS] Took 26.30 seconds =========================
+
+Processing tendedero_ensayo (platform: espressif32 @ 7.0.1; board: esp32doit-devkit-v1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32doit-devkit-v1.html
+PLATFORM: Espressif 32 (7.0.1) > DOIT ESP32 DEVKIT V1
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 33 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- WiFi @ 2.0.0
+|-- Preferences @ 2.0.0
+Building in release mode
+Retrieving maximum program size .pio\build\tendedero_ensayo\firmware.elf
+Checking size .pio\build\tendedero_ensayo\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  14.2% (used 46456 bytes from 327680 bytes)
+Flash: [=======   ]  72.2% (used 946653 bytes from 1310720 bytes)
+========================= [SUCCESS] Took 4.07 seconds =========================
+
+Environment         Status    Duration
+------------------  --------  ------------
+sensor_test         SUCCESS   00:00:15.974
+servo_test          SUCCESS   00:00:14.939
+sensor_shadow_test  SUCCESS   00:00:26.111
+tendedero_shadow    SUCCESS   00:00:26.301
+tendedero_ensayo    SUCCESS   00:00:04.072
+========================= 5 succeeded in 00:01:27.397 =========================
+PIO=0
+=== FIN

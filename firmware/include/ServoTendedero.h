@@ -1,11 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
+#include "TiposTendedero.h"
 #include "config.h"
-
-// Expuesto: el brazo deja el tendedero fuera del techo.
-// Resguardado: el brazo gira el tendedero hasta debajo del techo.
-enum class Posicion { Desconocida, Expuesto, Resguardado };
 
 // Mueve el brazo del tendedero con pulsos PWM. NO mide la posicion real del servo.
 class ServoTendedero {
@@ -33,6 +30,9 @@ public:
     destino_ = posicion;
     inicioMs_ = ahora;
   }
+
+  // Ultima posicion ordenada (puede no haberse alcanzado todavia).
+  Posicion destino() const { return destino_; }
 
   Posicion estimada(unsigned long ahora) const {
     // Se considera alcanzado el destino al pasar el tiempo calibrado.

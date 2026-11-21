@@ -85,7 +85,12 @@ class StaticContract(unittest.TestCase):
         config = (ROOT / "firmware" / "include" / "config.h").read_text(encoding="utf-8")
         self.assertIn("analogRead(PIN_AGUA_ANALOGICO)", sensor)
         self.assertIn('#include "SensorAgua.h"', source)
-        self.assertNotIn("PIN_LED", config)
+        # P4: el LED de luz automatica esta permitido, pero no como unico
+        # actuador (consigna §2): el servo sigue siendo el actuador principal.
+        self.assertIn("PIN_SERVO_PWM", config)
+        if "PIN_LED" in config:
+            self.assertIn("PIN_LDR_ANALOGICO", config)
+            self.assertNotIn("ledcAttachPin(PIN_LED", (ROOT / "firmware" / "include" / "LuzLed.h").read_text(encoding="utf-8"))
 
     def test_production_is_default_and_diagnostics_are_isolated(self):
         config = (ROOT / "firmware" / "platformio.ini").read_text(encoding="utf-8")

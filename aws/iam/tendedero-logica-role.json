@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LeerYAlertar",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:Query",
+        "dynamodb:PutItem"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-2:ACCOUNT_ID:table/tendedero_historico"
+    },
+    {
+      "Sid": "CambiarModo",
+      "Effect": "Allow",
+      "Action": "iot:UpdateThingShadow",
+      "Resource": "arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*"
+    },
+    {
+      "Sid": "Logs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-2:ACCOUNT_ID:log-group:/aws/lambda/tendedero_logica:*"
+    }
+  ]
+}

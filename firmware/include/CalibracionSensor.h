@@ -27,10 +27,21 @@ struct EstadoCalibracion {
 class CalibracionSensor {
 public:
   // Carga lo guardado; si no hay nada, usa las referencias de fabrica.
+  // Las referencias de fabrica fijan el sentido del sensor: si la lectura
+  // sube o baja al mojarse. Ninguna calibracion puede invertirlo.
   void iniciar(int secoFabrica, int aguaFabrica) {
+    sube_ = aguaFabrica >= secoFabrica;
     memoria_.begin("calibracion", false);
     seco_ = memoria_.getInt("seco", secoFabrica);
     agua_ = memoria_.getInt("agua", aguaFabrica);
+    if (!referenciasValidas(seco_, agua_) && referenciasValidas(secoFabrica, aguaFabrica)) {
+      // Referencias guardadas incoherentes (p. ej. invertidas por una version
+      // anterior del firmware): se vuelve a las de fabrica.
+      seco_ = secoFabrica;
+      agua_ = aguaFabrica;
+      memoria_.putInt("seco", seco_);
+      memoria_.putInt("agua", agua_);
+    }
     id_ = memoria_.getULong64("id", 0);
     condicion_ = static_cast<Condicion>(memoria_.getUChar("condicion", 0));
     resultado_ = static_cast<ResultadoCalibracion>(memoria_.getUChar("resultado", 0));
@@ -47,7 +58,9 @@ public:
   int umbralAgua() const { return seco_ + (agua_ - seco_) * PORCENTAJE_UMBRAL_AGUA / 100; }
 
   // Reemplaza solo la referencia pedida y conserva la otra. Si las dos
-  // quedan demasiado cerca, se rechaza y siguen los valores anteriores.
+  // quedan demasiado cerca o en el sentido contrario al de fabrica (por
+  // ejemplo, "seco" medido con el sensor mojado), se rechaza y siguen los
+  // valores anteriores.
   bool aplicar(Condicion condicion, uint64_t id, int lectura) {
     const int seco = condicion == Condicion::Seco ? lectura : seco_;
     const int agua = condicion == Condicion::Mojado ? lectura : agua_;
@@ -90,12 +103,14 @@ private:
     ++revision_;
   }
 
-  static bool referenciasValidas(int seco, int agua) {
+  bool referenciasValidas(int seco, int agua) const {
+    const int recorrido = sube_ ? agua - seco : seco - agua;
     return seco >= 0 && seco <= 4095 && agua >= 0 && agua <= 4095 &&
-           abs(agua - seco) >= SEPARACION_MINIMA_REFERENCIAS;
+           recorrido >= SEPARACION_MINIMA_REFERENCIAS;
   }
 
   Preferences memoria_;
+  bool sube_ = true;  // true: la lectura sube al mojarse (sensor MH en GPIO34).
   int seco_ = -1;
   int agua_ = -1;
   uint64_t id_ = 0;

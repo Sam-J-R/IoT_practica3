@@ -9,7 +9,11 @@
             {
               "name": "codigo",
               "type": "AMAZON.NUMBER",
-              "samples": ["{codigo}", "el código es {codigo}", "es {codigo}"]
+              "samples": [
+                "{codigo}",
+                "el código es {codigo}",
+                "es {codigo}"
+              ]
             }
           ],
           "samples": [
@@ -26,7 +30,11 @@
             {
               "name": "codigo",
               "type": "AMAZON.NUMBER",
-              "samples": ["{codigo}", "el código es {codigo}", "es {codigo}"]
+              "samples": [
+                "{codigo}",
+                "el código es {codigo}",
+                "es {codigo}"
+              ]
             }
           ],
           "samples": [
@@ -89,7 +97,12 @@
         },
         {
           "name": "CalibrarSensorIntent",
-          "slots": [{"name": "condicion", "type": "CondicionSensor"}],
+          "slots": [
+            {
+              "name": "condicion",
+              "type": "CondicionSensor"
+            }
+          ],
           "samples": [
             "calibra el sensor {condicion}",
             "calibrar el sensor {condicion}",
@@ -107,11 +120,103 @@
             "consulta la calibración"
           ]
         },
-        {"name": "AMAZON.CancelIntent", "samples": []},
-        {"name": "AMAZON.StopIntent", "samples": []},
-        {"name": "AMAZON.HelpIntent", "samples": []},
-        {"name": "AMAZON.FallbackIntent", "samples": []},
-        {"name": "AMAZON.NavigateHomeIntent", "samples": []}
+        {
+          "name": "CambiarModoIntent",
+          "slots": [
+            {
+              "name": "modo",
+              "type": "ModoOperacion"
+            }
+          ],
+          "samples": [
+            "cambia a modo {modo}",
+            "activa el modo {modo}",
+            "pon el tendedero en modo {modo}",
+            "usa el modo {modo}",
+            "quiero el modo {modo}",
+            "modo {modo}",
+            "pasa a modo {modo}"
+          ]
+        },
+        {
+          "name": "ConsultarModoIntent",
+          "slots": [],
+          "samples": [
+            "en qué modo está",
+            "en qué modo está el tendedero",
+            "qué modo tiene el tendedero",
+            "cuál es el modo",
+            "cuál es el modo de operación"
+          ]
+        },
+        {
+          "name": "ConfigurarEsperaIntent",
+          "slots": [
+            {
+              "name": "minutos",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "espera {minutos} minutos para volver a exponer",
+            "vuelve a exponer después de {minutos} minutos",
+            "configura la espera en {minutos} minutos",
+            "pon la espera en {minutos} minutos",
+            "cambia la espera a {minutos} minutos"
+          ]
+        },
+        {
+          "name": "EncenderLuzIntent",
+          "slots": [],
+          "samples": [
+            "enciende la luz",
+            "prende la luz",
+            "enciende la luz del tendedero",
+            "prende la luz del tendedero",
+            "enciende el foco"
+          ]
+        },
+        {
+          "name": "ApagarLuzIntent",
+          "slots": [],
+          "samples": [
+            "apaga la luz",
+            "apaga la luz del tendedero",
+            "apaga el foco",
+            "apaga la lámpara"
+          ]
+        },
+        {
+          "name": "ConsultarLuzIntent",
+          "slots": [],
+          "samples": [
+            "cómo está la luz",
+            "está oscuro",
+            "hay luz",
+            "la luz está encendida",
+            "está encendida la luz"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        }
       ],
       "types": [
         {
@@ -119,11 +224,49 @@
           "values": [
             {
               "id": "seco",
-              "name": {"value": "seco", "synonyms": ["seca", "en seco", "sin agua"]}
+              "name": {
+                "value": "seco",
+                "synonyms": [
+                  "seca",
+                  "en seco",
+                  "sin agua"
+                ]
+              }
             },
             {
               "id": "mojado",
-              "name": {"value": "mojado", "synonyms": ["mojada", "húmedo", "con agua"]}
+              "name": {
+                "value": "mojado",
+                "synonyms": [
+                  "mojada",
+                  "húmedo",
+                  "con agua"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ModoOperacion",
+          "values": [
+            {
+              "id": "automatico",
+              "name": {
+                "value": "automático",
+                "synonyms": [
+                  "automatico",
+                  "auto"
+                ]
+              }
+            },
+            {
+              "id": "manual",
+              "name": {
+                "value": "manual",
+                "synonyms": [
+                  "a mano"
+                ]
+              }
             }
           ]
         }
@@ -172,25 +315,37 @@
       {
         "id": "Elicit.Slot.Vincular.codigo",
         "variations": [
-          {"type": "PlainText", "value": "Dime el código de seis dígitos que está en la etiqueta de tu tendedero."}
+          {
+            "type": "PlainText",
+            "value": "Dime el código de seis dígitos que está en la etiqueta de tu tendedero."
+          }
         ]
       },
       {
         "id": "Confirm.Slot.Vincular.codigo",
         "variations": [
-          {"type": "SSML", "value": "<speak>Entendí el código <say-as interpret-as=\"digits\">{codigo}</say-as>. ¿Es correcto?</speak>"}
+          {
+            "type": "SSML",
+            "value": "<speak>Entendí el código <say-as interpret-as=\"digits\">{codigo}</say-as>. ¿Es correcto?</speak>"
+          }
         ]
       },
       {
         "id": "Elicit.Slot.Cambiar.codigo",
         "variations": [
-          {"type": "PlainText", "value": "Dime el código de seis dígitos del nuevo tendedero."}
+          {
+            "type": "PlainText",
+            "value": "Dime el código de seis dígitos del nuevo tendedero."
+          }
         ]
       },
       {
         "id": "Confirm.Slot.Cambiar.codigo",
         "variations": [
-          {"type": "SSML", "value": "<speak>Entendí el código <say-as interpret-as=\"digits\">{codigo}</say-as>. ¿Es correcto?</speak>"}
+          {
+            "type": "SSML",
+            "value": "<speak>Entendí el código <say-as interpret-as=\"digits\">{codigo}</say-as>. ¿Es correcto?</speak>"
+          }
         ]
       }
     ]
