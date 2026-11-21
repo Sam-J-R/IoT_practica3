@@ -1,16 +1,25 @@
-"""Backend P3: Alexa -> vinculacion DynamoDB -> IoT Thing Shadow.
+"""Backend P4: Alexa -> DynamoDB (dispositivos y vinculaciones) -> IoT Thing Shadow.
 
-La funcion fue desplegada y verificada en AWS mediante eventos directos de
-Lambda: vinculacion, consultas, comandos, cambio y desvinculacion. La prueba
-extremo a extremo con la Skill y el ESP32 fisico se documenta por separado.
-No fija un Thing para todos los usuarios: lo resuelve por userId en cada
-solicitud.
+P4: la voz convive con la logica automatica del ESP32 (reglas R1 y R5):
+- Toda orden de posicion se escribe con origen "voz"; las del LED, con
+  origen_led "voz" (RF12).
+- En modo automatico con agua detectada, "exponer" se rechaza con una
+  explicacion; en automatico con sensor de luz, la luz tampoco se controla
+  por voz. En manual, la voz manda siempre.
+- La voz cambia el modo (manual / automatico) y los minutos de espera de la
+  regla R2 (minutos_reexponer), como pide RF14.
+
+El usuario vincula su tendedero con el codigo numerico de la etiqueta. Ese
+codigo se busca en la tabla de dispositivos para obtener el Thing; no hay
+nombres de Things en variables de entorno ni en el codigo. En las demas
+solicitudes el Thing se resuelve por userId en la tabla de vinculaciones.
 """
 
 import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 
 import boto3
@@ -26,9 +35,31 @@ LOG.setLevel(logging.INFO)
 REGION = os.getenv("AWS_REGION", "us-east-2")
 IOT_ENDPOINT = os.getenv("IOT_ENDPOINT", "")
 BINDINGS_TABLE = os.getenv("DDB_BINDINGS_TABLE", "tendedero_vinculaciones")
+DEVICES_TABLE = os.getenv("DDB_DEVICES_TABLE", "tendedero_dispositivos")
+DEVICES_CODE_INDEX = os.getenv("DDB_DEVICES_CODE_INDEX", "codigoVinculacion-index")
+
+POSICIONES = ("expuesto", "resguardado")
+MODOS = ("manual", "automatico")
+ESTADOS_LED = ("encendido", "apagado")
+# Rango de minutos_reexponer aceptado por el ESP32 y la Lambda supervisor.
+MINUTOS_MIN, MINUTOS_MAX = 5, 240
+# Palabras que puede decir el usuario -> modo que entiende el ESP32.
+MODOS_HABLADOS = {
+    "manual": "manual", "a mano": "manual", "modo manual": "manual",
+    "automatico": "automatico", "automático": "automatico", "auto": "automatico",
+    "modo automatico": "automatico", "modo automático": "automatico",
+}
+# Palabras que puede decir el usuario -> condicion que entiende el ESP32.
+CONDICIONES = {
+    "seco": "seco", "seca": "seco", "sin agua": "seco", "en seco": "seco",
+    "mojado": "mojado", "mojada": "mojado", "humedo": "mojado", "húmedo": "mojado",
+    "con agua": "mojado", "agua": "mojado",
+}
 
 
 class BindingRepository:
+    """Vinculaciones usuario de Alexa -> Thing."""
+
     def __init__(self):
         self._table = boto3.resource("dynamodb", region_name=REGION).Table(BINDINGS_TABLE)
 
@@ -45,6 +76,27 @@ class BindingRepository:
 
     def unbind(self, user_id):
         self._table.delete_item(Key={"userId": user_id})
+
+
+class DeviceRepository:
+    """Ficha de cada tendedero: thingName (clave) y su codigo de vinculacion."""
+
+    def __init__(self):
+        self._table = boto3.resource("dynamodb", region_name=REGION).Table(DEVICES_TABLE)
+
+    def find_thing(self, codigo):
+        """Devuelve el Thing que tiene ese codigo, o None si no existe."""
+        items = self._table.query(
+            IndexName=DEVICES_CODE_INDEX,
+            KeyConditionExpression="codigoVinculacion = :codigo",
+            ExpressionAttributeValues={":codigo": codigo},
+        ).get("Items", [])
+        if not items:
+            return None
+        if len(items) > 1:
+            # Error de alta: dos tendederos no pueden compartir codigo.
+            raise ValueError("Código de vinculación duplicado")
+        return items[0]["thingName"]
 
 
 class ShadowService:
@@ -69,10 +121,40 @@ class ShadowService:
                 return {}
             raise
 
-    def request_cover(self, thing_name, position):
-        if position not in ("abierta", "cerrada"):
-            raise ValueError("Estado de cubierta no válido")
-        payload = {"state": {"desired": {"cubierta": position}}}
+    def request_position(self, thing_name, position):
+        if position not in POSICIONES:
+            raise ValueError("Posición del tendedero no válida")
+        # El origen distingue en el historico las ordenes de voz (RF12).
+        self._update_desired(thing_name, {"posicion": position, "origen": "voz"})
+
+    def request_mode(self, thing_name, modo):
+        if modo not in MODOS:
+            raise ValueError("Modo de operación no válido")
+        self._update_desired(thing_name, {"modo": modo})
+
+    def request_wait(self, thing_name, minutos):
+        if not MINUTOS_MIN <= minutos <= MINUTOS_MAX:
+            raise ValueError("Minutos de espera fuera de rango")
+        self._update_desired(thing_name, {"minutos_reexponer": minutos})
+
+    def request_led(self, thing_name, estado):
+        if estado not in ESTADOS_LED:
+            raise ValueError("Estado de la luz no válido")
+        self._update_desired(thing_name, {"led": estado, "origen_led": "voz"})
+
+    def request_calibration(self, thing_name, condicion):
+        """Pide al ESP32 medir el sensor en la condicion indicada.
+
+        El id (hora en milisegundos) distingue cada pedido: sin el, repetir la
+        misma condicion no cambiaria desired y el dispositivo no recibiria delta.
+        """
+        if condicion not in ("seco", "mojado"):
+            raise ValueError("Condición de calibración no válida")
+        pedido = {"condicion": condicion, "id": int(time.time() * 1000)}
+        self._update_desired(thing_name, {"calibracion_solicitada": pedido})
+
+    def _update_desired(self, thing_name, desired):
+        payload = {"state": {"desired": desired}}
         self._data.update_thing_shadow(
             thingName=thing_name,
             payload=json.dumps(payload).encode("utf-8"),
@@ -93,36 +175,59 @@ def _user_id(handler_input):
     return value
 
 
-def _slot(handler_input, slot_name):
+def _slot_object(handler_input, slot_name):
     request = handler_input.request_envelope.request
     intent = getattr(request, "intent", None)
     slots = getattr(intent, "slots", {}) or {}
-    value = getattr(slots.get(slot_name), "value", None)
+    return slots.get(slot_name)
+
+
+def _slot(handler_input, slot_name):
+    value = getattr(_slot_object(handler_input, slot_name), "value", None)
     return value.strip() if isinstance(value, str) else ""
 
 
-def _thing_from_spoken(raw):
-    """Resuelve alias configurables; no fija un único Thing en el servicio.
+def _codigo(handler_input):
+    """Codigo de vinculacion de 6 digitos, o cadena vacia si no es valido."""
+    digits = re.sub(r"\D", "", _slot(handler_input, "codigo"))
+    return digits if re.fullmatch(r"[1-9][0-9]{5}", digits) else ""
 
-    THING_ALIASES_JSON ejemplo (incluye variantes observadas en Alexa):
-    {"tendedero inteligente":"tendedero-inteligente",
-     "prueba dos":"tendedero-prueba2", "prueba 2":"tendedero-prueba2",
-     "tendedero prueba dos":"tendedero-prueba2",
-     "tendedero prueba 2":"tendedero-prueba2"}
-    """
-    phrase = re.sub(r"\s+", " ", raw.strip()).casefold()
-    aliases = json.loads(os.getenv("THING_ALIASES_JSON", "{}"))
-    for spoken, real in aliases.items():
-        if phrase == re.sub(r"\s+", " ", spoken.strip()).casefold():
-            return real
-    # Acepta el identificador exacto escrito, validado luego por DescribeThing.
-    if re.fullmatch(r"[A-Za-z0-9:_-]{1,128}", raw):
-        return raw
-    # Fallback para nombre simple hablado, sin asumir que sea un Thing real.
-    candidate = re.sub(r"\s+", "-", phrase)
-    if re.fullmatch(r"[a-z0-9:_-]{1,128}", candidate):
-        return candidate
-    raise ValueError("Identificador de Thing no válido")
+
+def _condicion(handler_input):
+    """Normaliza el slot a "seco" o "mojado"; cadena vacia si no se entiende."""
+    slot = _slot_object(handler_input, "condicion")
+    try:
+        # Si Alexa resolvio un sinonimo, entrega el id del valor del tipo.
+        for authority in slot.resolutions.resolutions_per_authority:
+            if authority.values:
+                resolved = authority.values[0].value.id
+                if resolved in ("seco", "mojado"):
+                    return resolved
+    except (AttributeError, TypeError):
+        pass
+    phrase = re.sub(r"\s+", " ", _slot(handler_input, "condicion")).casefold()
+    return CONDICIONES.get(phrase, "")
+
+
+def _modo(handler_input):
+    """Normaliza el slot a "manual" o "automatico"; cadena vacia si no se entiende."""
+    slot = _slot_object(handler_input, "modo")
+    try:
+        for authority in slot.resolutions.resolutions_per_authority:
+            if authority.values:
+                resolved = authority.values[0].value.id
+                if resolved in MODOS:
+                    return resolved
+    except (AttributeError, TypeError):
+        pass
+    phrase = re.sub(r"\s+", " ", _slot(handler_input, "modo")).casefold()
+    return MODOS_HABLADOS.get(phrase, "")
+
+
+def _minutos(handler_input):
+    """Entero del slot minutos, o None si no es un numero."""
+    digits = re.sub(r"\D", "", _slot(handler_input, "minutos"))
+    return int(digits) if digits else None
 
 
 def _answer(handler_input, message, keep_open=True):
@@ -141,7 +246,10 @@ def _run_safe(handler_input, operation):
         return operation()
     except (ClientError, ValueError, RuntimeError, json.JSONDecodeError):
         LOG.exception("Falló la operación del tendedero")
-        return _answer(handler_input, "No pude completar la solicitud. Revisa el identificador, la conexión y los permisos de AWS.")
+        return _answer(handler_input, "No pude completar la solicitud. Revisa el código, la conexión y los permisos de AWS.")
+
+
+SIN_VINCULO = "No tienes un tendedero vinculado. Di: vincula mi tendedero con el código, seguido de los seis dígitos de la etiqueta."
 
 
 class LaunchHandler(AbstractRequestHandler):
@@ -149,7 +257,7 @@ class LaunchHandler(AbstractRequestHandler):
         return ask_utils.is_request_type("LaunchRequest")(handler_input)
 
     def handle(self, handler_input):
-        return _answer(handler_input, "Bienvenido al tendedero inteligente. Puedes vincular tu objeto, consultar el agua o abrir y cerrar la cubierta.")
+        return _answer(handler_input, "Bienvenido al tendedero inteligente. Puedes consultar el agua, exponer o resguardar la ropa, cambiar el modo o controlar la luz. Di ayuda para conocer todas las órdenes.")
 
 
 class VincularHandler(AbstractRequestHandler):
@@ -159,18 +267,20 @@ class VincularHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            raw = _slot(handler_input, "thing_name")
-            if not raw:
-                return _answer(handler_input, "Dime el identificador del objeto que quieres vincular.")
-            thing_name = _thing_from_spoken(raw)
+            codigo = _codigo(handler_input)
+            if not codigo:
+                return _answer(handler_input, "Dime el código de seis dígitos que está en la etiqueta de tu tendedero.")
+            thing_name = DeviceRepository().find_thing(codigo)
+            if not thing_name:
+                return _answer(handler_input, "No encontré un tendedero con ese código. Revisa la etiqueta e inténtalo de nuevo.")
             try:
                 ShadowService().assert_thing_exists(thing_name)
             except ClientError as exc:
                 if exc.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
                     raise
-                return _answer(handler_input, "Ese identificador no corresponde a un objeto registrado. Revisa el alias e inténtalo de nuevo.")
+                return _answer(handler_input, "Ese código corresponde a un tendedero que ya no está registrado.")
             BindingRepository().bind(_user_id(handler_input), thing_name)
-            return _answer(handler_input, "He vinculado tu cuenta con el objeto {}. Ahora puedes consultar o controlar la cubierta.".format(thing_name))
+            return _answer(handler_input, "He vinculado tu tendedero. Ahora puedes consultar el agua, moverlo o calibrar el sensor.")
         return _run_safe(handler_input, work)
 
 
@@ -183,26 +293,37 @@ class DesvincularHandler(AbstractRequestHandler):
             repo = BindingRepository()
             user_id = _user_id(handler_input)
             if not repo.find(user_id):
-                return _answer(handler_input, "No tienes ningún objeto vinculado.")
+                return _answer(handler_input, "No tienes ningún tendedero vinculado.")
             repo.unbind(user_id)
-            return _answer(handler_input, "He eliminado la vinculación de tu objeto.")
+            return _answer(handler_input, "He eliminado la vinculación de tu tendedero.")
         return _run_safe(handler_input, work)
 
 
-class ComandoCubiertaHandler(AbstractRequestHandler):
+class ComandoPosicionHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return (ask_utils.is_intent_name("AbrirCubiertaIntent")(handler_input)
-                or ask_utils.is_intent_name("CerrarCubiertaIntent")(handler_input))
+        return (ask_utils.is_intent_name("ExponerTendederoIntent")(handler_input)
+                or ask_utils.is_intent_name("ResguardarTendederoIntent")(handler_input))
 
     def handle(self, handler_input):
         def work():
             thing_name = _bound_thing(handler_input)
             if not thing_name:
-                return _answer(handler_input, "Primero vincula tu objeto. Puedes decir: vincula mi objeto con su identificador.")
+                return _answer(handler_input, SIN_VINCULO)
             name = handler_input.request_envelope.request.intent.name
-            position = "abierta" if name == "AbrirCubiertaIntent" else "cerrada"
-            ShadowService().request_cover(thing_name, position)
-            return _answer(handler_input, "He solicitado que la cubierta quede {}. Espera la confirmación del dispositivo.".format(position))
+            position = "expuesto" if name == "ExponerTendederoIntent" else "resguardado"
+            shadow = ShadowService()
+            state = shadow.read(thing_name)
+            reported = state.get("reported", {})
+            desired = state.get("desired", {})
+            # Convivencia con R1: en automatico, la ropa no sale con lluvia.
+            if (position == "expuesto" and reported.get("modo") == "automatico"
+                    and reported.get("agua_detectada") is True):
+                return _answer(handler_input, "El sensor detecta agua y el tendedero está en modo automático, así que la ropa se queda resguardada. Si quieres exponerla igual, primero di: cambia a modo manual.")
+            # Ya esta ahi y no hay otra orden pendiente: no se escribe nada.
+            if reported.get("posicion") == position and desired.get("posicion") in (None, position):
+                return _answer(handler_input, "El tendedero ya está {}.".format(position))
+            shadow.request_position(thing_name, position)
+            return _answer(handler_input, "He solicitado que el tendedero quede {}. Espera la confirmación del dispositivo.".format(position))
         return _run_safe(handler_input, work)
 
 
@@ -214,7 +335,7 @@ class ConsultarAguaHandler(AbstractRequestHandler):
         def work():
             thing_name = _bound_thing(handler_input)
             if not thing_name:
-                return _answer(handler_input, "No tienes un objeto vinculado. Vincúlalo primero.")
+                return _answer(handler_input, SIN_VINCULO)
             reported = ShadowService().read(thing_name).get("reported", {})
             detectada = reported.get("agua_detectada")
             if not isinstance(detectada, bool):
@@ -223,24 +344,181 @@ class ConsultarAguaHandler(AbstractRequestHandler):
         return _run_safe(handler_input, work)
 
 
-class ConsultarCubiertaHandler(AbstractRequestHandler):
+class ConsultarPosicionHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return ask_utils.is_intent_name("ConsultarCubiertaIntent")(handler_input)
+        return ask_utils.is_intent_name("ConsultarPosicionIntent")(handler_input)
 
     def handle(self, handler_input):
         def work():
             thing_name = _bound_thing(handler_input)
             if not thing_name:
-                return _answer(handler_input, "No tienes un objeto vinculado. Vincúlalo primero.")
+                return _answer(handler_input, SIN_VINCULO)
             state = ShadowService().read(thing_name)
-            actual = state.get("reported", {}).get("cubierta")
-            desired = state.get("desired", {}).get("cubierta")
+            actual = state.get("reported", {}).get("posicion")
+            desired = state.get("desired", {}).get("posicion")
             if not actual:
-                return _answer(handler_input, "La cubierta todavía no ha reportado su estado.")
-            phrase = "Según el último reporte, la cubierta está {}.".format(actual)
+                return _answer(handler_input, "El tendedero todavía no ha reportado su posición.")
+            phrase = "Según el último reporte, el tendedero está {}.".format(actual)
             if desired and desired != actual:
-                phrase += " Existe una orden pendiente para dejarla {}.".format(desired)
+                phrase += " Existe una orden pendiente para dejarlo {}.".format(desired)
             return _answer(handler_input, phrase)
+        return _run_safe(handler_input, work)
+
+
+class CalibrarSensorHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("CalibrarSensorIntent")(handler_input)
+
+    def handle(self, handler_input):
+        def work():
+            thing_name = _bound_thing(handler_input)
+            if not thing_name:
+                return _answer(handler_input, SIN_VINCULO)
+            condicion = _condicion(handler_input)
+            if not condicion:
+                return _answer(handler_input, "Dime en qué condición está el sensor. Puedes decir: calibra el sensor seco, o calibra el sensor mojado.")
+            ShadowService().request_calibration(thing_name, condicion)
+            # No se espera al dispositivo: la respuesta guia el paso siguiente.
+            if condicion == "seco":
+                return _answer(handler_input, "He solicitado la calibración en seco. Mantén el sensor seco unos segundos. Después moja la superficie del sensor y di: calibra el sensor mojado.")
+            return _answer(handler_input, "He solicitado la calibración con agua. Mantén el sensor mojado unos segundos. Para saber el resultado, pregunta: cómo está la calibración.")
+        return _run_safe(handler_input, work)
+
+
+class ConsultarCalibracionHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("ConsultarCalibracionIntent")(handler_input)
+
+    def handle(self, handler_input):
+        def work():
+            thing_name = _bound_thing(handler_input)
+            if not thing_name:
+                return _answer(handler_input, SIN_VINCULO)
+            state = ShadowService().read(thing_name)
+            reported = state.get("reported", {})
+            pedido = state.get("desired", {}).get("calibracion_solicitada") or {}
+            atendido = reported.get("calibracion_solicitada") or {}
+            # El ESP32 repite en reported el pedido que ya atendio.
+            if pedido.get("id") and pedido.get("id") != atendido.get("id"):
+                return _answer(handler_input, "La calibración en {} todavía está pendiente. Verifica que el tendedero esté encendido y conectado.".format(pedido.get("condicion", "curso")))
+            estado = (reported.get("calibracion") or {}).get("estado")
+            condicion = atendido.get("condicion", "")
+            if estado == "aplicada":
+                return _answer(handler_input, "La última calibración, con el sensor {}, se aplicó correctamente.".format(condicion))
+            if estado == "rechazada":
+                return _answer(handler_input, "La última calibración, con el sensor {}, fue rechazada porque las lecturas en seco y con agua quedaron demasiado parecidas. Se conservan los valores anteriores. Revisa la condición del sensor y repítela.".format(condicion))
+            if estado == "caducada":
+                return _answer(handler_input, "La última calibración llegó tarde al tendedero y no se aplicó. Repítela con el tendedero encendido y conectado.")
+            if estado == "fabrica":
+                return _answer(handler_input, "El sensor usa la calibración de fábrica. Puedes decir: calibra el sensor seco.")
+            return _answer(handler_input, "El tendedero todavía no ha reportado su calibración.")
+        return _run_safe(handler_input, work)
+
+
+class CambiarModoHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("CambiarModoIntent")(handler_input)
+
+    def handle(self, handler_input):
+        def work():
+            thing_name = _bound_thing(handler_input)
+            if not thing_name:
+                return _answer(handler_input, SIN_VINCULO)
+            modo = _modo(handler_input)
+            if not modo:
+                return _answer(handler_input, "¿Qué modo quieres? Puedes decir: modo automático, o modo manual.")
+            ShadowService().request_mode(thing_name, modo)
+            if modo == "automatico":
+                return _answer(handler_input, "He activado el modo automático. El tendedero resguardará la ropa si detecta agua y la luz seguirá al sensor de luz.")
+            return _answer(handler_input, "He activado el modo manual. El tendedero y la luz solo cambiarán con tus órdenes.")
+        return _run_safe(handler_input, work)
+
+
+class ConsultarModoHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("ConsultarModoIntent")(handler_input)
+
+    def handle(self, handler_input):
+        def work():
+            thing_name = _bound_thing(handler_input)
+            if not thing_name:
+                return _answer(handler_input, SIN_VINCULO)
+            state = ShadowService().read(thing_name)
+            reported = state.get("reported", {})
+            modo = reported.get("modo")
+            if modo not in MODOS:
+                return _answer(handler_input, "El tendedero todavía no ha reportado su modo de operación.")
+            phrase = "El tendedero está en modo {}.".format("automático" if modo == "automatico" else "manual")
+            minutos = reported.get("minutos_reexponer")
+            if modo == "automatico" and isinstance(minutos, int):
+                phrase += " Vuelve a exponer la ropa después de {} minutos sin agua.".format(minutos)
+            pedido = state.get("desired", {}).get("modo")
+            if pedido in MODOS and pedido != modo:
+                phrase += " Hay un cambio pendiente a modo {}.".format("automático" if pedido == "automatico" else "manual")
+            return _answer(handler_input, phrase)
+        return _run_safe(handler_input, work)
+
+
+class ConfigurarEsperaHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("ConfigurarEsperaIntent")(handler_input)
+
+    def handle(self, handler_input):
+        def work():
+            thing_name = _bound_thing(handler_input)
+            if not thing_name:
+                return _answer(handler_input, SIN_VINCULO)
+            minutos = _minutos(handler_input)
+            if minutos is None or not MINUTOS_MIN <= minutos <= MINUTOS_MAX:
+                return _answer(handler_input, "Dime un tiempo entre {} y {} minutos. Por ejemplo: espera treinta minutos para volver a exponer.".format(MINUTOS_MIN, MINUTOS_MAX))
+            ShadowService().request_wait(thing_name, minutos)
+            return _answer(handler_input, "Listo. En modo automático, la ropa volverá a exponerse después de {} minutos sin agua.".format(minutos))
+        return _run_safe(handler_input, work)
+
+
+class ComandoLuzHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return (ask_utils.is_intent_name("EncenderLuzIntent")(handler_input)
+                or ask_utils.is_intent_name("ApagarLuzIntent")(handler_input))
+
+    def handle(self, handler_input):
+        def work():
+            thing_name = _bound_thing(handler_input)
+            if not thing_name:
+                return _answer(handler_input, SIN_VINCULO)
+            name = handler_input.request_envelope.request.intent.name
+            estado = "encendido" if name == "EncenderLuzIntent" else "apagado"
+            shadow = ShadowService()
+            reported = shadow.read(thing_name).get("reported", {})
+            if reported.get("led") not in ESTADOS_LED:
+                return _answer(handler_input, "Tu tendedero no tiene la luz instalada o todavía no ha reportado su estado.")
+            # Convivencia con R5: en automatico con sensor de luz, decide el sensor.
+            if reported.get("modo") == "automatico" and isinstance(reported.get("oscuro"), bool):
+                actual = "encendida" if reported["led"] == "encendido" else "apagada"
+                return _answer(handler_input, "En modo automático la luz la controla el sensor de luz, y ahora está {}. Para controlarla tú, primero di: cambia a modo manual.".format(actual))
+            shadow.request_led(thing_name, estado)
+            return _answer(handler_input, "He pedido {} la luz del tendedero.".format("encender" if estado == "encendido" else "apagar"))
+        return _run_safe(handler_input, work)
+
+
+class ConsultarLuzHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("ConsultarLuzIntent")(handler_input)
+
+    def handle(self, handler_input):
+        def work():
+            thing_name = _bound_thing(handler_input)
+            if not thing_name:
+                return _answer(handler_input, SIN_VINCULO)
+            reported = ShadowService().read(thing_name).get("reported", {})
+            partes = []
+            if isinstance(reported.get("oscuro"), bool):
+                partes.append("Está oscuro." if reported["oscuro"] else "Hay luz.")
+            if reported.get("led") in ESTADOS_LED:
+                partes.append("La luz del tendedero está {}.".format("encendida" if reported["led"] == "encendido" else "apagada"))
+            if not partes:
+                return _answer(handler_input, "Tu tendedero no tiene el sensor de luz ni la luz instalados.")
+            return _answer(handler_input, " ".join(partes))
         return _run_safe(handler_input, work)
 
 
@@ -249,7 +527,7 @@ class HelpHandler(AbstractRequestHandler):
         return ask_utils.is_intent_name("AMAZON.HelpIntent")(handler_input)
 
     def handle(self, handler_input):
-        return _answer(handler_input, "Puedes vincular, cambiar o desvincular tu objeto, preguntar por el agua, abrir o cerrar la cubierta y consultar su estado.")
+        return _answer(handler_input, "Puedes vincular tu tendedero con su código, preguntar por el agua, exponer o resguardar la ropa, consultar su posición, calibrar el sensor, cambiar a modo automático o manual, decir cuántos minutos esperar para volver a exponer, y encender, apagar o consultar la luz.")
 
 
 class StopHandler(AbstractRequestHandler):
@@ -282,13 +560,19 @@ builder = SkillBuilder()
 builder.add_request_handler(LaunchHandler())
 builder.add_request_handler(VincularHandler())
 builder.add_request_handler(DesvincularHandler())
-builder.add_request_handler(ComandoCubiertaHandler())
+builder.add_request_handler(ComandoPosicionHandler())
 builder.add_request_handler(ConsultarAguaHandler())
-builder.add_request_handler(ConsultarCubiertaHandler())
+builder.add_request_handler(ConsultarPosicionHandler())
+builder.add_request_handler(CalibrarSensorHandler())
+builder.add_request_handler(ConsultarCalibracionHandler())
+builder.add_request_handler(CambiarModoHandler())
+builder.add_request_handler(ConsultarModoHandler())
+builder.add_request_handler(ConfigurarEsperaHandler())
+builder.add_request_handler(ComandoLuzHandler())
+builder.add_request_handler(ConsultarLuzHandler())
 builder.add_request_handler(HelpHandler())
 builder.add_request_handler(StopHandler())
 builder.add_request_handler(FallbackHandler())
 builder.add_exception_handler(ErrorHandler())
 
 lambda_handler = builder.lambda_handler()
-

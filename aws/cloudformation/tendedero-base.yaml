@@ -1,0 +1,170 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Tendedero inteligente - base heredada de la Practica 3, para montar el sistema
+  completo en una cuenta propia: tablas de vinculaciones y dispositivos,
+  politica de AWS IoT, Thing y Lambda de la skill de Alexa con su rol.
+  El certificado del dispositivo, el registro de su codigo de vinculacion y la
+  skill de Alexa los crea tools/desplegar_cuenta_propia.py (CloudFormation no
+  puede generar la clave privada del certificado ni la skill).
+
+Parameters:
+  NombreThing:
+    Type: String
+    Default: tendedero-propio
+    AllowedPattern: "tendedero-[a-z0-9-]+"
+    Description: Nombre del Thing. El prefijo tendedero- lo exigen los permisos.
+  PrefijoThing:
+    Type: String
+    Default: tendedero-
+  IotEndpoint:
+    Type: String
+    Description: Endpoint ATS de datos (aws iot describe-endpoint --endpoint-type iot:Data-ATS).
+  AlexaSkillId:
+    Type: String
+    Default: ""
+    Description: >
+      ID de la skill. Vacio en el primer despliegue (la skill todavia no existe);
+      el script lo completa despues para que solo esa skill pueda invocar la Lambda.
+
+Conditions:
+  ConSkill: !Not [!Equals [!Ref AlexaSkillId, ""]]
+
+Resources:
+  # ------------------------------------------------------------- DynamoDB
+  # Capacidad aprovisionada de 1 unidad: dentro de la capa siempre gratuita.
+  TablaVinculaciones:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tendedero_vinculaciones
+      AttributeDefinitions:
+        - {AttributeName: userId, AttributeType: S}
+      KeySchema:
+        - {AttributeName: userId, KeyType: HASH}
+      BillingMode: PROVISIONED
+      ProvisionedThroughput: {ReadCapacityUnits: 1, WriteCapacityUnits: 1}
+
+  TablaDispositivos:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tendedero_dispositivos
+      AttributeDefinitions:
+        - {AttributeName: thingName, AttributeType: S}
+        - {AttributeName: codigoVinculacion, AttributeType: S}
+      KeySchema:
+        - {AttributeName: thingName, KeyType: HASH}
+      GlobalSecondaryIndexes:
+        - IndexName: codigoVinculacion-index
+          KeySchema:
+            - {AttributeName: codigoVinculacion, KeyType: HASH}
+          Projection: {ProjectionType: KEYS_ONLY}
+          ProvisionedThroughput: {ReadCapacityUnits: 1, WriteCapacityUnits: 1}
+      BillingMode: PROVISIONED
+      ProvisionedThroughput: {ReadCapacityUnits: 1, WriteCapacityUnits: 1}
+
+  # ------------------------------------------------------------- AWS IoT
+  # Misma politica que aws/iot-certificate-policy.template.json: cada
+  # dispositivo solo usa su propio Shadow. ${!...} escapa la variable de IoT.
+  PoliticaDispositivo:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName: tendedero-politica-dispositivo
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: iot:Connect
+            Resource: !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/${!iot:Connection.Thing.ThingName}"
+          - Effect: Allow
+            Action: iot:Publish
+            Resource:
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/update"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/get"
+          - Effect: Allow
+            Action: iot:Subscribe
+            Resource:
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/update/delta"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/get/accepted"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/get/rejected"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/update/accepted"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/update/rejected"
+          - Effect: Allow
+            Action: iot:Receive
+            Resource:
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/update/delta"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/get/accepted"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/get/rejected"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/update/accepted"
+              - !Sub "arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/shadow/update/rejected"
+
+  Tendedero:
+    Type: AWS::IoT::Thing
+    Properties:
+      ThingName: !Ref NombreThing
+
+  # ------------------------------------------------------------- Lambda de Alexa
+  RolAlexa:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: tendedero-alexa-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}
+      Policies:
+        - PolicyName: tendedero-alexa
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ThingsYShadows
+                Effect: Allow
+                Action: [iot:DescribeThing, iot:GetThingShadow, iot:UpdateThingShadow]
+                Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/${PrefijoThing}*
+              - Sid: Vinculaciones
+                Effect: Allow
+                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:DeleteItem]
+                Resource: !GetAtt TablaVinculaciones.Arn
+              - Sid: BuscarPorCodigo
+                Effect: Allow
+                Action: dynamodb:Query
+                Resource: !Sub "${TablaDispositivos.Arn}/index/codigoVinculacion-index"
+              - Sid: Logs
+                Effect: Allow
+                Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/tendedero_alexa:*
+
+  # El ZIP trae lambda_function.py y el ASK SDK (lambda/README.md).
+  LambdaAlexa:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: tendedero_alexa
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Code: ../../lambda/lambda_deployment_p3.zip
+      Role: !GetAtt RolAlexa.Arn
+      MemorySize: 128
+      Timeout: 8
+      Environment:
+        Variables:
+          IOT_ENDPOINT: !Ref IotEndpoint
+          DDB_BINDINGS_TABLE: !Ref TablaVinculaciones
+          DDB_DEVICES_TABLE: !Ref TablaDispositivos
+          DDB_DEVICES_CODE_INDEX: codigoVinculacion-index
+
+  # Alexa invoca la Lambda. Con el ID de la skill, solo esa skill puede hacerlo.
+  PermisoAlexa:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaAlexa
+      Action: lambda:InvokeFunction
+      Principal: alexa-appkit.amazon.com
+      EventSourceToken: !If [ConSkill, !Ref AlexaSkillId, !Ref "AWS::NoValue"]
+
+Outputs:
+  LambdaAlexaArn:
+    Value: !GetAtt LambdaAlexa.Arn
+  Thing:
+    Value: !Ref Tendedero
+  PoliticaDispositivo:
+    Value: !Ref PoliticaDispositivo
+  TablaDispositivos:
+    Value: !Ref TablaDispositivos
