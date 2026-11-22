@@ -9,7 +9,7 @@ Pasos para actualizar la cuenta de AWS que ya funciona con la práctica 3. La [g
 | Rol de la Lambda | Se agrega un permiso. |
 | Lambda `tendedero-inteligente-alexa` | ZIP nuevo y cambio de variables de entorno. |
 | Shadows de los dos Things | Se borran los atributos antiguos. |
-| Tabla `tendedero_vinculaciones` | Sin cambios. |
+| Tabla `tendedero_vinculaciones` | **Se recrea** con clave `userId` + `thingName`, para que un usuario tenga varios tendederos (paso 4.1). |
 
 No copiar certificados, claves privadas, contraseñas ni valores completos de `userId` al repositorio.
 
@@ -66,7 +66,39 @@ Si el ESP32 deja de conectarse después de este cambio, volver a activar la vers
 1. Abrir **IAM → Roles → `tendedero-inteligente-lambda-role`**.
 2. Editar la política en línea y reemplazarla por [lambda-iam-policy.template.json](../../aws/lambda-iam-policy.template.json), sustituyendo `ACCOUNT_ID`.
 
-El único cambio es una declaración nueva: `dynamodb:Query` sobre el índice `codigoVinculacion-index` de `tendedero_dispositivos`. La Lambda no necesita más permisos sobre esa tabla, porque solo la lee por código.
+Cambian dos declaraciones:
+
+- **`FindDeviceByBindingCode`** (nueva): `dynamodb:Query` sobre el índice `codigoVinculacion-index` de `tendedero_dispositivos`. La Lambda no necesita más permisos sobre esa tabla, porque solo la lee por código.
+- **`PersistUserBindings`**: sobre `tendedero_vinculaciones` pasa de `GetItem`, `PutItem` y `DeleteItem` a `Query`, `PutItem`, `UpdateItem` y `DeleteItem`. `Query` lee todos los tendederos del usuario. `UpdateItem` cambia el tendedero activo. `GetItem` se quita porque la Lambda ya no lo usa.
+
+## 4.1 Recrear la tabla de vinculaciones
+
+En DynamoDB, la clave de una tabla no se puede cambiar: hay que borrarla y crearla de nuevo. **Las vinculaciones actuales se pierden** y cada usuario vuelve a vincular su tendedero con el código, esta vez dándole un nombre.
+
+1. Abrir **DynamoDB → Tables → `tendedero_vinculaciones` → Actions → Delete table**. Esperar a que desaparezca.
+2. **Create table** con el nombre `tendedero_vinculaciones`:
+   - Partition key: `userId` (String).
+   - Sort key: `thingName` (String).
+   - Capacidad: bajo demanda, igual que [dynamodb-table.template.json](../../aws/dynamodb-table.template.json).
+3. Esperar a que quede en **Active**.
+
+Desde la terminal es lo mismo:
+
+```powershell
+aws dynamodb delete-table --table-name tendedero_vinculaciones --region us-east-2
+```
+
+```powershell
+aws dynamodb wait table-not-exists --table-name tendedero_vinculaciones --region us-east-2
+```
+
+```powershell
+aws dynamodb create-table --cli-input-json file://aws/dynamodb-table.template.json --region us-east-2
+```
+
+Hacerlo justo antes de subir la Lambda nueva (paso 5). La Lambda antigua usa `GetItem` con solo `userId` y falla contra la tabla nueva.
+
+En una cuenta propia montada con CloudFormation ([tendedero-base.yaml](../../aws/cloudformation/tendedero-base.yaml)), la tabla tiene nombre fijo y CloudFormation no puede reemplazarla. Primero hay que borrarla a mano y después actualizar la pila.
 
 El comodín `Resource: "*"` de las tres acciones de IoT se mantiene, por el mismo motivo documentado en la práctica 3. El mínimo para producción sigue siendo `arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*`.
 
@@ -100,11 +132,13 @@ El Shadow de `tendedero-inteligente` se completa solo cuando el ESP32 se conecta
 
 - [ ] La tabla `tendedero_dispositivos` y su índice están en **Active**, con dos ítems.
 - [ ] La versión activa de la política IoT contiene `${iot:Connection.Thing.ThingName}` y no contiene `ACCOUNT_ID`.
-- [ ] El rol de la Lambda tiene la declaración `FindDeviceByBindingCode`.
+- [ ] El rol de la Lambda tiene la declaración `FindDeviceByBindingCode`, y `PersistUserBindings` incluye `Query` y `UpdateItem`.
+- [ ] `tendedero_vinculaciones` tiene partition key `userId` y sort key `thingName`.
 - [ ] La Lambda tiene `DDB_DEVICES_TABLE` y ya no tiene `THING_ALIASES_JSON`.
 - [ ] Los Shadows no muestran `cubierta` ni `sensor_raw`.
 - [ ] Con el firmware nuevo cargado, el ESP32 se conecta y su Shadow muestra `posicion`, `agua_detectada`, `lectura_adc` y `calibracion`.
-- [ ] Prueba directa en la Lambda (**Test**) o desde el simulador de Alexa: vincular con `715204` responde «He vinculado tu tendedero».
+- [ ] Prueba directa en la Lambda (**Test**) o desde el simulador de Alexa: vincular con `715204` responde «He vinculado tu tendedero…».
+- [ ] Con el mismo usuario, vincular también `483920` con otro nombre deja **dos ítems** con el mismo `userId` en `tendedero_vinculaciones`.
 
 Si aparece `AccessDeniedException` en CloudWatch al vincular, revisar el ARN del índice en el rol: debe terminar en `table/tendedero_dispositivos/index/codigoVinculacion-index`.
 

@@ -150,21 +150,68 @@ Tabla `tendedero_dispositivos` (nueva). Es la ficha de cada producto:
 | `codigoVinculacion` | String, clave del índice `codigoVinculacion-index` | Código de la etiqueta: 6 dígitos, sin empezar en 0, único. |
 | `fechaAlta` | String ISO-8601 UTC | Fecha de registro del dispositivo. |
 
-Tabla `tendedero_vinculaciones` (sin cambios):
+### Varios tendederos por usuario
+
+Un usuario puede tener más de un tendedero en su casa: uno en el patio y otro en la terraza, por ejemplo. Para que Alexa los distinga, cada vinculación lleva un **nombre** que el usuario elige al vincular. En la práctica 3 la tabla tenía solo `userId` como clave, así que un usuario podía tener un único tendedero.
+
+Tabla `tendedero_vinculaciones` (P4, clave compuesta):
 
 | Campo | Tipo | Uso |
 |---|---|---|
 | `userId` | String, clave de partición | `context.System.user.userId` |
-| `thingName` | String | Thing validado. |
-| `fechaVinculacion` | String ISO-8601 UTC | Auditoría mínima. |
+| `thingName` | String, clave de ordenamiento | Thing validado. Un usuario no puede vincular dos veces el mismo. |
+| `nombre` | String | Nombre que dio el usuario («patio», «terraza»). Único entre los tendederos del mismo usuario; la Lambda lo compara sin tildes ni mayúsculas. |
+| `fechaVinculacion` | String ISO-8601 UTC | Cuándo se vinculó. Se conserva si el usuario lo renombra. |
+| `fechaSeleccion` | String ISO-8601 UTC | Cuándo se vinculó o se eligió por última vez. El de fecha más reciente es el **tendedero activo**. |
+
+Ejemplo ficticio: un usuario con dos tendederos y un segundo usuario de la misma casa.
+
+| `userId` | `thingName` | `nombre` | `fechaSeleccion` |
+|---|---|---|---|
+| `amzn1.ask.account.A` | `tendedero-inteligente` | patio | 2026-11-21T10:05:00Z |
+| `amzn1.ask.account.A` | `tendedero-prueba2` | terraza | 2026-11-21T09:00:00Z ← no activo |
+| `amzn1.ask.account.B` | `tendedero-inteligente` | casa | 2026-11-20T18:00:00Z |
+
+Decisiones de diseño:
+
+- **`thingName` como clave de ordenamiento, no `nombre`.** Lo estable es el Thing; el nombre lo puede cambiar el usuario. Así, renombrar es reescribir el mismo ítem y no puede quedar el mismo Thing dos veces con nombres distintos.
+- **Tendedero activo por fecha, no por una marca `activo: true`.** Elegir otro tendedero es una sola escritura (`UpdateItem` de `fechaSeleccion`). Con una marca habría que desmarcar el anterior en una segunda escritura, y un fallo entre las dos dejaría dos activos o ninguno.
+- **Un Thing puede estar vinculado a varios usuarios.** En una casa con dos cuentas de Alexa, cada persona vincula el mismo tendedero con su propio nombre.
+- **Máximo de 10 tendederos por usuario** (`MAX_TENDEDEROS`). Acota la `Query` de cada solicitud y la lista que Alexa lee en voz alta.
+- **Sin índice por `thingName`.** Ningún flujo actual necesita saber qué usuarios tiene un tendedero. Si más adelante se avisa por voz de una alerta (R3) a los dueños de un Thing, se agrega un índice global `thingName-index`.
+
+Patrones de acceso que satisface:
+
+| Patrón | Operación |
+|---|---|
+| Tendederos de un usuario (en cada solicitud y en «qué tendederos tengo») | `Query` por `userId`, con lectura consistente |
+| Vincular o renombrar un tendedero | `PutItem` (`userId`, `thingName`) |
+| Elegir el tendedero activo | `UpdateItem` de `fechaSeleccion`, con la condición de que el ítem exista |
+| Desvincular un tendedero | `DeleteItem` (`userId`, `thingName`) |
+| Reportes de un usuario (mockups) | `Query` por `userId` → `thingName` de cada tendedero → `Query` en `tendedero_historico` |
+
+### A qué tendedero va cada orden
+
+1. Si la frase nombra uno («resguarda el tendedero **del patio**»), se usa ese. Si no existe, Alexa dice cuáles tiene el usuario y no escribe nada.
+2. Si no, se usa el tendedero activo: el último que el usuario vinculó o eligió («usa el tendedero de la terraza»). Nombrar uno en una frase no cambia el activo.
+3. Si el usuario tiene más de uno, cada respuesta empieza con el nombre del tendedero («Tendedero patio: el sensor detecta agua»). Así sabe sobre cuál actuó Alexa.
+
+Al vincular:
+
+- El primer tendedero puede no tener nombre; en ese caso se llama «principal».
+- Desde el segundo, el nombre es obligatorio. Alexa lo pide y la Lambda rechaza un nombre repetido.
+- Volver a vincular el mismo código con otro nombre lo renombra, sin crear otra fila.
+
+Al desvincular con varios tendederos y sin decir cuál, Alexa pregunta cuál quiere desvincular en lugar de adivinar.
 
 Flujo de la Lambda:
 
 | Momento | Operaciones |
 |---|---|
-| Vincular o cambiar | Validar formato del código → `Query` al índice por código → `DescribeThing` → `PutItem` en vinculaciones. |
-| Cualquier otro intent | `GetItem` en vinculaciones por `userId` → Shadow del Thing. El código no interviene. |
-| Desvincular | `DeleteItem` en vinculaciones. |
+| Vincular | Validar formato del código → `Query` al índice por código → `DescribeThing` → `Query` de los tendederos del usuario (nombre repetido, tope) → `PutItem` en vinculaciones. |
+| Elegir tendedero | `Query` por `userId` → `UpdateItem` de `fechaSeleccion`. |
+| Cualquier otro intent | `Query` por `userId` → tendedero nombrado o activo → Shadow del Thing. El código no interviene. |
+| Desvincular | `Query` por `userId` → `DeleteItem` del tendedero elegido. |
 
 No se asigna un Thing por defecto a usuarios sin vincular.
 
@@ -172,13 +219,14 @@ No se asigna un Thing por defecto a usuarios sin vincular.
 
 | Intent | Slot | Comportamiento |
 |---|---|---|
-| `VincularThingIntent` | `codigo` (`AMAZON.NUMBER`) | Buscar el Thing por código, validar que existe y guardar usuario → Thing. |
-| `CambiarThingIntent` | `codigo` (`AMAZON.NUMBER`) | Reemplazar la vinculación existente. |
-| `DesvincularThingIntent` | — | Borrar la vinculación. |
-| `ConsultarAguaIntent` | — | Responder con `reported.agua_detectada`. |
-| `ExponerTendederoIntent` | — | Escribir `desired = {posicion: expuesto, origen: voz}`, salvo en automático con agua (ver convivencia). |
-| `ResguardarTendederoIntent` | — | Escribir `desired = {posicion: resguardado, origen: voz}`. |
-| `ConsultarPosicionIntent` | — | Leer `reported.posicion` e indicar si hay una orden pendiente. |
+| `VincularThingIntent` | `codigo` (`AMAZON.NUMBER`), `nombre` (`NombreTendedero`) | Buscar el Thing por código, validar que existe y agregarlo a los tendederos del usuario con ese nombre. Queda como activo. |
+| `SeleccionarTendederoIntent` | `nombre` | Elegir el tendedero activo. Reemplaza a `CambiarThingIntent` de la práctica 3. |
+| `ListarTendederosIntent` | — | Decir los tendederos del usuario y cuál es el activo. |
+| `DesvincularThingIntent` | `nombre` (opcional) | Borrar una vinculación. Con varios tendederos y sin nombre, pregunta cuál. |
+| `ConsultarAguaIntent` | `nombre` (opcional) | Responder con `reported.agua_detectada`. |
+| `ExponerTendederoIntent` | `nombre` (opcional) | Escribir `desired = {posicion: expuesto, origen: voz}`, salvo en automático con agua (ver convivencia). |
+| `ResguardarTendederoIntent` | `nombre` (opcional) | Escribir `desired = {posicion: resguardado, origen: voz}`. |
+| `ConsultarPosicionIntent` | `nombre` (opcional) | Leer `reported.posicion` e indicar si hay una orden pendiente. |
 | `CalibrarSensorIntent` | `condicion` (`CondicionSensor`: `seco` / `mojado`) | Escribir `desired.calibracion_solicitada`. |
 | `ConsultarCalibracionIntent` | — | Informar si el último pedido está pendiente, aplicado, rechazado o caducado. |
 | `CambiarModoIntent` | `modo` (`ModoOperacion`: `manual` / `automatico`) | Escribir `desired.modo`. |
@@ -187,10 +235,15 @@ No se asigna un Thing por defecto a usuarios sin vincular.
 | `EncenderLuzIntent` / `ApagarLuzIntent` | — | Escribir `desired.led` con `origen_led: voz`, salvo en automático con LDR (ver convivencia). |
 | `ConsultarLuzIntent` | — | Leer `reported.oscuro` y `reported.led`. |
 
+Los intents sin slot `nombre` actúan sobre el tendedero activo. La Lambda lee el slot `nombre` en cualquier intent, así que basta con agregar frases al modelo para permitirlo en otros.
+
+`NombreTendedero` es un tipo propio con valores de ejemplo (patio, terraza, azotea, balcón, jardín, lavandería…). Alexa también acepta nombres fuera de la lista. La Lambda quita «el», «del», «de la» y «tendedero» de lo que llega en el slot.
+
 ## Seguridad y coherencia
 
 - La política IoT usa `${iot:Connection.Thing.ThingName}`: una sola política sirve para todos los tendederos, y cada certificado solo accede al Shadow de su propio Thing.
 - El código de la etiqueta no prueba la posesión física del objeto. Quien lo conozca puede vincularlo. Un botón de emparejamiento en el dispositivo queda como mejora futura.
 - `userId` identifica una cuenta con la Skill habilitada. Puede cambiar si el usuario deshabilita y vuelve a habilitar la Skill.
+- La Lambda solo lee y escribe ítems con el `userId` de la solicitud: un usuario no puede ver, elegir ni desvincular los tendederos de otro.
 - Escribir `desired` no prueba movimiento físico. Alexa dice «He solicitado...» y la posición reportada es una estimación por tiempo.
 - Los pulsos del servo no están en el Shadow: dependen del mecanismo, no del ambiente, y un valor incorrecto puede dañar el servo.

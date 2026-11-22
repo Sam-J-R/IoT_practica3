@@ -11,6 +11,16 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from tests.fake_vinculaciones import TablaVinculaciones  # noqa: E402
+
+# El SDK del ZIP resuelve sus clases al deserializar cada evento: se importa una
+# vez, fuera de patch.dict, para que las clases no se descarten entre pruebas.
+_SDK = str(ROOT / "lambda/lambda_deployment_p3.zip")
+if _SDK not in sys.path:
+    sys.path.append(_SDK)
+import ask_sdk_core.utils  # noqa: E402,F401
+import ask_sdk_model  # noqa: E402,F401
 
 
 class ClientError(Exception):
@@ -20,7 +30,6 @@ class ClientError(Exception):
 
 class LambdaTests(unittest.TestCase):
     def setUp(self):
-        self.bindings = {}
         # Tabla de dispositivos: codigo de la etiqueta -> Thing.
         self.devices = {
             "111111": ["tendedero-uno"],
@@ -32,10 +41,7 @@ class LambdaTests(unittest.TestCase):
             "tendedero-uno": {"reported": {"agua_detectada": True, "posicion": "expuesto"}},
             "tendedero-dos": {"reported": {"agua_detectada": False, "posicion": "resguardado"}},
         }
-        self.bindings_table = Mock()
-        self.bindings_table.get_item.side_effect = self.read_binding
-        self.bindings_table.put_item.side_effect = lambda Item: self.bindings.update({Item["userId"]: Item})
-        self.bindings_table.delete_item.side_effect = lambda Key: self.bindings.pop(Key["userId"], None)
+        self.bindings_table = TablaVinculaciones()
         self.devices_table = Mock()
         self.devices_table.query.side_effect = self.query_device
         tables = {
@@ -59,14 +65,21 @@ class LambdaTests(unittest.TestCase):
         # Sin mapa de alias: ningun nombre de Thing llega por variables de entorno.
         env = {"IOT_ENDPOINT": "endpoint.example"}
         with patch.dict(sys.modules, modules), patch.dict(os.environ, env):
-            with patch.object(sys, "path", [str(ROOT / "lambda/lambda_deployment_p3.zip"), *sys.path]):
-                self.handler = runpy.run_path(str(ROOT / "lambda/lambda_function.py"))["lambda_handler"]
+            self.module = runpy.run_path(str(ROOT / "lambda/lambda_function.py"))
+        self.handler = self.module["lambda_handler"]
+        # Reloj que siempre avanza: el tendedero activo se decide por fechaSeleccion.
+        self.tick = 0
+
+        def ahora():
+            self.tick += 1
+            return "2026-11-21T10:00:{:02d}.000000+00:00".format(self.tick)
+        # run_path devuelve una copia de los globales: se cambia el diccionario real.
+        self.module["BindingRepository"].bind.__globals__["_ahora"] = ahora
         self.enterContext(patch.dict(os.environ, env))
 
-    def read_binding(self, Key, ConsistentRead):
-        self.assertTrue(ConsistentRead)
-        item = self.bindings.get(Key["userId"])
-        return {"Item": item} if item else {}
+    def bound(self, user):
+        """thingName -> nombre de los tendederos del usuario."""
+        return {t: i["nombre"] for t, i in self.bindings_table.de(user).items()}
 
     def query_device(self, IndexName, KeyConditionExpression, ExpressionAttributeValues):
         self.assertEqual(IndexName, "codigoVinculacion-index")
@@ -108,28 +121,103 @@ class LambdaTests(unittest.TestCase):
     def test_dynamic_binding_and_shadow_routing(self):
         self.assertIn("No tienes un tendedero vinculado", self.ask("A", "ConsultarAguaIntent"))
         self.data.get_thing_shadow.assert_not_called()
-        self.assertIn("He vinculado", self.ask("A", "VincularThingIntent", codigo="111111"))
-        self.ask("B", "VincularThingIntent", codigo="222222")
-        self.assertEqual(self.bindings["A"]["thingName"], "tendedero-uno")
-        self.assertEqual(self.bindings["B"]["thingName"], "tendedero-dos")
-        self.assertIn("detecta agua", self.ask("A", "ConsultarAguaIntent"))
+        # Primer tendedero sin nombre: queda como "principal" y la respuesta no lleva prefijo.
+        self.assertIn("He vinculado tu tendedero principal", self.ask("A", "VincularThingIntent", codigo="111111"))
+        self.ask("B", "VincularThingIntent", codigo="222222", nombre="patio")
+        self.assertEqual(self.bound("A"), {"tendedero-uno": "principal"})
+        self.assertEqual(self.bound("B"), {"tendedero-dos": "patio"})
+        respuesta = self.ask("A", "ConsultarAguaIntent")
+        self.assertIn("detecta agua", respuesta)
+        self.assertNotIn("Tendedero principal:", respuesta)
         self.assertIn("no detecta agua", self.ask("B", "ConsultarAguaIntent"))
         self.assertIn("He solicitado", self.ask("A", "ResguardarTendederoIntent"))
         self.assertEqual(self.shadows["tendedero-uno"]["desired"]["posicion"], "resguardado")
         self.assertNotIn("desired", self.shadows["tendedero-dos"])
         self.assertIn("orden pendiente", self.ask("A", "ConsultarPosicionIntent"))
 
-        self.assertIn("No encontré", self.ask("A", "CambiarThingIntent", codigo="999999"))
-        self.assertEqual(self.bindings["A"]["thingName"], "tendedero-uno")
-        self.ask("A", "CambiarThingIntent", codigo="222222")
-        self.assertIn("resguardado", self.ask("A", "ConsultarPosicionIntent"))
-        self.ask("A", "ExponerTendederoIntent")
-        self.assertEqual(self.shadows["tendedero-dos"]["desired"]["posicion"], "expuesto")
+        self.assertIn("No encontré", self.ask("A", "VincularThingIntent", codigo="999999", nombre="terraza"))
+        self.assertEqual(self.bound("A"), {"tendedero-uno": "principal"})
 
         self.ask("A", "DesvincularThingIntent")
-        self.assertNotIn("A", self.bindings)
+        self.assertEqual(self.bound("A"), {})
         self.assertIn("No tienes un tendedero vinculado", self.ask("A", "ResguardarTendederoIntent"))
+        # Desvincular a A no toca los tendederos de B.
         self.assertIn("resguardado", self.ask("B", "ConsultarPosicionIntent"))
+
+    def test_un_usuario_con_varios_tendederos(self):
+        self.ask("A", "VincularThingIntent", codigo="111111", nombre="patio")
+        # Un segundo tendedero necesita nombre para distinguirlo del primero.
+        self.assertIn("necesita un nombre", self.ask("A", "VincularThingIntent", codigo="222222"))
+        self.assertIn("Ya tienes un tendedero llamado pátio",
+                      self.ask("A", "VincularThingIntent", codigo="222222", nombre="Pátio"))
+        respuesta = self.ask("A", "VincularThingIntent", codigo="222222", nombre="la Terraza")
+        self.assertIn("Ahora tienes 2 tendederos y uso el tendedero terraza", respuesta)
+        self.assertEqual(self.bound("A"), {"tendedero-uno": "patio", "tendedero-dos": "terraza"})
+
+        # Sin nombre en la frase se usa el activo (el ultimo vinculado) y la respuesta lo nombra.
+        respuesta = self.ask("A", "ConsultarAguaIntent")
+        self.assertIn("Tendedero terraza:", respuesta)
+        self.assertIn("no detecta agua", respuesta)
+        respuesta = self.ask("A", "ListarTendederosIntent")
+        self.assertIn("Tienes 2 tendederos: patio y terraza", respuesta)
+        self.assertIn("uso el tendedero terraza", respuesta)
+
+        # Nombrar un tendedero en la frase actua sobre ese, sin cambiar el activo.
+        respuesta = self.ask("A", "ResguardarTendederoIntent", nombre="del patio")
+        self.assertIn("Tendedero patio:", respuesta)
+        self.assertEqual(self.shadows["tendedero-uno"]["desired"]["posicion"], "resguardado")
+        self.assertNotIn("desired", self.shadows["tendedero-dos"])
+        self.assertIn("Tendedero terraza:", self.ask("A", "ConsultarPosicionIntent"))
+        self.assertIn("No tienes un tendedero llamado azotea. Tus tendederos son: patio y terraza",
+                      self.ask("A", "ExponerTendederoIntent", nombre="azotea"))
+
+        # Elegir el activo: una sola escritura (UpdateItem), sin reescribir el item.
+        self.assertIn("Tus tendederos son", self.ask("A", "SeleccionarTendederoIntent"))
+        antes = len(self.bindings_table.llamadas)
+        self.assertIn("Ahora uso el tendedero patio", self.ask("A", "SeleccionarTendederoIntent", nombre="Patio"))
+        nuevas = self.bindings_table.llamadas[antes:]
+        self.assertEqual([x for x in nuevas if x != "query"], ["update_item"])
+        respuesta = self.ask("A", "ConsultarAguaIntent")
+        self.assertIn("Tendedero patio:", respuesta)
+        self.assertIn("El sensor detecta agua", respuesta)
+
+        # Otro usuario puede vincular el mismo tendedero (una casa con dos cuentas).
+        self.ask("B", "VincularThingIntent", codigo="111111", nombre="casa")
+        self.assertEqual(self.bound("B"), {"tendedero-uno": "casa"})
+        self.assertEqual(self.bound("A")["tendedero-uno"], "patio")
+
+        # Volver a vincular el mismo codigo renombra y conserva la fecha de vinculacion.
+        fecha = self.bindings_table.de("A")["tendedero-dos"]["fechaVinculacion"]
+        self.assertIn("Ahora se llama azotea", self.ask("A", "VincularThingIntent", codigo="222222", nombre="azotea"))
+        self.assertEqual(self.bindings_table.de("A")["tendedero-dos"]["fechaVinculacion"], fecha)
+        self.assertEqual(len(self.bound("A")), 2)
+
+        # Con varios, desvincular sin nombre no adivina.
+        self.assertIn("¿Cuál quieres desvincular?", self.ask("A", "DesvincularThingIntent"))
+        self.assertEqual(len(self.bound("A")), 2)
+        respuesta = self.ask("A", "DesvincularThingIntent", nombre="azotea")
+        self.assertIn("He desvinculado el tendedero azotea. Ahora uso el tendedero patio", respuesta)
+        self.assertEqual(self.bound("A"), {"tendedero-uno": "patio"})
+        # Con uno solo, las respuestas ya no llevan el nombre delante.
+        self.assertNotIn("Tendedero patio:", self.ask("A", "ConsultarAguaIntent"))
+
+    def test_tope_de_tendederos_por_usuario(self):
+        self.module["BindingRepository"].bind.__globals__["MAX_TENDEDEROS"] = 1
+        self.ask("A", "VincularThingIntent", codigo="111111", nombre="patio")
+        self.assertIn("que es el máximo", self.ask("A", "VincularThingIntent", codigo="222222", nombre="terraza"))
+        self.assertEqual(self.bound("A"), {"tendedero-uno": "patio"})
+        # Renombrar el que ya tiene no cuenta como uno nuevo.
+        self.assertIn("Ahora se llama terraza", self.ask("A", "VincularThingIntent", codigo="111111", nombre="terraza"))
+
+    def test_nombres_se_comparan_sin_tildes_ni_articulos(self):
+        limpiar = self.module["limpiar_nombre"]
+        clave = self.module["clave_nombre"]
+        self.assertEqual(limpiar("el tendedero del  Patio"), "patio")
+        self.assertEqual(limpiar("de la terraza"), "terraza")
+        self.assertEqual(limpiar("Balcón"), "balcón")
+        self.assertEqual(clave("Balcón"), clave("balcon"))
+        nombres = [{"thingName": "t", "nombre": n} for n in ("b", "a", "c")]
+        self.assertEqual(self.module["lista_hablada"](nombres), "a, b y c")
 
     def test_binding_code_is_validated_before_writing(self):
         # Codigo mal formado: no se consulta ninguna tabla.
@@ -141,7 +229,7 @@ class LambdaTests(unittest.TestCase):
         self.assertIn("ya no está registrado", self.ask("A", "VincularThingIntent", codigo="333333"))
         # Dos dispositivos con el mismo codigo: error, no se elige uno al azar.
         self.assertIn("No pude completar", self.ask("A", "VincularThingIntent", codigo="444444"))
-        self.assertNotIn("A", self.bindings)
+        self.assertEqual(self.bound("A"), {})
         # Alexa puede entregar el numero con separadores.
         self.assertIn("He vinculado", self.ask("A", "VincularThingIntent", codigo="111 111"))
 

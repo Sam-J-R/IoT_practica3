@@ -22,6 +22,8 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import probar_alexa  # noqa: E402
+sys.path.insert(0, str(ROOT))
+from tests.fake_vinculaciones import TablaVinculaciones  # noqa: E402
 import probar_lambda  # noqa: E402
 import verificar_aws  # noqa: E402
 
@@ -34,12 +36,7 @@ class ClientError(Exception):
 
 def cargar_lambda_local(dispositivos, shadows):
     """Devuelve lambda_handler del repositorio con DynamoDB, IoT y Shadow en memoria."""
-    vinculos = {}
-    vinc = Mock()
-    vinc.get_item.side_effect = lambda Key, ConsistentRead: (
-        {"Item": vinculos[Key["userId"]]} if Key["userId"] in vinculos else {})
-    vinc.put_item.side_effect = lambda Item: vinculos.update({Item["userId"]: Item})
-    vinc.delete_item.side_effect = lambda Key: vinculos.pop(Key["userId"], None)
+    vinc = TablaVinculaciones()
     disp = Mock()
     disp.query.side_effect = lambda **kw: {"Items": [
         {"thingName": t} for c, t in dispositivos.items() if c == kw["ExpressionAttributeValues"][":codigo"]]}
@@ -80,7 +77,7 @@ def cargar_lambda_local(dispositivos, shadows):
     import ask_sdk_model  # noqa: F401
     with patch.dict(sys.modules, mods), patch.dict(os.environ, {"IOT_ENDPOINT": "endpoint.example"}):
         handler = runpy.run_path(str(ROOT / "lambda/lambda_function.py"))["lambda_handler"]
-    return handler, vinculos
+    return handler, vinc
 
 
 class ProbarLambdaTests(unittest.TestCase):
@@ -97,8 +94,8 @@ class ProbarLambdaTests(unittest.TestCase):
                 lambda: self.shadows["tendedero-prueba2"], codigo="715204")
         fallas = [f for f in filas if f[2] != "PASA"]
         self.assertEqual(fallas, [], "\n".join(map(str, fallas)))
-        self.assertEqual(len(filas), 27)
-        self.assertNotIn(usuario, self.vinculos, "el último caso debe dejar al usuario desvinculado")
+        self.assertEqual(len(filas), 29)
+        self.assertEqual(self.vinculos.de(usuario), {}, "el último caso debe dejar al usuario desvinculado")
 
     def test_detecta_una_respuesta_distinta(self):
         casos = [{"id": "X", "nombre": "x", "lambda": {"tipo": "LaunchRequest"}, "espera": "otra cosa"}]
@@ -131,6 +128,8 @@ class ProbarAlexaTests(unittest.TestCase):
         modelo = json.loads((ROOT / "alexa/interaction-model-es-MX.json").read_text(encoding="utf-8"))
         lm = modelo["interactionModel"]["languageModel"]
         muestras = [s for i in lm["intents"] for s in i.get("samples", [])]
+        # Respuestas a la pregunta de un slot ("¿Qué nombre le pones?" -> "patio").
+        muestras += [s for i in lm["intents"] for slot in i.get("slots", []) for s in slot.get("samples", [])]
         invocacion = lm["invocationName"]
         import re
         def cubierta(frase):
@@ -175,8 +174,9 @@ def clientes_ok(**cambios):
     politica_rol = (ROOT / "aws/lambda-iam-policy.template.json").read_text().replace("ACCOUNT_ID", "123456789012")
     ddb = Mock()
     ddb.describe_table.side_effect = lambda TableName: {"Table": {
-        "TableStatus": "ACTIVE", "KeySchema": [{"AttributeName": "thingName" if "disp" in TableName else "userId",
-                                                 "KeyType": "HASH"}],
+        "TableStatus": "ACTIVE", "KeySchema": [{"AttributeName": "thingName", "KeyType": "HASH"}] if "disp" in TableName
+        else cambios.get("clave_vinculaciones", [{"AttributeName": "userId", "KeyType": "HASH"},
+                                                 {"AttributeName": "thingName", "KeyType": "RANGE"}]),
         "AttributeDefinitions": [{"AttributeName": "thingName", "AttributeType": "S"},
                                  {"AttributeName": "codigoVinculacion", "AttributeType": cambios.get("tipo_codigo", "S")}],
         "GlobalSecondaryIndexes": [{"IndexName": "codigoVinculacion-index", "IndexStatus": "ACTIVE"}]}}
@@ -247,6 +247,16 @@ class VerificarAwsTests(unittest.TestCase):
         politica["Statement"] = [s for s in politica["Statement"] if s.get("Sid") != "FindDeviceByBindingCode"]
         _, f = self.correr(politica_rol=json.dumps(politica))
         self.assertEqual(f[("IAM", "Query sobre el índice de dispositivos")][0], "FALLA")
+
+    def test_detecta_la_tabla_de_vinculaciones_de_la_p3(self):
+        # Clave solo userId: un usuario no podría tener más de un tendedero.
+        _, f = self.correr(clave_vinculaciones=[{"AttributeName": "userId", "KeyType": "HASH"}])
+        self.assertEqual(f[("DynamoDB", "vinculaciones con clave userId + thingName (varios por usuario)")][0], "FALLA")
+
+    def test_rol_sin_permiso_para_elegir_tendedero(self):
+        politica = (ROOT / "aws/lambda-iam-policy.template.json").read_text().replace('"dynamodb:UpdateItem",', "")
+        _, f = self.correr(politica_rol=politica.replace("ACCOUNT_ID", "123456789012"))
+        self.assertEqual(f[("IAM", "Query/PutItem/UpdateItem/DeleteItem en vinculaciones")][0], "FALLA")
 
 
 if __name__ == "__main__":

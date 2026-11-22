@@ -46,6 +46,20 @@ El usuario no dicta números: no tiene forma de saber qué valor poner, y un umb
 
 El respaldo periódico pasó de 5 s a 60 s. Los cambios de agua y de posición se siguen reportando de inmediato. Con 5 s, un dispositivo superaba las 500 000 actualizaciones al mes; con 60 s son unas 43 000.
 
+### 1.6 Varios tendederos por usuario
+
+**Antes.** `tendedero_vinculaciones` tenía solo `userId` como clave: cada usuario podía tener un tendedero, y vincular otro reemplazaba el anterior.
+
+**Ahora.** La clave es `userId` + `thingName` y cada vinculación lleva un `nombre` que elige el usuario («patio», «terraza»).
+
+- **Sin nombre en la frase:** las órdenes van al tendedero activo, que es el último que el usuario vinculó o eligió con «usa el tendedero de la terraza».
+- **Con nombre en la frase** («resguarda el tendedero del patio»): la orden va a ese tendedero y el activo no cambia.
+- **Con más de un tendedero:** Alexa antepone el nombre a cada respuesta, para que el usuario sepa sobre cuál actuó.
+
+`CambiarThingIntent` se reemplaza por `SeleccionarTendederoIntent` y se agrega `ListarTendederosIntent`. El diseño, sus decisiones y los patrones de acceso están en [CONTRATO.md](CONTRATO.md#varios-tendederos-por-usuario).
+
+Cambiar la clave obliga a recrear la tabla. Las vinculaciones de la práctica 3 se pierden y hay que volver a vincular ([GUIA_AWS.md](GUIA_AWS.md), paso 4.1).
+
 ## 2. Archivos modificados
 
 | Área | Archivos | Cambio |
@@ -62,6 +76,8 @@ El respaldo periódico pasó de 5 s a 60 s. Los cambios de agua y de posición s
 | AWS | `aws/lambda-iam-policy.template.json` | Permiso `dynamodb:Query` sobre el índice. |
 | AWS | `aws/dynamodb-dispositivos.*.json`, `aws/shadow-*.json` (nuevos) | Tabla nueva, ítems de ejemplo y JSON para migrar los Shadows. |
 | Pruebas | `tests/` | 19 pruebas: vinculación por código, calibración y contrato. |
+| Varios tendederos | `lambda/lambda_function.py` y el ZIP, `alexa/interaction-model-es-MX.json`, `aws/dynamodb-table.template.json`, `aws/lambda-iam-policy.template.json`, `aws/cloudformation/tendedero-base.yaml`, `tools/verificar_aws.py`, `tools/casos_alexa.json` | Clave `userId` + `thingName`, slot `nombre`, intents para elegir y listar, permisos `Query` y `UpdateItem`. |
+| Varios tendederos | `tests/fake_vinculaciones.py` (nuevo), `tests/test_lambda_integration.py`, `tests/test_herramientas_nube.py`, `tests/test_static_contract.py` | Tabla con clave compuesta en memoria; pruebas de varios tendederos, nombres, tope, renombrado y desvinculación. |
 
 ## 3. Pasos para cada integrante
 
@@ -74,7 +90,7 @@ Seguir [GUIA_AWS.md](GUIA_AWS.md) de principio a fin:
 1. Crear la tabla `tendedero_dispositivos` con su índice.
 2. Registrar los dos tendederos con sus códigos.
 3. Reemplazar la política IoT.
-4. Actualizar la política del rol de la Lambda.
+4. Actualizar la política del rol de la Lambda y recrear `tendedero_vinculaciones` con la clave `userId` + `thingName`.
 5. Subir el ZIP nuevo y cambiar las variables de entorno.
 6. Limpiar los Shadows.
 

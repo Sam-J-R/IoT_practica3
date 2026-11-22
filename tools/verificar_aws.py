@@ -6,7 +6,7 @@ Por defecto SOLO LEE: no cambia nada en la cuenta.
 
 Revisa:
   1. Tabla tendedero_dispositivos activa, índice codigoVinculacion-index, códigos válidos y únicos.
-  2. Tabla tendedero_vinculaciones activa.
+  2. Tabla tendedero_vinculaciones activa, con clave userId + thingName.
   3. Política IoT genérica (${iot:Connection.Thing.ThingName}, sin ACCOUNT_ID).
   4. Certificado del Thing físico asociado al Thing y con la política.
   5. Rol de la Lambda con dynamodb:Query sobre el índice.
@@ -82,6 +82,9 @@ class Verificador:
                         lambda: ddb.describe_table(TableName=self.a.tabla_vinculaciones)["Table"])
         if v:
             self.anotar("DynamoDB", "tendedero_vinculaciones activa", v["TableStatus"] == "ACTIVE")
+            claves = {k["AttributeName"]: k["KeyType"] for k in v["KeySchema"]}
+            self.anotar("DynamoDB", "vinculaciones con clave userId + thingName (varios por usuario)",
+                        claves == {"userId": "HASH", "thingName": "RANGE"}, claves)
 
     # 3 y 4 --------------------------------------------------------------
     def politica_iot(self):
@@ -128,9 +131,10 @@ class Verificador:
             return False
         self.anotar("IAM", "Query sobre el índice de dispositivos",
                     permite("dynamodb:Query", "table/tendedero_dispositivos/index/codigoVinculacion-index"))
-        self.anotar("IAM", "GetItem/PutItem/DeleteItem en vinculaciones",
+        self.anotar("IAM", "Query/PutItem/UpdateItem/DeleteItem en vinculaciones",
                     all(permite(x, "table/tendedero_vinculaciones")
-                        for x in ("dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem")))
+                        for x in ("dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem",
+                                  "dynamodb:DeleteItem")))
 
     # 6 -------------------------------------------------------------------
     def funcion(self):
