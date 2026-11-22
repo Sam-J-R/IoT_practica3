@@ -381,31 +381,31 @@
     },
     {
       "id": "C25",
-      "nombre": "Encender la luz en manual",
+      "nombre": "Encender la luz para recoger la ropa",
       "alexa": [
         [
           "enciende la luz",
-          "encender la luz|no tiene la luz instalada"
+          "encender la luz|ya está encendida|no tiene la luz instalada"
         ]
       ],
       "lambda": {
         "intent": "EncenderLuzIntent"
       },
-      "espera": "encender la luz|no tiene la luz instalada"
+      "espera": "encender la luz|ya está encendida|no tiene la luz instalada"
     },
     {
       "id": "C26",
-      "nombre": "Consultar la luz",
+      "nombre": "Consultar la luz para recoger la ropa",
       "alexa": [
         [
           "cómo está la luz",
-          "oscuro|Hay luz|luz del tendedero|no tiene el sensor de luz"
+          "luz del tendedero est|no tiene la luz instalada"
         ]
       ],
       "lambda": {
         "intent": "ConsultarLuzIntent"
       },
-      "espera": "oscuro|Hay luz|luz del tendedero|no tiene el sensor de luz"
+      "espera": "luz del tendedero est|no tiene la luz instalada"
     },
     {
       "id": "C27",

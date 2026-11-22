@@ -149,14 +149,11 @@ class Esp32Simulado:
 
     def _r5(self):
         with self.lock:
-            if not self.ldr or self.modo != "automatico" or self.oscuro < 0:
-                return
-            deseado = "encendido" if self.oscuro == 1 else "apagado"
-            if deseado != self.led:
-                self.linea(f"[EDGE] R5: {'oscuro' if self.oscuro else 'claro'}, LED {deseado} ms=1")
-                self._cambiar_led(deseado, "edge")
-                if self.en_linea:
-                    self.linea(f"[EDGE] desired.led={deseado} origen_led=edge publicado")
+            if (self.ldr and self.modo == "automatico" and self.oscuro == 1
+                    and self.destino != "resguardado"):
+                self.linea("[EDGE] R5: es de noche en modo automatico, resguardando ms=1")
+                self._mover("resguardado", "edge")
+                self._decision_edge()
 
     def _latido(self):
         while self.vivo:
@@ -175,9 +172,11 @@ class Esp32Simulado:
             self.linea(f"[SHADOW] delta recibido destino={destino} v=3 ms=1")
             time.sleep(0.1)
             with self.lock:
-                if (self.rechaza_voz and self.modo == "automatico" and self.mojado
+                noche = self.ldr and self.oscuro == 1
+                if (self.rechaza_voz and self.modo == "automatico" and (self.mojado or noche)
                         and destino == "expuesto"):
-                    self.linea("[EDGE] Orden de exponer rechazada: hay agua y el modo es automatico ms=1")
+                    motivo = "hay agua" if self.mojado else "es de noche"
+                    self.linea(f"[EDGE] Orden de exponer rechazada: {motivo} y el modo es automatico ms=1")
                     self._mover("resguardado", "edge")
                     self._decision_edge()
                 else:
@@ -205,10 +204,7 @@ class Esp32Simulado:
             self.linea(f"[ENSAYO] led {cmd[4:]} publicado ms=1")
             time.sleep(0.1)
             with self.lock:
-                if self.ldr and self.modo == "automatico" and self.oscuro >= 0:
-                    self.linea("[EDGE] Orden de luz rechazada: modo automatico con LDR ms=1")
-                else:
-                    self._cambiar_led(estado, "voz")
+                self._cambiar_led(estado, "voz")  # La luz para recoger la ropa obedece siempre a la voz.
         elif cmd.startswith("calibrar_"):
             condicion = cmd.split("_")[1]
             self.linea(f"[ENSAYO] pedido {cmd} publicado ms=1")
@@ -349,8 +345,17 @@ class ProbarEsp32Tests(unittest.TestCase):
         esp.ldr = True
         res, filas, _, _ = self.correr(["luz"], esp=esp, preguntar=self.operador_luz(esp), timeout_orden=1)
         self.assertTrue(res.ok(), res.markdown())
-        self.assertEqual(filas[("luz", "en manual, la voz apaga el LED aunque esté oscuro")][1], "origen=voz")
-        self.assertEqual((esp.modo, esp.led), ("automatico", "apagado"))
+        self.assertEqual(filas[("luz", "R5: el movimiento lo pidió el Edge")][1], "origen=edge")
+        self.assertEqual(filas[("luz", "la voz enciende la luz para recoger la ropa")][1], "origen=voz")
+        self.assertEqual((esp.modo, esp.destino, esp.led), ("automatico", "resguardado", "apagado"))
+
+    def test_luz_detecta_que_la_voz_saca_la_ropa_de_noche(self):
+        esp = Esp32Simulado(reporte_s=0.1)
+        esp.ldr = True
+        esp.rechaza_voz = False  # firmware sin la politica voz/noche
+        res, filas, _, _ = self.correr(["luz"], esp=esp, preguntar=self.operador_luz(esp), timeout_orden=1)
+        self.assertFalse(res.ok())
+        self.assertEqual(filas[("luz", "de noche en automático, exponer por voz se rechaza")][0], "FALLA")
 
     def test_luz_con_ldr_simulado(self):
         esp = Esp32Simulado(reporte_s=0.1)

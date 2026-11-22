@@ -143,20 +143,22 @@ Con muchos dispositivos, el alta manual no escala. Hay dos formas de automatizar
 
 La tabla `tendedero_dispositivos` también queda preparada para guardar más datos de cada producto (ubicación, modelo, versión de firmware), que servirán para el análisis de datos de la siguiente fase.
 
-## 9. Actualizar la lógica de la Nube (R4 corregida)
+## 9. Actualizar la lógica de la Nube (R2 y R4)
 
-R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO.md#por-qué-r4-duplica-la-espera-y-no-pasa-a-modo-manual)). Los permisos y la Lambda supervisor no cambian.
+R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO.md#por-qué-r4-duplica-la-espera-y-no-pasa-a-modo-manual)). R2 ahora tiene en cuenta la luz. Los permisos no cambian.
 
 | Recurso | Cambio |
 |---|---|
 | Lambda `tendedero_logica` | Código nuevo. Variables sin cambios (`DDB_HISTORY_TABLE`, `IOT_ENDPOINT`, `LIMITE_MOVIMIENTOS_HORA`). |
 | Lambda `tendedero_almacenamiento` | Código nuevo: acepta `minutos_reexponer` entre 15 y 240. |
+| Lambda `tendedero_supervisor` | Código nuevo: R2 solo vuelve a exponer si hay luz, y después de una noche seca expone a la mañana. Variables sin cambios. |
 | Rol `tendedero-logica-role` | Sin cambios: sigue necesitando `iot:UpdateThingShadow` para escribir la espera nueva. |
 
 ### Pasos en la consola
 
 1. **Lambda → `tendedero_logica` → Code**: reemplazar `lambda_function.py` por [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) y elegir **Deploy**.
 2. **Lambda → `tendedero_almacenamiento` → Code**: reemplazar `lambda_function.py` por [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) y elegir **Deploy**.
+3. **Lambda → `tendedero_supervisor` → Code**: reemplazar `lambda_function.py` por [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) y elegir **Deploy**.
 
 ### Verificar
 
@@ -174,6 +176,6 @@ R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO
 2. Paso 4.1: recrear `tendedero_vinculaciones`. **Borra las vinculaciones actuales.**
 3. Paso 5: subir el ZIP nuevo de la Lambda de Alexa.
 4. [ALEXA.md](ALEXA.md): pegar el modelo nuevo y compilar.
-5. Paso 9: Lambdas de lógica (R4) y de almacenamiento.
+5. Paso 9: Lambdas de lógica (R4), almacenamiento y supervisor (R2).
 6. Volver a vincular los tendederos desde Alexa, con nombre.
-7. Fuera de AWS: cargar el firmware nuevo en el ESP32, que ya no acepta esperas menores a 15 minutos.
+7. Fuera de AWS: cargar el firmware nuevo en el ESP32 (R5 de noche, luz con apagado automático y espera mínima de 15 minutos).

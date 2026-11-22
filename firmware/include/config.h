@@ -4,7 +4,8 @@
 
 constexpr int PIN_AGUA_ANALOGICO = 34;
 constexpr int PIN_SERVO_PWM = 26;
-// Luz automatica (P4): LDR en divisor de tension y LED con resistencia de 220 ohm.
+// P4: LDR en divisor de tension (detecta la noche, regla R5) y LED con resistencia
+// de 220 ohm (luz para recoger la ropa, solo por voz).
 constexpr int PIN_LDR_ANALOGICO = 35; // ADC1, solo entrada: funciona con Wi-Fi activo.
 constexpr int PIN_LED = 27;
 constexpr unsigned long INTERVALO_SENSOR_MS = 500;
@@ -32,12 +33,15 @@ constexpr int MINUTOS_REEXPONER_INICIAL = 30;
 constexpr int MINUTOS_REEXPONER_MIN = 15;  // Menos: la ropa sale con la superficie aun mojada.
 constexpr int MINUTOS_REEXPONER_MAX = 240;
 
-// Luz automatica (regla R5). La lectura del LDR se lleva a una escala de
+// Deteccion de la noche (regla R5). La lectura del LDR se lleva a una escala de
 // 0 (oscuro) a 1000 (claro) con las referencias de luz_local.h.
-// Histeresis: se considera oscuro por debajo de 350 y claro por encima de 650.
+// Histeresis: se considera noche por debajo de 350 y dia por encima de 650.
 constexpr int LUZ_PERMIL_OSCURO = 350;
 constexpr int LUZ_PERMIL_CLARO = 650;
-// El cambio debe mantenerse 3 s: una sombra que pasa no enciende el LED.
-constexpr unsigned long LUZ_CONFIRMACION_MS = 3000;
+// El cambio debe mantenerse 5 min: una nube o una sombra que pasa no es la noche.
+constexpr unsigned long LUZ_CONFIRMACION_MS = 300000;
+// Luz para recoger la ropa: se enciende por voz y se apaga sola pasado este
+// tiempo, por si el usuario se olvida de apagarla.
+constexpr unsigned long LED_APAGADO_AUTOMATICO_MS = 600000;
 // Diferencia minima entre las referencias de claro y oscuro para aceptarlas.
 constexpr int SEPARACION_MINIMA_LUZ = 200;

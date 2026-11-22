@@ -13,9 +13,10 @@ enum class Posicion : uint8_t { Desconocida, Expuesto, Resguardado };
 // Ninguno = el mensaje no traia modo (no es un valor valido del Shadow).
 enum class Modo : uint8_t { Ninguno, Manual, Automatico };
 
-// Estado del LED de luz automatica. Desconocida = sin LED o sin dato.
+// Estado del LED (luz para recoger la ropa). Desconocida = sin LED o sin dato.
 enum class Luz : uint8_t { Desconocida, Apagada, Encendida };
 
 // Quien pidio el ultimo cambio de un actuador (RF12).
-// Voz = Lambda de Alexa; Edge = regla R1 del ESP32; Nube = Lambdas de logica.
+// Voz = Lambda de Alexa; Edge = reglas R1/R5 o apagado automatico del LED en el
+// ESP32; Nube = Lambdas de logica.
 enum class Origen : uint8_t { Ninguno, Voz, Edge, Nube };

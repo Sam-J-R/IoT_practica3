@@ -10,8 +10,8 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 - Tablas DynamoDB: `tendedero_vinculaciones` y `tendedero_dispositivos`.
 - Shadow: clásico (sin nombre).
 - El actuador es un brazo que gira el tendedero hasta debajo de un techo fijo. Ya no existe una cubierta que se abre y se cierra.
-- Actuadores: el brazo (servo MG90S, principal) y un LED de luz automática. Sensores: agua (MH, GPIO34) y luz (LDR, GPIO35).
-- Lógica automática: el ESP32 resguarda la ropa si detecta agua (R1) y enciende el LED si está oscuro (R5), en modo `automatico` y también sin Internet. La Nube vuelve a exponer la ropa (R2), registra alertas (R3) y, si hay demasiados movimientos, duplica la espera antes de volver a exponer (R4). Ver [Lógica de control](#lógica-de-control).
+- Actuadores: el brazo (servo MG90S, principal) y un LED, la luz para recoger la ropa. Sensores: agua (MH, GPIO34) y luz (LDR, GPIO35), que detecta la noche.
+- Lógica automática: el ESP32 resguarda la ropa si detecta agua (R1) o si anochece (R5), en modo `automatico` y también sin Internet. La Nube vuelve a exponer la ropa cuando hay luz y no llueve (R2), registra alertas (R3) y, si hay demasiados movimientos, duplica la espera antes de volver a exponer (R4). Ver [Lógica de control](#lógica-de-control).
 
 ## Documento Shadow
 
@@ -24,7 +24,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
       "modo": "automatico",
       "minutos_reexponer": 30,
       "led": "encendido",
-      "origen_led": "edge",
+      "origen_led": "voz",
       "calibracion_solicitada": { "condicion": "seco", "id": 1731600000000 }
     },
     "reported": {
@@ -37,7 +37,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
       "luz_adc": 640,
       "oscuro": true,
       "led": "encendido",
-      "origen_led": "edge",
+      "origen_led": "voz",
       "ts_dispositivo": 1795110000123,
       "calibracion": { "umbral_seco": 200, "umbral_agua": 600, "estado": "aplicada" },
       "calibracion_solicitada": { "condicion": "seco", "id": 1731600000000 }
@@ -52,7 +52,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 | `desired.origen` | string | `voz`, `nube`, `edge` | Quien escribe `desired.posicion` | Quién pidió el movimiento (RF12). |
 | `desired.modo` | string | `manual`, `automatico` | Lambda de Alexa | Modo de operación (RF14). Ninguna regla automática lo cambia. |
 | `desired.minutos_reexponer` | entero | 15–240 | Lambda de Alexa o Lambda de lógica (R4) | Minutos sin agua antes de que R2 vuelva a exponer. Fuera de rango, el ESP32 lo ignora. |
-| `desired.led` | string | `encendido`, `apagado` | Lambda de Alexa o ESP32 (R5) | Orden para el LED. Siempre junto con `desired.origen_led`. |
+| `desired.led` | string | `encendido`, `apagado` | Lambda de Alexa o ESP32 (apagado automático) | Luz para recoger la ropa. Siempre junto con `desired.origen_led`. |
 | `desired.origen_led` | string | `voz`, `nube`, `edge` | Quien escribe `desired.led` | Quién pidió el cambio del LED. |
 | `desired.calibracion_solicitada.condicion` | string | `seco`, `mojado` | Lambda | Condición en la que el usuario dice que está el sensor. |
 | `desired.calibracion_solicitada.id` | entero | Hora del pedido en milisegundos | Lambda | Distingue cada pedido y permite saber su antigüedad. |
@@ -67,9 +67,9 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 | `reported.modo` | string | `manual`, `automatico` | ESP32 | Modo vigente; se guarda en la memoria del ESP32 y sobrevive a reinicios sin Internet. |
 | `reported.minutos_reexponer` | entero | 15–240 (inicial 30) | ESP32 | Espera vigente para R2. |
 | `reported.luz_adc` | entero | 0–4095 | ESP32 | Lectura cruda del LDR. Ausente si no hay LDR. |
-| `reported.oscuro` | booleano | `true`, `false`; `null` sin dato | ESP32 | Clasificación del LDR con histéresis (oscuro < 350, claro > 650 en escala 0–1000) y 3 s de confirmación. Ausente si no hay LDR. |
-| `reported.led` | string | `encendido`, `apagado` | ESP32 | Estado del LED. Ausente si no hay LED. |
-| `reported.origen_led` | string | `voz`, `nube`, `edge` | ESP32 | Quién pidió el último cambio del LED. |
+| `reported.oscuro` | booleano | `true`, `false`; `null` sin dato | ESP32 | `true` = es de noche. Clasificación del LDR con histéresis (oscuro < 350, claro > 650 en escala 0–1000) y 5 min de confirmación, para que una nube no cuente como noche. La usan R5, R2 y la respuesta de «¿cómo está el tendedero?». Ausente si no hay LDR. |
+| `reported.led` | string | `encendido`, `apagado` | ESP32 | Estado de la luz. Ausente si no hay LED. |
+| `reported.origen_led` | string | `voz`, `edge` | ESP32 | `voz` si la encendió o apagó el usuario; `edge` si se apagó sola a los 10 minutos. |
 | `reported.luz_simulada` | booleano | `true`; `null` lo borra | ESP32 (perfil de ensayo) | La luz viene de los comandos `ldr_oscuro` / `ldr_claro`, no del LDR. No mezclar con datos reales. |
 | `reported.ts_dispositivo` | entero | Epoch en ms (NTP) | ESP32 | Hora del ESP32 en cada reporte, para medir la latencia de almacenamiento. |
 
@@ -103,8 +103,8 @@ Sin calibración previa, el ESP32 usa las referencias de fábrica de `calibracio
 | Regla | Dónde | Condición → acción | Por qué ahí |
 |---|---|---|---|
 | R1 | Edge (`LogicaEdge::evaluarR1`) | Modo `automatico` y agua detectada → resguardar | Urgente, datos locales, debe funcionar sin Internet. |
-| R5 | Edge (`LogicaEdge::evaluarR5`) | Modo `automatico`: oscuro → LED encendido; claro → apagado | Inmediata, datos locales, sin Internet. |
-| R2 | Nube (Lambda supervisor, cada 5 min) | Modo `automatico`, resguardado y sin agua durante `minutos_reexponer` → `desired = {posicion: expuesto, origen: nube}` | Necesita el histórico. |
+| R5 | Edge (`LogicaEdge::evaluarR5`) | Modo `automatico` y de noche (LDR oscuro 5 min) → resguardar | Datos locales y debe funcionar sin Internet, igual que R1. De noche la humedad (sereno, rocío) vuelve a mojar la ropa. |
+| R2 | Nube (Lambda supervisor, cada 5 min) | Modo `automatico`, resguardado por el Edge (R1 o R5), sin agua durante `minutos_reexponer` y con luz → `desired = {posicion: expuesto, origen: nube}` | Cruza el histórico de lluvia con la luz actual. Así la ropa guardada de noche sale sola a la mañana si no llueve. Tarda hasta 5 min en actuar. |
 | R3 | Nube (Lambda supervisor) | Sin reporte durante 3 min → alerta en el histórico | El objeto no puede reportar su propia desconexión. |
 | R4 | Nube (Lambda de lógica, regla `tendedero_movimientos`) | Modo `automatico` y más de 6 movimientos en una hora → `desired.minutos_reexponer` × 2 (tope 240) y alerta `exceso_movimientos` en el histórico. El modo no cambia y R1 sigue activa. | Necesita el histórico de movimientos. |
 
@@ -120,13 +120,22 @@ Con la espera inicial de 30 minutos, R2 genera como mucho unos 4 movimientos por
 
 Para contar los movimientos, R4 suma los guardados en la hora anterior al mensaje y el movimiento que trae el mensaje. La misma publicación dispara en paralelo la Lambda de almacenamiento, así que este movimiento puede no estar guardado todavía. Contarlo aparte da el mismo resultado sin importar cuál de las dos termine antes.
 
+### Para qué sirven el LDR y el LED
+
+| Componente | Función | Por qué en este tendedero |
+|---|---|---|
+| LDR | Detectar la noche (R5) y la luz para volver a exponer (R2). | En una casa, la ropa no se deja afuera de noche: el sereno la vuelve a humedecer. Mide la luz real en lugar de usar la hora, porque la hora de anochecer cambia con la estación y la hora no sabe si el día está muy oscuro. También da el dato de horas de luz para los reportes. |
+| LED | Luz para recoger la ropa de noche, encendida por voz. Se apaga sola a los 10 minutos. | De noche la ropa queda resguardada bajo el techo pero sigue colgada; quien sale a recogerla necesita luz. En el prototipo es un LED; en el producto sería una tira LED de 12 V, dentro del límite de baja tensión. |
+
+El LED no tiene regla automática: la luz la decide solo el usuario, así no hay conflicto entre la voz y la lógica automática. El apagado a los 10 minutos lo hace el ESP32 y se registra con origen `edge`.
+
 ### Convivencia de la voz con la lógica automática
 
 | Orden de voz | Modo `manual` | Modo `automatico` |
 |---|---|---|
 | Resguardar | Se cumple | Se cumple |
-| Exponer | Se cumple | Se cumple si no hay agua. Con agua, la Lambda responde con una explicación y no escribe; si igual llega, el ESP32 la rechaza y escribe `desired = {posicion: resguardado, origen: edge}` |
-| Encender / apagar la luz | Se cumple | Con LDR, la decide el sensor: la Lambda explica y no escribe; el ESP32 también la rechaza. Sin LDR, se cumple |
+| Exponer | Se cumple | Se cumple si no hay agua y es de día. Con agua o de noche, la Lambda responde con una explicación y no escribe; si igual llega, el ESP32 la rechaza y escribe `desired = {posicion: resguardado, origen: edge}` |
+| Encender / apagar la luz | Se cumple | Se cumple. La luz no tiene regla automática: solo se apaga sola a los 10 minutos. |
 
 ### Reglas del `delta` que respeta el ESP32
 
@@ -236,14 +245,14 @@ No se asigna un Thing por defecto a usuarios sin vincular.
 | `ConsultarAguaIntent` | `nombre` (opcional) | Responder con `reported.agua_detectada`. |
 | `ExponerTendederoIntent` | `nombre` (opcional) | Escribir `desired = {posicion: expuesto, origen: voz}`, salvo en automático con agua (ver convivencia). |
 | `ResguardarTendederoIntent` | `nombre` (opcional) | Escribir `desired = {posicion: resguardado, origen: voz}`. |
-| `ConsultarPosicionIntent` | `nombre` (opcional) | Leer `reported.posicion` e indicar si hay una orden pendiente. |
+| `ConsultarPosicionIntent` | `nombre` (opcional) | Decir la posición y **el motivo** (lluvia, noche, orden de voz o modo manual) y cuándo volverá a salir, con `posicion`, `agua_detectada`, `oscuro`, `origen`, `modo` y `minutos_reexponer`. Indica si hay una orden pendiente. |
 | `CalibrarSensorIntent` | `condicion` (`CondicionSensor`: `seco` / `mojado`) | Escribir `desired.calibracion_solicitada`. |
 | `ConsultarCalibracionIntent` | — | Informar si el último pedido está pendiente, aplicado, rechazado o caducado. |
 | `CambiarModoIntent` | `modo` (`ModoOperacion`: `manual` / `automatico`) | Escribir `desired.modo`. |
 | `ConsultarModoIntent` | — | Leer `reported.modo` y `minutos_reexponer`, e indicar si hay un cambio pendiente. |
 | `ConfigurarEsperaIntent` | `minutos` (`AMAZON.NUMBER`) | Validar 15–240 y escribir `desired.minutos_reexponer`. |
-| `EncenderLuzIntent` / `ApagarLuzIntent` | — | Escribir `desired.led` con `origen_led: voz`, salvo en automático con LDR (ver convivencia). |
-| `ConsultarLuzIntent` | — | Leer `reported.oscuro` y `reported.led`. |
+| `EncenderLuzIntent` / `ApagarLuzIntent` | `nombre` (opcional) | Escribir `desired.led` con `origen_led: voz`. Al encender, avisa que se apaga sola a los 10 minutos. |
+| `ConsultarLuzIntent` | `nombre` (opcional) | Leer `reported.led`. |
 
 Todos los intents que actúan sobre un tendedero tienen el slot `nombre` (opcional), aunque la tabla no lo repita en cada fila. Así se puede nombrar el tendedero en la frase y la Lambda puede preguntarlo con `Dialog.ElicitSlot`, que solo funciona sobre un slot que el intent tiene en el modelo.
 

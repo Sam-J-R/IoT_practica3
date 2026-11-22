@@ -55,7 +55,7 @@ public:
   void publicarDecisionEdge(Posicion posicion);
   // Igual que tomarOrden, para desired.led / desired.origen_led.
   bool tomarOrdenLuz(Luz& luz, Origen& origen);
-  // Igual que publicarDecisionEdge, para el LED (regla R5 o rechazo de voz).
+  // Igual que publicarDecisionEdge, para el LED (apagado automatico por tiempo).
   void publicarDecisionLuz(Luz luz);
   // La calibracion solo viaja al conectar y cuando cambia su revision.
   void reportar(unsigned long ahora, const Telemetria& telemetria,

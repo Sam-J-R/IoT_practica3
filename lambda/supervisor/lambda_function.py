@@ -6,10 +6,13 @@ Para cada tendedero registrado en la tabla de dispositivos:
 R3: si no hay una lectura en los ultimos MINUTOS_SIN_REPORTE, registra una alerta
     "sin_reporte" (una sola por desconexion). El objeto no puede avisar de su
     propia desconexion, por eso esta regla va en la Nube.
-R2: en modo automatico, si R1 (Edge) resguardo la ropa y lleva al menos
-    minutos_reexponer sin agua desde el ultimo evento de agua, la vuelve a
-    exponer escribiendo desired = {posicion: expuesto, origen: nube}. No toca un
-    resguardo pedido por voz.
+R2: en modo automatico, si el Edge resguardo la ropa (R1 por lluvia o R5 por
+    la noche), lleva al menos minutos_reexponer sin agua desde el ultimo evento
+    de agua y hay luz, la vuelve a exponer escribiendo
+    desired = {posicion: expuesto, origen: nube}. Asi, la ropa que se guardo de
+    noche sale sola a la manana siguiente si no llueve. No toca un resguardo
+    pedido por voz. Va en la Nube porque cruza el historico de lluvia con el
+    estado actual de la luz.
 
 Permisos: dynamodb:Scan sobre la tabla de dispositivos; dynamodb:Query y
 dynamodb:PutItem sobre la de historico; iot:GetThingShadow e
@@ -104,17 +107,21 @@ def revisar_r3(thing, ahora):
 
 
 def revisar_r2(thing, reported, ahora):
-    """Vuelve a exponer si R1 resguardo y ya paso la espera sin agua."""
+    """Vuelve a exponer si el Edge resguardo, ya paso la espera sin agua y hay luz."""
     if (reported.get("modo") != "automatico" or reported.get("posicion") != "resguardado"
             or reported.get("origen") != "edge" or reported.get("agua_detectada") is not False):
         return False
-    eventos_agua = [e for e in ultimos(thing, "evento#", EVENTOS_A_REVISAR) if e.get("cambio") == "agua"]
-    if not eventos_agua or eventos_agua[0].get("agua_detectada") is not False:
-        return False  # Sin registro de cuando paro el agua: no se arriesga la ropa.
-    seco_desde = fecha_de(eventos_agua[0]["sk"])
+    if reported.get("oscuro") is True:
+        return False  # De noche no se expone: R5 la volveria a resguardar.
     espera = int(reported.get("minutos_reexponer") or 30)
-    if not seco_desde or ahora - seco_desde < timedelta(minutes=espera):
-        return False
+    eventos_agua = [e for e in ultimos(thing, "evento#", EVENTOS_A_REVISAR) if e.get("cambio") == "agua"]
+    if eventos_agua:
+        if eventos_agua[0].get("agua_detectada") is not False:
+            return False  # El ultimo evento dice que llovia: no se arriesga la ropa.
+        seco_desde = fecha_de(eventos_agua[0]["sk"])
+        if not seco_desde or ahora - seco_desde < timedelta(minutes=espera):
+            return False
+    # Sin lluvia en los ultimos eventos (p. ej. una noche seca), la espera ya se cumplio.
     _shadow.update_thing_shadow(thingName=thing, payload=json.dumps(
         {"state": {"desired": {"posicion": "expuesto", "origen": "nube"}}}))
     logger.info("R2: %s vuelve a exponerse tras %d min sin agua", thing, espera)

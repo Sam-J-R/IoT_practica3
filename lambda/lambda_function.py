@@ -1,11 +1,14 @@
 """Backend P4: Alexa -> DynamoDB (dispositivos y vinculaciones) -> IoT Thing Shadow.
 
-P4: la voz convive con la logica automatica del ESP32 (reglas R1 y R5):
+P4: la voz convive con la logica automatica del ESP32 (R1 lluvia, R5 noche):
 - Toda orden de posicion se escribe con origen "voz"; las del LED, con
   origen_led "voz" (RF12).
-- En modo automatico con agua detectada, "exponer" se rechaza con una
-  explicacion; en automatico con sensor de luz, la luz tampoco se controla
-  por voz. En manual, la voz manda siempre.
+- En modo automatico, "exponer" se rechaza con una explicacion si hay agua o
+  es de noche, porque R1 o R5 la deshacerian. En manual, la voz manda siempre.
+- El LED es la luz para recoger la ropa: solo lo controla la voz y el ESP32
+  lo apaga solo a los 10 minutos.
+- "Como esta el tendedero" responde la posicion y el motivo (lluvia, noche,
+  orden de voz o modo manual), con los datos de los dos sensores.
 - La voz cambia el modo (manual / automatico) y los minutos de espera de la
   regla R2 (minutos_reexponer), como pide RF14.
 
@@ -56,6 +59,8 @@ ESTADOS_LED = ("encendido", "apagado")
 # Rango de minutos_reexponer aceptado por el ESP32 (config.h). Menos de 15 minutos
 # expone la ropa con la superficie aun mojada y con probabilidad de otro chubasco.
 MINUTOS_MIN, MINUTOS_MAX = 15, 240
+# Minutos tras los que el ESP32 apaga solo la luz (LED_APAGADO_AUTOMATICO_MS en config.h).
+MINUTOS_LUZ = 10
 # Palabras que puede decir el usuario -> modo que entiende el ESP32.
 MODOS_HABLADOS = {
     "manual": "manual", "a mano": "manual", "modo manual": "manual",
@@ -383,7 +388,7 @@ class LaunchHandler(AbstractRequestHandler):
         return ask_utils.is_request_type("LaunchRequest")(handler_input)
 
     def handle(self, handler_input):
-        return _answer(handler_input, "Bienvenido al tendedero inteligente. Puedes consultar el agua, exponer o resguardar la ropa, cambiar el modo o controlar la luz. Di ayuda para conocer todas las órdenes.")
+        return _answer(handler_input, "Bienvenido al tendedero inteligente. Puedes preguntar cómo está el tendedero, exponer o resguardar la ropa, cambiar el modo o encender la luz para recoger la ropa. Di ayuda para conocer todas las órdenes.")
 
 
 class VincularHandler(AbstractRequestHandler):
@@ -497,10 +502,12 @@ class ComandoPosicionHandler(AbstractRequestHandler):
             state = shadow.read(thing_name)
             reported = state.get("reported", {})
             desired = state.get("desired", {})
-            # Convivencia con R1: en automatico, la ropa no sale con lluvia.
-            if (position == "expuesto" and reported.get("modo") == "automatico"
-                    and reported.get("agua_detectada") is True):
-                return _answer(handler_input, "El sensor detecta agua y el tendedero está en modo automático, así que la ropa se queda resguardada. Si quieres exponerla igual, primero di: cambia a modo manual.")
+            # Convivencia con R1 y R5: en automatico, la ropa no sale con lluvia ni de noche.
+            if position == "expuesto" and reported.get("modo") == "automatico":
+                if reported.get("agua_detectada") is True:
+                    return _answer(handler_input, "El sensor detecta agua y el tendedero está en modo automático, así que la ropa se queda resguardada. Si quieres exponerla igual, primero di: cambia a modo manual.")
+                if reported.get("oscuro") is True:
+                    return _answer(handler_input, "Ya es de noche y el tendedero está en modo automático, así que la ropa se queda resguardada hasta que vuelva la luz. Si quieres exponerla igual, primero di: cambia a modo manual.")
             # Ya esta ahi y no hay otra orden pendiente: no se escribe nada.
             if reported.get("posicion") == position and desired.get("posicion") in (None, position):
                 return _answer(handler_input, "El tendedero ya está {}.".format(position))
@@ -524,22 +531,57 @@ class ConsultarAguaHandler(AbstractRequestHandler):
         return _run_safe(handler_input, work)
 
 
+def motivo_posicion(reported, desired):
+    """Posicion del tendedero y por que esta asi, con los datos de los dos sensores."""
+    posicion = reported.get("posicion")
+    if posicion not in POSICIONES:
+        return "El tendedero todavía no ha reportado su posición."
+    automatico = reported.get("modo") == "automatico"
+    manual = reported.get("modo") == "manual"
+    lluvia = reported.get("agua_detectada") is True
+    noche = reported.get("oscuro") is True
+    origen = reported.get("origen")
+
+    if posicion == "resguardado":
+        if origen == "voz":
+            frase = "el tendedero está resguardado porque se lo pediste."
+            if automatico:
+                frase += " No volverá a salir solo: pídelo cuando quieras."
+        elif lluvia:
+            frase = "el tendedero está resguardado porque está lloviendo."
+        elif noche:
+            frase = "el tendedero está resguardado porque ya oscureció."
+        else:
+            frase = "el tendedero está resguardado por la protección automática, porque llovió o anocheció."
+        if origen != "voz" and automatico:
+            minutos = reported.get("minutos_reexponer")
+            espera = " pasen {} minutos sin agua".format(minutos) if isinstance(minutos, int) else " pare la lluvia"
+            frase += " Volverá a salir cuando{} y haya luz.".format(espera)
+        elif manual:
+            frase += " Está en modo manual, así que solo saldrá cuando lo pidas."
+    else:
+        frase = "el tendedero está expuesto"
+        frase += " y recibiendo luz." if reported.get("oscuro") is False else "."
+        if manual:
+            frase += " Está en modo manual: si llueve o anochece, no se resguardará solo."
+        elif automatico:
+            frase += " Se resguardará solo si llueve o anochece."
+
+    texto = "Según el último reporte, " + frase
+    pedida = desired.get("posicion")
+    if pedida in POSICIONES and pedida != posicion:
+        texto += " Existe una orden pendiente para dejarlo {}.".format(pedida)
+    return texto
+
+
 class ConsultarPosicionHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return ask_utils.is_intent_name("ConsultarPosicionIntent")(handler_input)
 
     def handle(self, handler_input):
         def work():
-            thing_name = _destino(handler_input)
-            state = ShadowService().read(thing_name)
-            actual = state.get("reported", {}).get("posicion")
-            desired = state.get("desired", {}).get("posicion")
-            if not actual:
-                return _answer(handler_input, "El tendedero todavía no ha reportado su posición.")
-            phrase = "Según el último reporte, el tendedero está {}.".format(actual)
-            if desired and desired != actual:
-                phrase += " Existe una orden pendiente para dejarlo {}.".format(desired)
-            return _answer(handler_input, phrase)
+            state = ShadowService().read(_destino(handler_input))
+            return _answer(handler_input, motivo_posicion(state.get("reported", {}), state.get("desired", {})))
         return _run_safe(handler_input, work)
 
 
@@ -601,8 +643,8 @@ class CambiarModoHandler(AbstractRequestHandler):
                 return _answer(handler_input, "¿Qué modo quieres? Puedes decir: modo automático, o modo manual.")
             ShadowService().request_mode(thing_name, modo)
             if modo == "automatico":
-                return _answer(handler_input, "He activado el modo automático. El tendedero resguardará la ropa si detecta agua y la luz seguirá al sensor de luz.")
-            return _answer(handler_input, "He activado el modo manual. El tendedero y la luz solo cambiarán con tus órdenes.")
+                return _answer(handler_input, "He activado el modo automático. El tendedero resguardará la ropa si llueve o anochece, y la volverá a exponer cuando haya luz y no llueva.")
+            return _answer(handler_input, "He activado el modo manual. El tendedero solo se moverá con tus órdenes, aunque llueva o anochezca.")
         return _run_safe(handler_input, work)
 
 
@@ -645,6 +687,8 @@ class ConfigurarEsperaHandler(AbstractRequestHandler):
 
 
 class ComandoLuzHandler(AbstractRequestHandler):
+    """Luz para recoger la ropa. Solo la controla la voz; el ESP32 la apaga sola."""
+
     def can_handle(self, handler_input):
         return (ask_utils.is_intent_name("EncenderLuzIntent")(handler_input)
                 or ask_utils.is_intent_name("ApagarLuzIntent")(handler_input))
@@ -658,12 +702,12 @@ class ComandoLuzHandler(AbstractRequestHandler):
             reported = shadow.read(thing_name).get("reported", {})
             if reported.get("led") not in ESTADOS_LED:
                 return _answer(handler_input, "Tu tendedero no tiene la luz instalada o todavía no ha reportado su estado.")
-            # Convivencia con R5: en automatico con sensor de luz, decide el sensor.
-            if reported.get("modo") == "automatico" and isinstance(reported.get("oscuro"), bool):
-                actual = "encendida" if reported["led"] == "encendido" else "apagada"
-                return _answer(handler_input, "En modo automático la luz la controla el sensor de luz, y ahora está {}. Para controlarla tú, primero di: cambia a modo manual.".format(actual))
+            if reported["led"] == estado:
+                return _answer(handler_input, "La luz del tendedero ya está {}.".format("encendida" if estado == "encendido" else "apagada"))
             shadow.request_led(thing_name, estado)
-            return _answer(handler_input, "He pedido {} la luz del tendedero.".format("encender" if estado == "encendido" else "apagar"))
+            if estado == "encendido":
+                return _answer(handler_input, "He pedido encender la luz del tendedero. Se apagará sola en {} minutos.".format(MINUTOS_LUZ))
+            return _answer(handler_input, "He pedido apagar la luz del tendedero.")
         return _run_safe(handler_input, work)
 
 
@@ -673,16 +717,12 @@ class ConsultarLuzHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _destino(handler_input)
-            reported = ShadowService().read(thing_name).get("reported", {})
-            partes = []
-            if isinstance(reported.get("oscuro"), bool):
-                partes.append("Está oscuro." if reported["oscuro"] else "Hay luz.")
-            if reported.get("led") in ESTADOS_LED:
-                partes.append("La luz del tendedero está {}.".format("encendida" if reported["led"] == "encendido" else "apagada"))
-            if not partes:
-                return _answer(handler_input, "Tu tendedero no tiene el sensor de luz ni la luz instalados.")
-            return _answer(handler_input, " ".join(partes))
+            reported = ShadowService().read(_destino(handler_input)).get("reported", {})
+            if reported.get("led") not in ESTADOS_LED:
+                return _answer(handler_input, "Tu tendedero no tiene la luz instalada o todavía no ha reportado su estado.")
+            if reported["led"] == "encendido":
+                return _answer(handler_input, "La luz del tendedero está encendida. Se apaga sola a los {} minutos de encenderla.".format(MINUTOS_LUZ))
+            return _answer(handler_input, "La luz del tendedero está apagada.")
         return _run_safe(handler_input, work)
 
 
@@ -691,7 +731,7 @@ class HelpHandler(AbstractRequestHandler):
         return ask_utils.is_intent_name("AMAZON.HelpIntent")(handler_input)
 
     def handle(self, handler_input):
-        return _answer(handler_input, "Puedes vincular tus tendederos con su código y un nombre, preguntar qué tendederos tienes, preguntar por el agua, exponer o resguardar la ropa, consultar su posición, calibrar el sensor, cambiar a modo automático o manual, decir cuántos minutos esperar para volver a exponer, y encender, apagar o consultar la luz.")
+        return _answer(handler_input, "Puedes vincular tus tendederos con su código y un nombre, preguntar qué tendederos tienes, preguntar por el agua, exponer o resguardar la ropa, preguntar cómo está el tendedero y por qué, calibrar el sensor, cambiar a modo automático o manual, decir cuántos minutos esperar para volver a exponer, y encender o apagar la luz para recoger la ropa.")
 
 
 class StopHandler(AbstractRequestHandler):

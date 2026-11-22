@@ -4,7 +4,8 @@
 #include "TiposTendedero.h"
 #include "config.h"
 
-// LED de luz automatica en GPIO27 (con resistencia de 220 ohm en serie).
+// Luz para recoger la ropa en GPIO27 (LED con resistencia de 220 ohm en serie).
+// La enciende la voz; el programa principal la apaga sola tras LED_APAGADO_AUTOMATICO_MS.
 // Encendido/apagado digital: no usa PWM, asi no comparte temporizador con el servo.
 class LuzLed {
 public:

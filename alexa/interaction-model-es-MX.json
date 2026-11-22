@@ -205,7 +205,13 @@
             "dónde está el tendedero del {nombre}",
             "dónde está el tendedero de la {nombre}",
             "cómo está el tendedero del {nombre}",
-            "cómo está el tendedero de la {nombre}"
+            "cómo está el tendedero de la {nombre}",
+            "por qué está guardada la ropa",
+            "por qué está resguardada la ropa",
+            "por qué no está afuera la ropa",
+            "cómo está la ropa",
+            "por qué está guardada la ropa del {nombre}",
+            "por qué está guardada la ropa de la {nombre}"
           ]
         },
         {
@@ -393,7 +399,9 @@
             "prende la luz del tendedero",
             "enciende el foco",
             "enciende la luz del tendedero del {nombre}",
-            "enciende la luz del tendedero de la {nombre}"
+            "enciende la luz del tendedero de la {nombre}",
+            "enciende la luz para recoger la ropa",
+            "prende la luz para recoger la ropa"
           ]
         },
         {
@@ -445,8 +453,6 @@
           ],
           "samples": [
             "cómo está la luz",
-            "está oscuro",
-            "hay luz",
             "la luz está encendida",
             "está encendida la luz",
             "cómo está la luz del tendedero del {nombre}",

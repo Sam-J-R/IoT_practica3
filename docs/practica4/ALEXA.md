@@ -59,7 +59,7 @@ Usar **Test → Development**, en español (MX). Los códigos son los de ejemplo
 | 4 | vincula mi tendedero | Alexa pide el código. |
 | 5 | vincula mi tendedero con el código 999999 | «No encontré un tendedero con ese código…» |
 | 6 | hay agua en el sensor | «El sensor detecta agua» o «El sensor no detecta agua». |
-| 7 | dónde está el tendedero | «Según el último reporte, el tendedero está…» |
+| 7 | cómo está el tendedero | «Según el último reporte, el tendedero está…» y el motivo: lluvia, noche, orden de voz o modo manual. |
 | 8 | resguarda la ropa | «He solicitado que el tendedero quede resguardado…» |
 | 9 | expón el tendedero | «He solicitado que el tendedero quede expuesto…» |
 | 10 | vincula el tendedero del patio con el código 483920 | Confirma el código y agrega el tendedero físico: «Ahora tienes 2 tendederos: patio y terraza…» |

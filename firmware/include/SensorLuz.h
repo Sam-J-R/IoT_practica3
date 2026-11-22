@@ -3,9 +3,9 @@
 #include <Arduino.h>
 #include "config.h"
 
-// LDR en divisor de tension leido por GPIO35. Clasifica el ambiente en claro
-// u oscuro con histeresis y confirmacion temporal. No controla el LED: eso lo
-// decide LogicaEdge (regla R5).
+// LDR en divisor de tension leido por GPIO35. Clasifica el ambiente en dia
+// (claro) o noche (oscuro) con histeresis y confirmacion temporal. La decision
+// de resguardar de noche la toma LogicaEdge (regla R5).
 class SensorLuz {
 public:
   SensorLuz(int referenciaClaro, int referenciaOscuro)
