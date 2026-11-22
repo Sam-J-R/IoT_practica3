@@ -150,7 +150,8 @@ R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO
 | Recurso | Cambio |
 |---|---|
 | Lambda `tendedero_logica` | Código nuevo. Variables sin cambios (`DDB_HISTORY_TABLE`, `IOT_ENDPOINT`, `LIMITE_MOVIMIENTOS_HORA`). |
-| Lambda `tendedero_almacenamiento` | Código nuevo: acepta `minutos_reexponer` entre 15 y 240. |
+| Lambda `tendedero_almacenamiento` | Código nuevo: las lecturas guardan solo los datos de los sensores, los eventos de posición guardan si había agua y si era de noche, y acepta `minutos_reexponer` entre 15 y 240. |
+| Regla `tendedero_cambios` | SQL nuevo: sin filtro, la Lambda compara los documentos. |
 | Lambda `tendedero_supervisor` | Código nuevo: R2 solo vuelve a exponer si hay luz, y después de una noche seca expone a la mañana. Variables sin cambios. |
 | Rol `tendedero-logica-role` | Sin cambios: sigue necesitando `iot:UpdateThingShadow` para escribir la espera nueva. |
 
@@ -159,6 +160,11 @@ R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO
 1. **Lambda → `tendedero_logica` → Code**: reemplazar `lambda_function.py` por [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) y elegir **Deploy**.
 2. **Lambda → `tendedero_almacenamiento` → Code**: reemplazar `lambda_function.py` por [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) y elegir **Deploy**.
 3. **Lambda → `tendedero_supervisor` → Code**: reemplazar `lambda_function.py` por [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) y elegir **Deploy**.
+4. **AWS IoT → Message routing → Rules → `tendedero_cambios` → Edit**: reemplazar la sentencia SQL por la de [tendedero_cambios.json](../../aws/reglas/tendedero_cambios.json) y guardar. La acción (invocar `tendedero_almacenamiento`) no cambia:
+
+   ```sql
+   SELECT current.state.reported AS actual, previous.state.reported AS anterior, topic(3) AS thingName, timestamp() AS ts FROM '$aws/things/+/shadow/update/documents' WHERE NOT isUndefined(current.state.reported)
+   ```
 
 ### Verificar
 
@@ -176,6 +182,6 @@ R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO
 2. Paso 4.1: recrear `tendedero_vinculaciones`. **Borra las vinculaciones actuales.**
 3. Paso 5: subir el ZIP nuevo de la Lambda de Alexa.
 4. [ALEXA.md](ALEXA.md): pegar el modelo nuevo y compilar.
-5. Paso 9: Lambdas de lógica (R4), almacenamiento y supervisor (R2).
+5. Paso 9: Lambdas de lógica (R4), almacenamiento y supervisor (R2), y la regla `tendedero_cambios`.
 6. Volver a vincular los tendederos desde Alexa, con nombre.
 7. Fuera de AWS: cargar el firmware nuevo en el ESP32 (R5 de noche, luz con apagado automático y espera mínima de 15 minutos).

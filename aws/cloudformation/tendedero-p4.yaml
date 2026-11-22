@@ -216,11 +216,7 @@ Resources:
           SELECT current.state.reported AS actual, previous.state.reported AS anterior,
           topic(3) AS thingName, timestamp() AS ts
           FROM '$aws/things/+/shadow/update/documents'
-          WHERE previous.state.reported.posicion <> current.state.reported.posicion
-          OR previous.state.reported.agua_detectada <> current.state.reported.agua_detectada
-          OR previous.state.reported.modo <> current.state.reported.modo
-          OR previous.state.reported.led <> current.state.reported.led
-          OR previous.state.reported.oscuro <> current.state.reported.oscuro
+          WHERE NOT isUndefined(current.state.reported)
         Actions:
           - Lambda: {FunctionArn: !GetAtt LambdaAlmacenamiento.Arn}
 

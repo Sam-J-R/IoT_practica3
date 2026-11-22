@@ -7,7 +7,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 - Región AWS: `us-east-2` (Ohio) para IoT Core, Lambda y DynamoDB.
 - Thing físico: `tendedero-inteligente`. Thing de prueba: `tendedero-prueba2`.
 - Convención para Things nuevos: `tendedero-NNN`. El prefijo `tendedero-` es obligatorio.
-- Tablas DynamoDB: `tendedero_vinculaciones` y `tendedero_dispositivos`.
+- Tablas DynamoDB: `tendedero_vinculaciones`, `tendedero_dispositivos` y `tendedero_historico` (ver [Modelo del histórico](#modelo-del-histórico-rf11-rf12-rf15)).
 - Shadow: clásico (sin nombre).
 - El actuador es un brazo que gira el tendedero hasta debajo de un techo fijo. Ya no existe una cubierta que se abre y se cierra.
 - Actuadores: el brazo (servo MG90S, principal) y un LED, la luz para recoger la ropa. Sensores: agua (MH, GPIO34) y luz (LDR, GPIO35), que detecta la noche.
@@ -234,6 +234,63 @@ Flujo de la Lambda:
 | Desvincular | `Query` por `userId` → `DeleteItem` del tendedero elegido. |
 
 No se asigna un Thing por defecto a usuarios sin vincular.
+
+## Modelo del histórico (RF11, RF12, RF15)
+
+`tendedero_historico` es la tabla de análisis: de ella salen los reportes del usuario. También es la memoria de la lógica en la Nube (R2 lee cuándo paró la lluvia, R3 la última lectura y R4 los movimientos de la última hora).
+
+### Tres tablas, tres responsabilidades
+
+| Tabla | Responde | Cambia |
+|---|---|---|
+| `tendedero_dispositivos` | Qué tendederos existen y su código. La usan la vinculación y el supervisor (lista de Things que revisan R2 y R3). | Al dar de alta un tendedero |
+| `tendedero_vinculaciones` | De quién es cada tendedero y cómo lo llama. | Al vincular o desvincular |
+| `tendedero_historico` | Qué le pasó a cada tendedero. | Cada minuto y con cada evento |
+
+### Qué se guarda y para qué
+
+Se parte de las decisiones del usuario, no de la forma de los mensajes:
+
+| Reporte | Pregunta del usuario | Datos que usa |
+|---|---|---|
+| A. Secado de la semana | ¿Cuántas horas estuvo afuera la ropa y cuánta luz recibió? | Eventos de posición y de luz |
+| B. Mejor momento para tender | ¿A qué horas suele llover y cuándo hay más luz? | Eventos de agua y lecturas de `luz_adc` |
+| C. Protección | ¿Cuántas veces la protegió de la lluvia y de la noche? ¿Quién movió el tendedero? | Eventos de posición con `origen`, `agua_detectada` y `oscuro` |
+| D. Estado del equipo | ¿Estuvo conectado? ¿Cuánto se movió el brazo? | Alertas de R3 y R4, eventos de posición, `lectura_adc` |
+
+Los mockups de los cuatro reportes, con la consulta de cada elemento, están en [MOCKUPS.md](MOCKUPS.md).
+
+Las duraciones (horas afuera, de lluvia, de luz) no se guardan: se calculan restando las fechas de dos eventos seguidos. Los reportes se calculan al abrirlos, consultando el período que muestran.
+
+| Tipo de ítem | `sk` | Campos | TTL | Por qué |
+|---|---|---|---|---|
+| Lectura | `lectura#<fecha>` | `lectura_adc`, `agua_detectada`, `luz_adc`, `oscuro`, `ts_dispositivo` (y `luz_simulada` en ensayos) | 30 días | Una por mensaje publicado, para medir la integridad del almacenamiento. Sirven para la curva de luz del último mes y la deriva del sensor. Posición, modo, origen y LED no se repiten: están en los eventos. |
+| Evento de posición | `evento#<fecha>#posicion` | `posicion`, `origen`, `agua_detectada`, `oscuro` | 365 días | El contexto distingue la protección por lluvia (R1) de la de la noche (R5); `origen` dice quién lo movió. |
+| Evento de agua | `evento#<fecha>#agua` | `agua_detectada` | 365 días | Inicio y fin de cada lluvia. |
+| Evento de luz | `evento#<fecha>#luz` | `oscuro` | 365 días | Anochecer y amanecer: horas de luz por día. |
+| Evento de modo | `evento#<fecha>#modo` | `modo` | 365 días | Cuándo se apagó la protección automática. |
+| Evento del LED | `evento#<fecha>#led` | `led`, `origen_led` | 365 días | Lo pide RF12 (cambio de un actuador con su origen). Aporta poco al análisis. |
+| Alerta | `alerta#<fecha>#sin_reporte` o `#exceso_movimientos` | Detalle de la alerta | 365 días | Disponibilidad (R3) y espera demasiado corta (R4). |
+
+Todos los ítems llevan `thingName`, `tipo`, `ts_iot` (hora de la regla), `ts_guardado` (hora de la Lambda) y `ttl`.
+
+### Patrones de acceso
+
+| Patrón | Operación |
+|---|---|
+| Lecturas de un tendedero en un rango de fechas | `Query` `thingName = X AND sk BETWEEN lectura#<desde> AND lectura#<hasta>` |
+| Eventos de un tendedero en un rango (todos los tipos) | `Query` `sk BETWEEN evento#<desde> AND evento#<hasta>`; el tipo se filtra por `cambio` |
+| Alertas de un tendedero | `Query` `sk BEGINS_WITH alerta#` |
+| Reportes de un usuario | `Query` en `tendedero_vinculaciones` por `userId` → una consulta por tendedero |
+
+No hacen falta índices secundarios: todos los reportes son de un tendedero en un rango de fechas. Con 10 a 20 eventos por día, un año son unos 7 000 eventos por tendedero, así que no hace falta un resumen diario precalculado. Queda como mejora si hubiera miles de tendederos. Los reportes para la empresa, que juntan todos los tendederos, necesitarían otro índice o un proceso de agregación, y quedan fuera de esta práctica.
+
+### Reglas que llenan la tabla
+
+- `tendedero_lecturas` (`update/accepted`): cada reporte del ESP32 → una lectura.
+- `tendedero_cambios` (`update/documents`): entrega todos los documentos, sin filtro en el SQL, y la Lambda compara el anterior con el actual. Comparar en el SQL perdía el primer valor de un campo que el documento anterior no tenía, por ejemplo después de limpiar el Shadow. Cuesta una invocación más por reporte, dentro de la capa gratuita.
+
+Datos sin conexión: el ESP32 no acumula lecturas mientras está desconectado, así que no se guardan. El hueco queda marcado por la alerta `sin_reporte` de R3.
 
 ## Intents
 

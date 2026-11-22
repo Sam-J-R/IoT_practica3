@@ -19,15 +19,15 @@ class AlmacenamientoExtra(unittest.TestCase):
         self.handler = self.aws.cargar(ROOT / "lambda/almacenamiento/lambda_function.py")["lambda_handler"]
         self.tabla = self.aws.table("tendedero_historico")
 
-    def test_guarda_modo_origen_y_campos_nulos_se_omiten(self):
+    def test_campos_nulos_y_de_configuracion_se_omiten(self):
         self.handler({"reported": {"lectura_adc": 10, "agua_detectada": None, "modo": "manual",
                                    "origen": "voz", "ts_dispositivo": float(AHORA_MS),
                                    "calibracion": {"umbral_seco": 200}},
                       "thingName": "t", "ts": AHORA_MS}, None)
         item = self.tabla.items[0]
-        self.assertEqual((item["modo"], item["origen"], item["ts_dispositivo"]), ("manual", "voz", AHORA_MS))
-        self.assertNotIn("agua_detectada", item)
-        self.assertNotIn("calibracion", item, "solo se guardan los campos de telemetria")
+        self.assertEqual(item["ts_dispositivo"], AHORA_MS)
+        for campo in ("agua_detectada", "modo", "origen", "calibracion"):
+            self.assertNotIn(campo, item, "una lectura solo guarda datos de sensores")
 
     def test_descarta_evento_sin_forma_conocida(self):
         self.assertIn("descartado", self.handler({"thingName": "t", "ts": AHORA_MS}, None))

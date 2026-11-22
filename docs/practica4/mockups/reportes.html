@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reportes del tendedero</title>
+<!--
+  Mockups de los reportes (RF15). Datos FICTICIOS, solo para ilustrar.
+  Debajo de cada elemento se indica de que consulta a DynamoDB sale.
+  Abrir con #a, #b, #c o #d muestra un solo reporte (asi se exportan las imagenes).
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --fondo: #f1f0ed;
+    --surface-1: #fcfcfb;
+    --surface-2: #f4f3f0;
+    --borde: #e1e0db;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #77766f;
+    --grid: #e6e5e1;
+    --series-1: #2a78d6;   /* afuera (expuesto) */
+    --series-2: #eb6834;   /* luz */
+    --series-3: #1baf7a;   /* lluvia */
+    --neutro: #c9c8c2;     /* resguardado */
+    --noche: #dcdbe6;
+    --good: #0ca30c;
+    --good-text: #006300;
+    --warning: #fab219;
+    --fuente-fondo: #eef4fc;
+    --fuente-texto: #1c5cab;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --fondo: #111110;
+      --surface-1: #1a1a19;
+      --surface-2: #232321;
+      --borde: #33322f;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #9a998f;
+      --grid: #2e2d2a;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --neutro: #4a4945;
+      --noche: #2c2b3a;
+      --good: #0ca30c;
+      --good-text: #0ca30c;
+      --warning: #fab219;
+      --fuente-fondo: #17263a;
+      --fuente-texto: #86b6ef;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fondo);
+    color: var(--text-primary);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header.pagina { max-width: 1640px; margin: 0 auto; padding: 24px 16px 8px; }
+  header.pagina h1 { margin: 0 0 4px; font-size: 24px; }
+  header.pagina p { margin: 0; color: var(--text-secondary); max-width: 760px; }
+  .reportes {
+    max-width: 1640px; margin: 0 auto; padding: 16px;
+    display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    align-items: start;
+  }
+  .telefono {
+    background: var(--surface-1); border: 1px solid var(--borde); border-radius: 22px;
+    padding: 18px 16px 20px; max-width: 400px; width: 100%;
+  }
+  .solo .reportes { grid-template-columns: 400px; justify-content: start; padding: 0; }
+  .solo header.pagina { display: none; }
+  .solo body, body.solo { background: var(--surface-1); }
+  .chip {
+    display: inline-block; font-size: 12px; color: var(--text-secondary);
+    background: var(--surface-2); border-radius: 999px; padding: 2px 10px;
+  }
+  h2 { font-size: 19px; margin: 8px 0 2px; }
+  .periodo { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+  h3 { font-size: 14px; margin: 18px 0 6px; color: var(--text-primary); }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { background: var(--surface-2); border-radius: 14px; padding: 10px 12px; }
+  .tile .valor { font-size: 24px; font-weight: 650; line-height: 1.15; }
+  .tile .etiqueta { font-size: 12.5px; color: var(--text-secondary); }
+  .tile .icono { font-size: 13px; margin-right: 4px; }
+  .aviso {
+    background: var(--surface-2); border-left: 4px solid var(--series-1); border-radius: 10px;
+    padding: 10px 12px; font-size: 13.5px; margin-top: 10px;
+  }
+  .aviso strong { display: block; margin-bottom: 2px; }
+  .fuente {
+    margin-top: 6px; font-size: 11.5px; line-height: 1.4; color: var(--fuente-texto);
+    background: var(--fuente-fondo); border-radius: 8px; padding: 6px 8px;
+  }
+  .fuente code { font-size: 11px; }
+  .leyenda { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 2px 0 4px; flex-wrap: wrap; }
+  .leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--text-muted); font-size: 11px; }
+  svg .valor-dato { fill: var(--text-secondary); font-size: 11px; font-weight: 600; }
+  .lista { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .lista li { padding: 7px 0; border-bottom: 1px solid var(--borde); display: flex; gap: 8px; }
+  .lista li:last-child { border-bottom: 0; }
+  .lista .fecha { color: var(--text-muted); min-width: 74px; }
+  #tooltip {
+    position: fixed; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; padding: 5px 8px; border-radius: 6px; opacity: 0; transition: opacity .08s;
+    white-space: nowrap; z-index: 10;
+  }
+  .ficticio { font-size: 12px; color: var(--text-muted); margin-top: 14px; }
+</style>
+</head>
+<body>
+<header class="pagina">
+  <h1>Reportes del tendedero inteligente</h1>
+  <p>Mockups para el usuario (RF15). Se calculan al abrirlos, consultando <code>tendedero_historico</code> del tendedero elegido. Los datos son ficticios; cada recuadro azul indica de qué consulta sale el elemento.</p>
+</header>
+
+<main class="reportes">
+
+  <!-- ============================ A. Secado ============================ -->
+  <section class="telefono" id="a">
+    <span class="chip">Tendedero patio</span>
+    <h2>Secado de la semana</h2>
+    <div class="periodo">Hoy, sábado 21 de noviembre · últimos 7 días</div>
+
+    <div class="tiles">
+      <div class="tile"><div class="valor">5 h 40 min</div><div class="etiqueta">afuera hoy</div></div>
+      <div class="tile"><div class="valor">11 h 50 min</div><div class="etiqueta">de luz hoy</div></div>
+    </div>
+    <div class="fuente">Suma de los intervalos entre eventos de posición (<code>expuesto</code> → <code>resguardado</code>) y entre eventos de luz (amanecer → anochecer). <code>Query sk BETWEEN evento#hoy 00:00 AND evento#hoy 23:59</code></div>
+
+    <h3>Hoy, hora por hora</h3>
+    <div class="leyenda"><span><i style="background:var(--series-1)"></i>Afuera</span><span><i style="background:var(--neutro)"></i>Resguardada</span><span><i style="background:var(--series-3)"></i>Lluvia</span></div>
+    <svg id="lineaDia" viewBox="0 0 360 74" role="img" aria-label="Línea de tiempo de hoy"></svg>
+    <div class="fuente">Cada cambio de posición y de agua de hoy es un tramo. El motivo de cada resguardo sale de <code>agua_detectada</code> y <code>oscuro</code> del evento de posición.</div>
+
+    <h3>Horas por día</h3>
+    <div class="leyenda"><span><i style="background:var(--series-1)"></i>Afuera</span><span><i style="background:var(--series-2)"></i>Luz</span></div>
+    <svg id="barrasSemana" viewBox="0 0 360 170" role="img" aria-label="Horas afuera y de luz por día"></svg>
+    <div class="fuente">Lo mismo, agrupado por día. <code>Query sk BETWEEN evento#hace 7 días AND evento#hoy</code> (eventos con TTL de 365 días).</div>
+
+    <div class="aviso"><strong>¿Ya está seca?</strong>Hoy la ropa lleva 5 h 40 min afuera con buena luz: más que el promedio de la semana (4 h 20 min).</div>
+    <div class="ficticio">Datos de ejemplo.</div>
+  </section>
+
+  <!-- ===================== B. Mejor momento para tender ===================== -->
+  <section class="telefono" id="b">
+    <span class="chip">Tendedero patio</span>
+    <h2>Mejor momento para tender</h2>
+    <div class="periodo">Últimos 30 días</div>
+
+    <div class="aviso" style="margin-top:0"><strong>Mejor franja: 09:00 a 13:00</strong>Llovió en esa franja 2 de 30 días y es cuando más luz llega al tendedero.</div>
+    <div class="fuente">Franja de 4 h con menos días de lluvia y más luz promedio, a partir de los dos gráficos de abajo.</div>
+
+    <h3>Días con lluvia a cada hora</h3>
+    <svg id="barrasLluvia" viewBox="0 0 360 170" role="img" aria-label="Días con lluvia por hora"></svg>
+    <div class="fuente">Inicio y fin de cada lluvia (eventos <code>cambio = agua</code>); se cuenta en cuántos días hubo lluvia en cada hora. <code>Query sk BETWEEN evento#hace 30 días AND evento#hoy</code></div>
+
+    <h3>Luz promedio a cada hora</h3>
+    <div class="leyenda"><span><i style="background:var(--series-2)"></i>Nivel de luz (0 a 100 %)</span></div>
+    <svg id="lineaLuz" viewBox="0 0 360 150" role="img" aria-label="Nivel de luz promedio por hora"></svg>
+    <div class="fuente">Promedio de <code>luz_adc</code> por hora, llevado a 0–100 % con las referencias del LDR. <code>Query sk BETWEEN lectura#hace 30 días AND lectura#hoy</code> (lecturas con TTL de 30 días: este reporte no puede mirar más atrás).</div>
+    <div class="ficticio">Datos de ejemplo.</div>
+  </section>
+
+  <!-- ============================ C. Protección ============================ -->
+  <section class="telefono" id="c">
+    <span class="chip">Tendedero patio</span>
+    <h2>Protección</h2>
+    <div class="periodo">Últimos 7 días</div>
+
+    <div class="tiles">
+      <div class="tile"><div class="valor">6 veces</div><div class="etiqueta">la protegió de la lluvia</div></div>
+      <div class="tile"><div class="valor">7 veces</div><div class="etiqueta">la guardó al anochecer</div></div>
+    </div>
+    <div class="fuente">Eventos de posición <code>resguardado</code> con <code>origen = edge</code>: con <code>agua_detectada = true</code> es lluvia (R1); con <code>oscuro = true</code> y sin agua, es la noche (R5).</div>
+
+    <h3>Quién movió el tendedero</h3>
+    <svg id="barrasOrigen" viewBox="0 0 360 120" role="img" aria-label="Movimientos por origen"></svg>
+    <div class="fuente">Eventos <code>cambio = posicion</code> contados por <code>origen</code>: <code>edge</code> (lluvia o noche), <code>nube</code> (R2 la volvió a exponer) y <code>voz</code>.</div>
+
+    <div class="aviso"><strong>Sugerencia: espera más antes de volver a exponer</strong>En 3 de las 9 veces que la ropa volvió a salir sola, llovió otra vez en menos de 30 minutos. Prueba con 60 minutos: «espera sesenta minutos para volver a exponer».</div>
+    <div class="fuente">Eventos de posición <code>expuesto</code> con <code>origen = nube</code> seguidos de un evento de agua <code>true</code> en menos de 30 min. La espera vigente es <code>reported.minutos_reexponer</code> del Shadow.</div>
+
+    <h3>Ajustes automáticos</h3>
+    <ul class="lista">
+      <li><span class="fecha">19 nov</span><span>Se movió 7 veces en una hora: la espera pasó de 30 a 60 minutos.</span></li>
+    </ul>
+    <div class="fuente">Alertas <code>exceso_movimientos</code> de R4 (<code>minutos_antes</code>, <code>minutos_despues</code>). <code>Query sk BEGINS_WITH alerta#</code></div>
+    <div class="ficticio">Datos de ejemplo.</div>
+  </section>
+
+  <!-- ========================== D. Estado del equipo ========================== -->
+  <section class="telefono" id="d">
+    <span class="chip">Tendedero patio</span>
+    <h2>Estado del equipo</h2>
+    <div class="periodo">Últimos 7 días · en uso desde el 14 de marzo de 2026</div>
+
+    <div class="tiles">
+      <div class="tile"><div class="valor"><span class="icono" style="color:var(--good)">●</span>99,1 %</div><div class="etiqueta">del tiempo conectado</div></div>
+      <div class="tile"><div class="valor"><span class="icono" style="color:var(--warning)">▲</span>2</div><div class="etiqueta">desconexiones</div></div>
+    </div>
+    <div class="fuente">Minutos con lecturas sobre el total del período; los huecos los marcan las alertas <code>sin_reporte</code> de R3. «En uso desde» es <code>fechaAlta</code> de <code>tendedero_dispositivos</code>.</div>
+
+    <h3>Conexión por día</h3>
+    <div class="leyenda"><span><i style="background:var(--good)"></i>Conectado</span><span><i style="background:var(--warning)"></i>Sin conexión</span></div>
+    <svg id="lineaConexion" viewBox="0 0 360 150" role="img" aria-label="Conexión por día"></svg>
+    <div class="fuente">Alertas <code>sin_reporte</code> (inicio) y la siguiente lectura (fin). <code>Query sk BEGINS_WITH alerta#</code> y <code>sk BETWEEN lectura#…</code></div>
+
+    <h3>Movimientos del brazo por día</h3>
+    <svg id="barrasMovimientos" viewBox="0 0 360 150" role="img" aria-label="Movimientos del brazo por día"></svg>
+    <div class="fuente">Eventos <code>cambio = posicion</code> por día. Muchos movimientos significan desgaste del servo.</div>
+
+    <h3>Desconexiones</h3>
+    <ul class="lista">
+      <li><span class="fecha">20 nov</span><span>Sin conexión de 02:10 a 03:05 (55 min). Las reglas de lluvia y noche siguieron funcionando.</span></li>
+      <li><span class="fecha">17 nov</span><span>Sin conexión de 14:20 a 14:51 (31 min).</span></li>
+    </ul>
+    <div class="fuente">Alertas <code>sin_reporte</code> con <code>ultima_lectura</code>. Las lecturas de esos minutos no existen: el ESP32 no las acumula sin conexión.</div>
+    <div class="ficticio">Datos de ejemplo.</div>
+  </section>
+
+</main>
+<div id="tooltip" role="tooltip"></div>
+
+<script>
+// ---------------------------------------------------------------- datos de ejemplo
+const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const SEMANA = [
+  { dia: "dom 15", afuera: 3.2, luz: 11.6 }, { dia: "lun 16", afuera: 6.1, luz: 12.0 },
+  { dia: "mar 17", afuera: 2.0, luz: 9.4 }, { dia: "mié 18", afuera: 4.5, luz: 11.2 },
+  { dia: "jue 19", afuera: 1.5, luz: 8.8 }, { dia: "vie 20", afuera: 7.4, luz: 12.1 },
+  { dia: "sáb 21", afuera: 5.7, luz: 11.8 },
+];
+// Tramos de hoy (horas decimales): tipo afuera | resguardada; lluvia aparte.
+const HOY = [
+  { desde: 6, hasta: 8.5, tipo: "resguardada", motivo: "noche" },
+  { desde: 8.5, hasta: 11.2, tipo: "afuera", motivo: "salió sola al haber luz" },
+  { desde: 11.2, hasta: 12.4, tipo: "resguardada", motivo: "lluvia" },
+  { desde: 12.4, hasta: 15.4, tipo: "afuera", motivo: "salió sola tras 30 min sin agua" },
+  { desde: 15.4, hasta: 20, tipo: "resguardada", motivo: "la pediste por voz" },
+];
+const LLUVIA_HOY = [{ desde: 11.15, hasta: 11.9 }];
+const HORAS = Array.from({ length: 15 }, (_, i) => i + 6); // 06..20
+const LLUVIA_HORA = [0, 1, 1, 1, 1, 1, 2, 3, 5, 7, 8, 6, 4, 2, 1];
+const LUZ_HORA = [4, 18, 42, 63, 79, 88, 92, 90, 82, 70, 54, 37, 19, 6, 1];
+const ORIGEN = [
+  { nombre: "ESP32 (lluvia o noche)", valor: 13 },
+  { nombre: "Nube (volver a exponer)", valor: 9 },
+  { nombre: "Voz", valor: 4 },
+];
+const CONEXION = [100, 100, 97.8, 100, 100, 96.2, 100]; // % por día
+const MOVIMIENTOS = [2, 3, 4, 2, 9, 3, 3]; // suma 26, igual que por origen
+
+// ---------------------------------------------------------------- utilidades
+const NS = "http://www.w3.org/2000/svg";
+const tooltip = document.getElementById("tooltip");
+function el(nombre, attrs, padre) {
+  const e = document.createElementNS(NS, nombre);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  if (padre) padre.appendChild(e);
+  return e;
+}
+function texto(padre, x, y, contenido, attrs = {}) {
+  const t = el("text", { x, y, ...attrs }, padre);
+  t.textContent = contenido;
+  return t;
+}
+function conTooltip(nodo, mensaje) {
+  nodo.style.cursor = "default";
+  nodo.addEventListener("pointermove", ev => {
+    tooltip.textContent = mensaje;
+    tooltip.style.left = ev.clientX + 12 + "px";
+    tooltip.style.top = ev.clientY - 30 + "px";
+    tooltip.style.opacity = 1;
+  });
+  nodo.addEventListener("pointerleave", () => { tooltip.style.opacity = 0; });
+}
+// Barra con extremo redondeado (4 px) apoyada en la linea base.
+function barra(padre, x, y, w, h, color) {
+  const r = Math.min(4, w / 2, h);
+  const d = `M${x},${y + h} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${y + h} Z`;
+  return el("path", { d, fill: color }, padre);
+}
+function hhmm(h) {
+  const horas = Math.floor(h), min = Math.round((h - horas) * 60);
+  return `${String(horas).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+function duracion(h) {
+  const horas = Math.floor(h), min = Math.round((h - horas) * 60);
+  return min ? `${horas} h ${min} min` : `${horas} h`;
+}
+function ejeY(svg, x0, x1, y0, y1, max, pasos, sufijo = "") {
+  for (let i = 0; i <= pasos; i++) {
+    const v = (max / pasos) * i;
+    const y = y1 - (y1 - y0) * (i / pasos);
+    el("line", { x1: x0, x2: x1, y1: y, y2: y, stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    texto(svg, x0 - 6, y + 4, `${Math.round(v)}${sufijo}`, { "text-anchor": "end" });
+  }
+}
+
+// ---------------------------------------------------------------- A. linea del dia
+(function () {
+  const svg = document.getElementById("lineaDia");
+  const x0 = 8, x1 = 352, y = 14, alto = 26;
+  const x = h => x0 + ((h - 6) / 14) * (x1 - x0);
+  HOY.forEach(t => {
+    const r = el("rect", { x: x(t.desde) + 1, y, width: x(t.hasta) - x(t.desde) - 2, height: alto, rx: 4,
+      fill: t.tipo === "afuera" ? "var(--series-1)" : "var(--neutro)" }, svg);
+    conTooltip(r, `${hhmm(t.desde)}–${hhmm(t.hasta)} · ${t.tipo}: ${t.motivo}`);
+  });
+  LLUVIA_HOY.forEach(l => {
+    const r = el("rect", { x: x(l.desde), y: y + alto + 4, width: x(l.hasta) - x(l.desde), height: 6, rx: 3,
+      fill: "var(--series-3)" }, svg);
+    conTooltip(r, `Lluvia ${hhmm(l.desde)}–${hhmm(l.hasta)}`);
+  });
+  [6, 9, 12, 15, 18, 20].forEach(h => texto(svg, x(h), 66, `${String(h).padStart(2, "0")}:00`, { "text-anchor": "middle" }));
+})();
+
+// ---------------------------------------------------------------- A. barras agrupadas
+(function () {
+  const svg = document.getElementById("barrasSemana");
+  const x0 = 30, x1 = 356, y0 = 8, y1 = 140, max = 14;
+  ejeY(svg, x0, x1, y0, y1, max, 2, " h");
+  const ancho = (x1 - x0) / SEMANA.length, w = 14, gap = 2;
+  SEMANA.forEach((d, i) => {
+    const cx = x0 + ancho * i + ancho / 2;
+    [["afuera", "var(--series-1)", "afuera"], ["luz", "var(--series-2)", "de luz"]].forEach(([k, c, nombre], j) => {
+      const h = (d[k] / max) * (y1 - y0);
+      const xb = cx - w - gap / 2 + j * (w + gap);
+      conTooltip(barra(svg, xb, y1 - h, w, h, c), `${d.dia}: ${duracion(d[k])} ${nombre}`);
+    });
+    texto(svg, cx, y1 + 16, d.dia.split(" ")[0], { "text-anchor": "middle" });
+  });
+})();
+
+// ---------------------------------------------------------------- B. lluvia por hora
+(function () {
+  const svg = document.getElementById("barrasLluvia");
+  const x0 = 26, x1 = 356, y0 = 14, y1 = 120, max = 10;
+  ejeY(svg, x0, x1, y0, y1, max, 2);
+  const ancho = (x1 - x0) / HORAS.length, w = ancho - 4;
+  const mayor = Math.max(...LLUVIA_HORA);
+  HORAS.forEach((h, i) => {
+    const v = LLUVIA_HORA[i], alto = (v / max) * (y1 - y0);
+    const x = x0 + ancho * i + 2;
+    if (v) conTooltip(barra(svg, x, y1 - alto, w, alto, "var(--series-3)"), `${String(h).padStart(2, "0")}:00 · llovió ${v} de 30 días`);
+    // Rotulos directos solo en los extremos utiles (relief: el aqua tiene poco contraste).
+    if (v === mayor || h === 10) texto(svg, x + w / 2, y1 - alto - 4, `${v}`, { class: "valor-dato", "text-anchor": "middle" });
+    if (h % 2 === 0) texto(svg, x + w / 2, y1 + 15, `${h}h`, { "text-anchor": "middle" });
+  });
+  // Franja recomendada.
+  const xa = x0 + ancho * (9 - 6), xb = x0 + ancho * (13 - 6);
+  el("line", { x1: xa, x2: xb, y1: y1 + 26, y2: y1 + 26, stroke: "var(--series-1)", "stroke-width": 2 }, svg);
+  texto(svg, (xa + xb) / 2, y1 + 42, "mejor franja", { "text-anchor": "middle", style: "fill:var(--series-1)" });
+})();
+
+// ---------------------------------------------------------------- B. luz por hora
+(function () {
+  const svg = document.getElementById("lineaLuz");
+  const x0 = 30, x1 = 352, y0 = 10, y1 = 120;
+  ejeY(svg, x0, x1, y0, y1, 100, 2, "%");
+  const x = i => x0 + (i / (HORAS.length - 1)) * (x1 - x0);
+  const y = v => y1 - (v / 100) * (y1 - y0);
+  const d = LUZ_HORA.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
+  el("path", { d, fill: "none", stroke: "var(--series-2)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  const guia = el("line", { y1: y0, y2: y1, stroke: "var(--text-muted)", "stroke-width": 1, opacity: 0 }, svg);
+  const punto = el("circle", { r: 4.5, fill: "var(--series-2)", stroke: "var(--surface-1)", "stroke-width": 2, opacity: 0 }, svg);
+  const pico = LUZ_HORA.indexOf(Math.max(...LUZ_HORA));
+  el("circle", { cx: x(pico), cy: y(LUZ_HORA[pico]), r: 4, fill: "var(--series-2)", stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+  texto(svg, x(pico), y(LUZ_HORA[pico]) - 8, `${LUZ_HORA[pico]} % a las ${HORAS[pico]}:00`, { class: "valor-dato", "text-anchor": "middle" });
+  HORAS.forEach((h, i) => { if (h % 2 === 0) texto(svg, x(i), y1 + 15, `${h}h`, { "text-anchor": "middle" }); });
+  const zona = el("rect", { x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: "transparent" }, svg);
+  zona.addEventListener("pointermove", ev => {
+    const caja = svg.getBoundingClientRect();
+    const px = (ev.clientX - caja.left) * (360 / caja.width);
+    const i = Math.max(0, Math.min(HORAS.length - 1, Math.round(((px - x0) / (x1 - x0)) * (HORAS.length - 1))));
+    guia.setAttribute("x1", x(i)); guia.setAttribute("x2", x(i)); guia.setAttribute("opacity", 0.5);
+    punto.setAttribute("cx", x(i)); punto.setAttribute("cy", y(LUZ_HORA[i])); punto.setAttribute("opacity", 1);
+    tooltip.textContent = `${String(HORAS[i]).padStart(2, "0")}:00 · luz ${LUZ_HORA[i]} %`;
+    tooltip.style.left = ev.clientX + 12 + "px"; tooltip.style.top = ev.clientY - 30 + "px"; tooltip.style.opacity = 1;
+  });
+  zona.addEventListener("pointerleave", () => { tooltip.style.opacity = 0; guia.setAttribute("opacity", 0); punto.setAttribute("opacity", 0); });
+})();
+
+// ---------------------------------------------------------------- C. movimientos por origen
+(function () {
+  const svg = document.getElementById("barrasOrigen");
+  const x0 = 8, x1 = 320, max = 14, alto = 14;
+  ORIGEN.forEach((o, i) => {
+    const y = 6 + i * 38;
+    texto(svg, x0, y + 10, o.nombre, { style: "fill:var(--text-secondary);font-size:12px" });
+    const w = (o.valor / max) * (x1 - x0);
+    const r = el("rect", { x: x0, y: y + 16, width: w, height: alto, rx: 4, fill: "var(--series-1)" }, svg);
+    conTooltip(r, `${o.nombre}: ${o.valor} movimientos`);
+    texto(svg, x0 + w + 6, y + 27, `${o.valor}`, { class: "valor-dato" });
+  });
+})();
+
+// ---------------------------------------------------------------- D. conexion por dia
+(function () {
+  const svg = document.getElementById("lineaConexion");
+  const x0 = 8, x1 = 352, alto = 12;
+  // Una fila por dia: barra de 24 h con el tramo sin conexion marcado.
+  const cortes = { 2: [14.33, 14.85], 5: [2.17, 3.08] };
+  SEMANA.forEach((d, i) => {
+    const y = 2 + i * 19;
+    texto(svg, x0, y + 10, d.dia.split(" ")[0], { style: "fill:var(--text-secondary)" });
+    const xa = x0 + 34, xb = x1;
+    const x = h => xa + (h / 24) * (xb - xa);
+    const fila = el("rect", { x: xa, y, width: xb - xa, height: alto, rx: 4, fill: "var(--good)" }, svg);
+    conTooltip(fila, `${d.dia}: ${String(CONEXION[i]).replace(".", ",")} % conectado`);
+    if (cortes[i]) {
+      const [desde, hasta] = cortes[i];
+      const r = el("rect", { x: x(desde), y, width: Math.max(4, x(hasta) - x(desde)), height: alto, fill: "var(--warning)",
+        stroke: "var(--surface-1)", "stroke-width": 2 }, svg);
+      conTooltip(r, `${d.dia}: sin conexión ${hhmm(desde)}–${hhmm(hasta)}`);
+    }
+  });
+  const xa = x0 + 34;
+  [0, 6, 12, 18, 24].forEach(h => texto(svg, xa + (h / 24) * (x1 - xa), 146, `${h}h`, { "text-anchor": "middle" }));
+})();
+
+// ---------------------------------------------------------------- D. movimientos por dia
+(function () {
+  const svg = document.getElementById("barrasMovimientos");
+  const x0 = 26, x1 = 356, y0 = 14, y1 = 124, max = 12;
+  ejeY(svg, x0, x1, y0, y1, max, 2);
+  const ancho = (x1 - x0) / MOVIMIENTOS.length, w = 22;
+  MOVIMIENTOS.forEach((v, i) => {
+    const cx = x0 + ancho * i + ancho / 2, h = (v / max) * (y1 - y0);
+    conTooltip(barra(svg, cx - w / 2, y1 - h, w, h, "var(--series-1)"), `${SEMANA[i].dia}: ${v} movimientos`);
+    if (v === Math.max(...MOVIMIENTOS)) texto(svg, cx, y1 - h - 5, `${v}`, { class: "valor-dato", "text-anchor": "middle" });
+    texto(svg, cx, y1 + 16, SEMANA[i].dia.split(" ")[0], { "text-anchor": "middle" });
+  });
+})();
+
+// ---------------------------------------------------------------- un solo reporte (#a .. #d)
+const solo = location.hash.slice(1);
+if (["a", "b", "c", "d"].includes(solo)) {
+  // Las imagenes exportadas van en tema claro, para que se lean igual en GitHub.
+  document.documentElement.dataset.theme = "light";
+  document.documentElement.classList.add("solo");
+  document.body.classList.add("solo");
+  document.querySelectorAll(".telefono").forEach(s => { if (s.id !== solo) s.remove(); });
+}
+</script>
+</body>
+</html>

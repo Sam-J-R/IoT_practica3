@@ -54,6 +54,20 @@ class AlmacenamientoTests(unittest.TestCase):
             self.handler(evento, None)
         self.assertEqual(self.tabla.items, [], "ninguna lectura invalida debe guardarse")
 
+    def test_lectura_guarda_solo_los_sensores(self):
+        """Posicion, modo, origen y LED ya estan en los eventos: no se repiten en cada lectura."""
+        self.handler(self.lectura(origen="voz", minutos_reexponer=30, luz_adc=900, oscuro=False,
+                                  led="apagado", origen_led="voz"), None)
+        item = self.tabla.items[0]
+        for campo in ("posicion", "modo", "origen", "minutos_reexponer", "led", "origen_led"):
+            self.assertNotIn(campo, item)
+        self.assertEqual((int(item["lectura_adc"]), item["agua_detectada"], int(item["luz_adc"]), item["oscuro"]),
+                         (120, False, 900, False))
+
+    def test_lectura_invalida_se_descarta_aunque_el_campo_no_se_guarde(self):
+        self.handler(self.lectura(modo="turbo"), None)
+        self.assertEqual(self.tabla.items, [])
+
     def test_no_falla_con_reporte_parcial(self):
         """El reporte periodico puede no traer todos los campos (p. ej. sin calibracion)."""
         self.handler({"reported": {"lectura_adc": 50, "agua_detectada": False},
@@ -70,6 +84,31 @@ class AlmacenamientoTests(unittest.TestCase):
         self.assertEqual(eventos[0]["cambio"], "posicion")
         self.assertEqual(eventos[0]["posicion"], "resguardado")
         self.assertEqual(eventos[0]["origen"], "edge")
+        # Contexto para distinguir la proteccion por lluvia (R1) de la de la noche (R5).
+        self.assertIs(eventos[0]["agua_detectada"], True)
+
+    def test_evento_de_posicion_de_noche(self):
+        self.handler({"actual": {"posicion": "resguardado", "origen": "edge", "agua_detectada": False,
+                                 "oscuro": True},
+                      "anterior": {"posicion": "expuesto", "agua_detectada": False, "oscuro": True},
+                      "thingName": "tendedero-uno", "ts": AHORA_MS}, None)
+        evento, = self.tabla.items
+        self.assertEqual((evento["cambio"], evento["agua_detectada"], evento["oscuro"]), ("posicion", False, True))
+
+    def test_documento_sin_cambios_no_guarda_eventos(self):
+        # La regla entrega todos los documentos (p. ej. cuando Alexa solo escribe desired).
+        reported = {"posicion": "expuesto", "agua_detectada": False, "modo": "automatico", "oscuro": False}
+        resultado = self.handler({"actual": reported, "anterior": dict(reported),
+                                  "thingName": "tendedero-uno", "ts": AHORA_MS}, None)
+        self.assertEqual(resultado, {"guardados": 0})
+        self.assertEqual(self.tabla.items, [])
+
+    def test_primer_valor_de_un_campo_es_un_evento(self):
+        # Tras limpiar el Shadow, el documento anterior no tiene el campo: igual se registra.
+        self.handler({"actual": {"posicion": "expuesto", "oscuro": False, "origen": "voz"},
+                      "anterior": {"posicion": "expuesto", "origen": "voz"},
+                      "thingName": "tendedero-uno", "ts": AHORA_MS}, None)
+        self.assertEqual([i["cambio"] for i in self.tabla.items], ["luz"])
 
     def test_evento_de_agua_y_posicion_a_la_vez(self):
         self.handler({"actual": {"posicion": "resguardado", "origen": "edge", "agua_detectada": True},
@@ -89,19 +128,20 @@ class AlmacenamientoTests(unittest.TestCase):
 
 @unittest.skipUnless(RUTA.exists(), f"todavia no existe {RUTA.relative_to(ROOT)}")
 class LuzAutomaticaTests(unittest.TestCase):
-    """RF11 y RF12 para el LDR y el LED (regla R5)."""
+    """RF11 y RF12 para el LDR (regla R5) y el LED (luz para recoger la ropa)."""
 
     def setUp(self):
         self.aws = FakeAws()
         self.handler = self.aws.cargar(RUTA, {"DDB_HISTORY_TABLE": TABLA})["lambda_handler"]
         self.tabla = self.aws.table(TABLA)
 
-    def test_lectura_guarda_luz_y_led(self):
+    def test_lectura_guarda_la_luz_pero_no_el_led(self):
         self.handler({"reported": {"lectura_adc": 10, "luz_adc": 640, "oscuro": True, "led": "encendido",
                                    "origen_led": "edge"},
                       "thingName": "tendedero-uno", "ts": AHORA_MS}, None)
         item = self.tabla.items[0]
-        self.assertEqual((int(item["luz_adc"]), item["oscuro"], item["led"]), (640, True, "encendido"))
+        self.assertEqual((int(item["luz_adc"]), item["oscuro"]), (640, True))
+        self.assertNotIn("led", item, "el LED es un actuador: se registra en sus eventos")
 
     def test_descarta_luz_invalida(self):
         for malo in ({"luz_adc": 9000}, {"oscuro": "si"}, {"led": "prendido"}, {"luz_simulada": 1}):

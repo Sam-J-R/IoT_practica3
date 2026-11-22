@@ -11,6 +11,7 @@ La entrega de la práctica 3 queda recuperable en la etiqueta de git `practica3-
 | [CONTRATO.md](CONTRATO.md) | Shadow, tablas, intents y reglas de calibración. Es la referencia común. |
 | [GUIA_AWS.md](GUIA_AWS.md) | Pasos para actualizar la cuenta de AWS. |
 | [ALEXA.md](ALEXA.md) | Pasos para actualizar la Skill y frases de prueba. |
+| [MOCKUPS.md](MOCKUPS.md) | Mockups de los cuatro reportes (RF15) y de qué consulta sale cada elemento. |
 
 ## 1. Qué cambió y por qué
 
@@ -81,6 +82,14 @@ La espera mínima sube de 5 a 15 minutos: con menos, la ropa sale con la superfi
 - **LED:** es la luz para recoger la ropa. Solo lo controla la voz y el ESP32 lo apaga solo a los 10 minutos.
 - **Alexa:** «¿cómo está el tendedero?» responde la posición y el motivo (lluvia, noche, orden de voz o modo manual). «¿Cómo está la luz?» solo informa si la luz está encendida.
 
+### 1.9 Qué guarda el histórico y para qué
+
+El diseño parte de cuatro reportes para el usuario: secado, mejor momento para tender, protección y estado del equipo. Ver [CONTRATO.md](CONTRATO.md#modelo-del-histórico-rf11-rf12-rf15).
+
+- Las lecturas guardan solo los datos de los sensores. Posición, modo, origen y LED ya estaban en los eventos y se repetían en unas 43 000 lecturas al mes.
+- Los eventos de posición guardan si había agua y si era de noche, para distinguir la protección por lluvia de la de la noche.
+- La regla `tendedero_cambios` ya no compara en el SQL: perdía el primer valor de un campo después de limpiar el Shadow. Ahora compara la Lambda.
+
 ## 2. Archivos modificados
 
 | Área | Archivos | Cambio |
@@ -99,6 +108,7 @@ La espera mínima sube de 5 a 15 minutos: con menos, la ropa sale con la superfi
 | Pruebas | `tests/` | 19 pruebas: vinculación por código, calibración y contrato. |
 | Varios tendederos | `lambda/lambda_function.py` y el ZIP, `alexa/interaction-model-es-MX.json`, `aws/dynamodb-table.template.json`, `aws/lambda-iam-policy.template.json`, `aws/cloudformation/tendedero-base.yaml`, `tools/verificar_aws.py`, `tools/casos_alexa.json` | Clave `userId` + `thingName`, slot `nombre` en todos los intents del tendedero, pregunta «¿En cuál?» con `Dialog.ElicitSlot`, intent para listar, permiso `Query`. |
 | R4 | `lambda/logica/lambda_function.py`, `tests/p4/test_logica.py` | R4 duplica `minutos_reexponer` en lugar de pasar a manual y cuenta el movimiento del mensaje. |
+| Histórico | `lambda/almacenamiento/lambda_function.py`, `aws/reglas/tendedero_cambios.json`, `aws/cloudformation/tendedero-p4.yaml`, `tools/estimar_costo.py`, pruebas | Lecturas solo con sensores, contexto en los eventos de posición y regla de cambios sin filtro. |
 | LDR y LED | `firmware/include/LogicaEdge.h`, `firmware/src/Tendedero.cpp`, `firmware/include/config.h`, `lambda/lambda_function.py` y el ZIP, `lambda/supervisor/lambda_function.py`, `alexa/interaction-model-es-MX.json`, `tools/probar_esp32.py`, `tools/casos_alexa.json`, pruebas | R5 resguarda de noche; R2 solo con luz; luz por voz con apagado a los 10 min; motivo en la consulta de posición. |
 | Espera mínima | `firmware/include/config.h`, `lambda/lambda_function.py` y el ZIP, `lambda/almacenamiento/lambda_function.py`, pruebas y `tools/casos_alexa.json` | `minutos_reexponer` pasa de 5–240 a 15–240. |
 | Varios tendederos | `tests/fake_vinculaciones.py` (nuevo), `tests/test_lambda_integration.py`, `tests/test_herramientas_nube.py`, `tests/test_static_contract.py` | Tabla con clave compuesta en memoria; pruebas de varios tendederos, nombres, tope, renombrado y desvinculación. |

@@ -94,6 +94,14 @@ class StaticContract(unittest.TestCase):
                 self.assertIn("nombre", {s["name"] for s in intent.get("slots", [])})
         self.assertNotIn("SeleccionarTendederoIntent", intents)
 
+    def test_change_rule_lets_the_lambda_compare(self):
+        # Comparar en el SQL pierde el primer valor de un campo (anterior indefinido) y,
+        # si falta un campo en los dos documentos, la condicion queda indefinida.
+        regla = json.loads((ROOT / "aws" / "reglas" / "tendedero_cambios.json").read_text(encoding="utf-8"))
+        self.assertTrue(regla["sql"].endswith("WHERE NOT isUndefined(current.state.reported)"), regla["sql"])
+        plantilla = (ROOT / "aws" / "cloudformation" / "tendedero-p4.yaml").read_text(encoding="utf-8")
+        self.assertIn("WHERE NOT isUndefined(current.state.reported)", plantilla)
+
     def test_deployment_zip_matches_source(self):
         # splitlines() ignora la diferencia entre finales de linea CRLF y LF.
         source = (ROOT / "lambda" / "lambda_function.py").read_bytes().splitlines()
