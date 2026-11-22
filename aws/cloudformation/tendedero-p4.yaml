@@ -37,7 +37,7 @@ Parameters:
     Default: 6
   MinutosSinReporte:
     Type: Number
-    Default: 3
+    Default: 5
 
 Conditions:
   ConPresupuesto: !Not [!Equals [!Ref CorreoAlertas, ""]]
@@ -100,7 +100,7 @@ Resources:
                 Effect: Allow
                 Action: [dynamodb:Query, dynamodb:PutItem]
                 Resource: !GetAtt TablaHistorico.Arn
-              - Sid: CambiarModo
+              - Sid: AjustarEspera
                 Effect: Allow
                 Action: iot:UpdateThingShadow
                 Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/${PrefijoThing}*
@@ -216,11 +216,7 @@ Resources:
           SELECT current.state.reported AS actual, previous.state.reported AS anterior,
           topic(3) AS thingName, timestamp() AS ts
           FROM '$aws/things/+/shadow/update/documents'
-          WHERE previous.state.reported.posicion <> current.state.reported.posicion
-          OR previous.state.reported.agua_detectada <> current.state.reported.agua_detectada
-          OR previous.state.reported.modo <> current.state.reported.modo
-          OR previous.state.reported.led <> current.state.reported.led
-          OR previous.state.reported.oscuro <> current.state.reported.oscuro
+          WHERE NOT isUndefined(current.state.reported)
         Actions:
           - Lambda: {FunctionArn: !GetAtt LambdaAlmacenamiento.Arn}
 

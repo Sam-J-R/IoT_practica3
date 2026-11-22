@@ -1,18 +1,31 @@
 """Backend P4: Alexa -> DynamoDB (dispositivos y vinculaciones) -> IoT Thing Shadow.
 
-P4: la voz convive con la logica automatica del ESP32 (reglas R1 y R5):
-- Toda orden de posicion se escribe con origen "voz"; las del LED, con
-  origen_led "voz" (RF12).
-- En modo automatico con agua detectada, "exponer" se rechaza con una
-  explicacion; en automatico con sensor de luz, la luz tampoco se controla
-  por voz. En manual, la voz manda siempre.
+P4: la voz convive con la logica automatica del ESP32 (R1 lluvia, R5 noche):
+- Toda orden de posicion se escribe con origen "voz" (RF12). Las del LED no
+  llevan origen: solo la voz las da, y el ESP32 reporta origen_led.
+- En modo automatico, "exponer" se rechaza con una explicacion si hay agua o
+  es de noche, porque R1 o R5 la deshacerian. En manual, la voz manda siempre.
+- El LED es la luz para recoger la ropa: solo lo controla la voz y el ESP32
+  lo apaga solo a los 10 minutos.
+- "Como esta el tendedero" responde la posicion y el motivo (lluvia, noche,
+  orden de voz o modo manual), con los datos de los dos sensores.
 - La voz cambia el modo (manual / automatico) y los minutos de espera de la
   regla R2 (minutos_reexponer), como pide RF14.
 
-El usuario vincula su tendedero con el codigo numerico de la etiqueta. Ese
-codigo se busca en la tabla de dispositivos para obtener el Thing; no hay
-nombres de Things en variables de entorno ni en el codigo. En las demas
-solicitudes el Thing se resuelve por userId en la tabla de vinculaciones.
+El usuario vincula cada tendedero con el codigo numerico de la etiqueta y le
+da un nombre ("patio", "terraza"). El codigo se busca en la tabla de
+dispositivos para obtener el Thing; no hay nombres de Things en variables de
+entorno ni en el codigo.
+
+Un usuario puede tener varios tendederos (clave userId + thingName en la tabla
+de vinculaciones). Cada orden se dirige asi:
+1. Con un solo tendedero, a ese; no hace falta decir el nombre.
+2. Con varios, al que se nombra en la frase ("resguarda el tendedero del
+   patio"). Si la frase no nombra ninguno, Alexa pregunta cual (Dialog.ElicitSlot
+   sobre el slot nombre) y retoma la misma orden con la respuesta.
+No hay un tendedero "activo" guardado: nunca se actua sobre uno que el usuario
+no eligio en esa orden. Con varios, la respuesta empieza con el nombre del
+tendedero para confirmar sobre cual se actuo.
 """
 
 import json
@@ -20,6 +33,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 from datetime import datetime, timezone
 
 import boto3
@@ -27,6 +41,7 @@ from botocore.exceptions import ClientError
 import ask_sdk_core.utils as ask_utils
 from ask_sdk_core.dispatch_components import AbstractExceptionHandler, AbstractRequestHandler
 from ask_sdk_core.skill_builder import SkillBuilder
+from ask_sdk_model.dialog import ElicitSlotDirective
 
 
 LOG = logging.getLogger(__name__)
@@ -41,8 +56,11 @@ DEVICES_CODE_INDEX = os.getenv("DDB_DEVICES_CODE_INDEX", "codigoVinculacion-inde
 POSICIONES = ("expuesto", "resguardado")
 MODOS = ("manual", "automatico")
 ESTADOS_LED = ("encendido", "apagado")
-# Rango de minutos_reexponer aceptado por el ESP32 y la Lambda supervisor.
-MINUTOS_MIN, MINUTOS_MAX = 5, 240
+# Rango de minutos_reexponer aceptado por el ESP32 (config.h). Menos de 15 minutos
+# expone la ropa con la superficie aun mojada y con probabilidad de otro chubasco.
+MINUTOS_MIN, MINUTOS_MAX = 15, 240
+# Minutos tras los que el ESP32 apaga solo la luz (LED_APAGADO_AUTOMATICO_MS en config.h).
+MINUTOS_LUZ = 10
 # Palabras que puede decir el usuario -> modo que entiende el ESP32.
 MODOS_HABLADOS = {
     "manual": "manual", "a mano": "manual", "modo manual": "manual",
@@ -57,25 +75,81 @@ CONDICIONES = {
 }
 
 
+# Tope de tendederos por usuario: acota la Query de cada solicitud y la lista
+# que Alexa lee al preguntar en cual actuar.
+MAX_TENDEDEROS = 10
+# Nombre que recibe el primer tendedero si el usuario no dijo ninguno.
+NOMBRE_POR_DEFECTO = "principal"
+# Palabras que Alexa puede incluir en el slot y que no forman parte del nombre.
+_RELLENO_NOMBRE = re.compile(r"^(?:(?:mi|el|la|los|las|del|de|al|en|tendedero|tendederos)\s+)+")
+
+
+def _ahora():
+    return datetime.now(timezone.utc).isoformat()
+
+
 class BindingRepository:
-    """Vinculaciones usuario de Alexa -> Thing."""
+    """Vinculaciones usuario de Alexa -> sus tendederos.
+
+    Clave de particion userId y de ordenamiento thingName: un usuario tiene
+    varios tendederos y no puede vincular dos veces el mismo. Cada item guarda
+    el nombre que le dio el usuario, para distinguirlos por voz.
+    """
 
     def __init__(self):
         self._table = boto3.resource("dynamodb", region_name=REGION).Table(BINDINGS_TABLE)
 
-    def find(self, user_id):
-        item = self._table.get_item(Key={"userId": user_id}, ConsistentRead=True).get("Item")
-        return item.get("thingName") if item else None
+    def list(self, user_id):
+        """Todos los tendederos del usuario (una Query por particion)."""
+        return self._table.query(
+            KeyConditionExpression="userId = :u",
+            ExpressionAttributeValues={":u": user_id},
+            ConsistentRead=True,
+        ).get("Items", [])
 
-    def bind(self, user_id, thing_name):
+    def bind(self, user_id, thing_name, nombre, fecha_vinculacion=None):
+        """Crea la vinculacion o, si ya existia, le cambia el nombre."""
         self._table.put_item(Item={
             "userId": user_id,
             "thingName": thing_name,
-            "fechaVinculacion": datetime.now(timezone.utc).isoformat(),
+            "nombre": nombre,
+            "fechaVinculacion": fecha_vinculacion or _ahora(),
         })
 
-    def unbind(self, user_id):
-        self._table.delete_item(Key={"userId": user_id})
+    def unbind(self, user_id, thing_name):
+        self._table.delete_item(Key={"userId": user_id, "thingName": thing_name})
+
+
+def clave_nombre(nombre):
+    """Forma de comparar nombres: sin tildes, mayusculas ni espacios de mas."""
+    sin_tildes = unicodedata.normalize("NFKD", nombre or "")
+    sin_tildes = "".join(c for c in sin_tildes if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", sin_tildes).strip().casefold()
+
+
+def limpiar_nombre(texto):
+    """'el tendedero del Patio' -> 'patio'. Conserva las tildes para que Alexa lo pronuncie bien."""
+    nombre = re.sub(r"\s+", " ", texto or "").strip().casefold()
+    return _RELLENO_NOMBRE.sub("", nombre).strip()
+
+
+def buscar_por_nombre(vinculos, nombre):
+    clave = clave_nombre(nombre)
+    return next((v for v in vinculos if clave_nombre(v.get("nombre")) == clave), None)
+
+
+def lista_hablada(vinculos, conjuncion="y"):
+    """['patio', 'terraza', 'azotea'] -> 'patio, terraza y azotea' (o '... o azotea')."""
+    nombres = sorted(v.get("nombre") or v["thingName"] for v in vinculos)
+    if len(nombres) == 1:
+        return nombres[0]
+    return ", ".join(nombres[:-1]) + " " + conjuncion + " " + nombres[-1]
+
+
+def tus_tendederos(vinculos):
+    if len(vinculos) == 1:
+        return "Tu tendedero se llama {}.".format(lista_hablada(vinculos))
+    return "Tus tendederos son: {}.".format(lista_hablada(vinculos))
 
 
 class DeviceRepository:
@@ -140,7 +214,7 @@ class ShadowService:
     def request_led(self, thing_name, estado):
         if estado not in ESTADOS_LED:
             raise ValueError("Estado de la luz no válido")
-        self._update_desired(thing_name, {"led": estado, "origen_led": "voz"})
+        self._update_desired(thing_name, {"led": estado})
 
     def request_calibration(self, thing_name, condicion):
         """Pide al ESP32 medir el sensor en la condicion indicada.
@@ -230,20 +304,77 @@ def _minutos(handler_input):
     return int(digits) if digits else None
 
 
+def _nombre(handler_input):
+    """Nombre del tendedero dicho en la frase, limpio; cadena vacia si no hay."""
+    return limpiar_nombre(_slot(handler_input, "nombre"))
+
+
 def _answer(handler_input, message, keep_open=True):
-    builder = handler_input.response_builder.speak(message)
+    # Con varios tendederos, _destino deja el nombre para encabezar la respuesta.
+    prefijo = handler_input.attributes_manager.request_attributes.get("prefijo", "")
+    builder = handler_input.response_builder.speak(prefijo + message)
     if keep_open:
         builder.ask("¿Quieres hacer algo más?")
     return builder.response
 
 
-def _bound_thing(handler_input):
-    return BindingRepository().find(_user_id(handler_input))
+class SinDestino(Exception):
+    """No se puede actuar: el mensaje explica por que."""
+
+
+class PedirNombre(Exception):
+    """Hay varios tendederos y la frase no dice cual: Alexa debe preguntarlo."""
+
+    def __init__(self, vinculos, pregunta="¿En cuál tendedero? Tienes {}."):
+        super().__init__(pregunta)
+        self.vinculos = vinculos
+        self.pregunta = pregunta
+
+
+def _preguntar_nombre(handler_input, vinculos, pregunta):
+    """Pide el slot nombre y conserva el intent con sus demas slots.
+
+    Alexa hace la pregunta, el usuario responde ("el del patio") y la Lambda
+    recibe de nuevo el mismo intent, ahora con el nombre completado.
+    """
+    texto = pregunta.format(lista_hablada(vinculos, "o"))
+    intent = handler_input.request_envelope.request.intent
+    return (handler_input.response_builder.speak(texto).ask(texto)
+            .add_directive(ElicitSlotDirective(slot_to_elicit="nombre", updated_intent=intent))
+            .response)
+
+
+def _destino(handler_input):
+    """Thing sobre el que actua la solicitud.
+
+    Un solo tendedero: ese. Varios: el nombrado en la frase; si no nombra
+    ninguno, se pregunta (PedirNombre).
+    """
+    vinculos = BindingRepository().list(_user_id(handler_input))
+    if not vinculos:
+        raise SinDestino(SIN_VINCULO)
+    nombre = _nombre(handler_input)
+    if nombre:
+        vinculo = buscar_por_nombre(vinculos, nombre)
+        if not vinculo:
+            raise SinDestino("No tienes un tendedero llamado {}. {}".format(nombre, tus_tendederos(vinculos)))
+    elif len(vinculos) == 1:
+        vinculo = vinculos[0]
+    else:
+        raise PedirNombre(vinculos)
+    if len(vinculos) > 1:
+        handler_input.attributes_manager.request_attributes["prefijo"] = "Tendedero {}: ".format(
+            vinculo.get("nombre") or vinculo["thingName"])
+    return vinculo["thingName"]
 
 
 def _run_safe(handler_input, operation):
     try:
         return operation()
+    except SinDestino as exc:
+        return _answer(handler_input, str(exc))
+    except PedirNombre as exc:
+        return _preguntar_nombre(handler_input, exc.vinculos, exc.pregunta)
     except (ClientError, ValueError, RuntimeError, json.JSONDecodeError):
         LOG.exception("Falló la operación del tendedero")
         return _answer(handler_input, "No pude completar la solicitud. Revisa el código, la conexión y los permisos de AWS.")
@@ -257,13 +388,14 @@ class LaunchHandler(AbstractRequestHandler):
         return ask_utils.is_request_type("LaunchRequest")(handler_input)
 
     def handle(self, handler_input):
-        return _answer(handler_input, "Bienvenido al tendedero inteligente. Puedes consultar el agua, exponer o resguardar la ropa, cambiar el modo o controlar la luz. Di ayuda para conocer todas las órdenes.")
+        return _answer(handler_input, "Bienvenido al tendedero inteligente. Puedes preguntar cómo está el tendedero, exponer o resguardar la ropa, cambiar el modo o encender la luz para recoger la ropa. Di ayuda para conocer todas las órdenes.")
 
 
 class VincularHandler(AbstractRequestHandler):
+    """Agrega un tendedero al usuario, o renombra uno que ya tenia."""
+
     def can_handle(self, handler_input):
-        return (ask_utils.is_intent_name("VincularThingIntent")(handler_input)
-                or ask_utils.is_intent_name("CambiarThingIntent")(handler_input))
+        return ask_utils.is_intent_name("VincularThingIntent")(handler_input)
 
     def handle(self, handler_input):
         def work():
@@ -279,8 +411,50 @@ class VincularHandler(AbstractRequestHandler):
                 if exc.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
                     raise
                 return _answer(handler_input, "Ese código corresponde a un tendedero que ya no está registrado.")
-            BindingRepository().bind(_user_id(handler_input), thing_name)
-            return _answer(handler_input, "He vinculado tu tendedero. Ahora puedes consultar el agua, moverlo o calibrar el sensor.")
+
+            repo = BindingRepository()
+            user_id = _user_id(handler_input)
+            vinculos = repo.list(user_id)
+            existente = next((v for v in vinculos if v["thingName"] == thing_name), None)
+            nombre = _nombre(handler_input)
+            if not nombre:
+                if existente:
+                    nombre = existente.get("nombre") or NOMBRE_POR_DEFECTO
+                elif not vinculos:
+                    nombre = NOMBRE_POR_DEFECTO
+                else:
+                    return _answer(handler_input, "Ya tienes un tendedero vinculado, así que este necesita un nombre. Di, por ejemplo: vincula mi tendedero de la terraza con el código, y los seis dígitos.")
+            otro = buscar_por_nombre(vinculos, nombre)
+            if otro and otro["thingName"] != thing_name:
+                return _answer(handler_input, "Ya tienes un tendedero llamado {}. Elige otro nombre, por ejemplo terraza o azotea.".format(nombre))
+            if not existente and len(vinculos) >= MAX_TENDEDEROS:
+                return _answer(handler_input, "Ya tienes {} tendederos vinculados, que es el máximo. Desvincula uno antes de agregar otro.".format(MAX_TENDEDEROS))
+
+            repo.bind(user_id, thing_name, nombre, existente.get("fechaVinculacion") if existente else None)
+            if existente:
+                if clave_nombre(existente.get("nombre")) == clave_nombre(nombre):
+                    return _answer(handler_input, "Ese tendedero ya estaba vinculado con el nombre {}.".format(nombre))
+                return _answer(handler_input, "Ese tendedero ya estaba vinculado. Ahora se llama {}.".format(nombre))
+            if not vinculos:
+                return _answer(handler_input, "He vinculado tu tendedero {}. Ahora puedes consultar el agua, moverlo o calibrar el sensor.".format(nombre))
+            return _answer(handler_input, "He vinculado tu tendedero {}. Ahora tienes {} tendederos: {}. En cada orden di en cuál, por ejemplo: resguarda el tendedero del patio. Si no lo dices, te preguntaré.".format(
+                nombre, len(vinculos) + 1, lista_hablada(vinculos + [{"thingName": thing_name, "nombre": nombre}])))
+        return _run_safe(handler_input, work)
+
+
+class ListarTendederosHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("ListarTendederosIntent")(handler_input)
+
+    def handle(self, handler_input):
+        def work():
+            vinculos = BindingRepository().list(_user_id(handler_input))
+            if not vinculos:
+                return _answer(handler_input, SIN_VINCULO)
+            if len(vinculos) == 1:
+                return _answer(handler_input, "Tienes un tendedero vinculado: {}.".format(vinculos[0].get("nombre")))
+            return _answer(handler_input, "Tienes {} tendederos: {}. En cada orden di en cuál, por ejemplo: resguarda el tendedero del patio.".format(
+                len(vinculos), lista_hablada(vinculos)))
         return _run_safe(handler_input, work)
 
 
@@ -292,10 +466,25 @@ class DesvincularHandler(AbstractRequestHandler):
         def work():
             repo = BindingRepository()
             user_id = _user_id(handler_input)
-            if not repo.find(user_id):
+            vinculos = repo.list(user_id)
+            if not vinculos:
                 return _answer(handler_input, "No tienes ningún tendedero vinculado.")
-            repo.unbind(user_id)
-            return _answer(handler_input, "He eliminado la vinculación de tu tendedero.")
+            nombre = _nombre(handler_input)
+            if nombre:
+                vinculo = buscar_por_nombre(vinculos, nombre)
+                if not vinculo:
+                    return _answer(handler_input, "No tienes un tendedero llamado {}. {}".format(nombre, tus_tendederos(vinculos)))
+            elif len(vinculos) == 1:
+                vinculo = vinculos[0]
+            else:
+                # Con varios, no se adivina: desvincular el equivocado deja al usuario sin control.
+                return _preguntar_nombre(handler_input, vinculos, "¿Cuál quieres desvincular? Tienes {}.")
+            repo.unbind(user_id, vinculo["thingName"])
+            restantes = [v for v in vinculos if v["thingName"] != vinculo["thingName"]]
+            if not restantes:
+                return _answer(handler_input, "He eliminado la vinculación de tu tendedero.")
+            return _answer(handler_input, "He desvinculado el tendedero {}. {}".format(
+                vinculo.get("nombre"), tus_tendederos(restantes)))
         return _run_safe(handler_input, work)
 
 
@@ -306,19 +495,19 @@ class ComandoPosicionHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             name = handler_input.request_envelope.request.intent.name
             position = "expuesto" if name == "ExponerTendederoIntent" else "resguardado"
             shadow = ShadowService()
             state = shadow.read(thing_name)
             reported = state.get("reported", {})
             desired = state.get("desired", {})
-            # Convivencia con R1: en automatico, la ropa no sale con lluvia.
-            if (position == "expuesto" and reported.get("modo") == "automatico"
-                    and reported.get("agua_detectada") is True):
-                return _answer(handler_input, "El sensor detecta agua y el tendedero está en modo automático, así que la ropa se queda resguardada. Si quieres exponerla igual, primero di: cambia a modo manual.")
+            # Convivencia con R1 y R5: en automatico, la ropa no sale con lluvia ni de noche.
+            if position == "expuesto" and reported.get("modo") == "automatico":
+                if reported.get("agua_detectada") is True:
+                    return _answer(handler_input, "El sensor detecta agua y el tendedero está en modo automático, así que la ropa se queda resguardada. Si quieres exponerla igual, primero di: cambia a modo manual.")
+                if reported.get("oscuro") is True:
+                    return _answer(handler_input, "Ya es de noche y el tendedero está en modo automático, así que la ropa se queda resguardada hasta que vuelva la luz. Si quieres exponerla igual, primero di: cambia a modo manual.")
             # Ya esta ahi y no hay otra orden pendiente: no se escribe nada.
             if reported.get("posicion") == position and desired.get("posicion") in (None, position):
                 return _answer(handler_input, "El tendedero ya está {}.".format(position))
@@ -333,9 +522,7 @@ class ConsultarAguaHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             reported = ShadowService().read(thing_name).get("reported", {})
             detectada = reported.get("agua_detectada")
             if not isinstance(detectada, bool):
@@ -344,24 +531,57 @@ class ConsultarAguaHandler(AbstractRequestHandler):
         return _run_safe(handler_input, work)
 
 
+def motivo_posicion(reported, desired):
+    """Posicion del tendedero y por que esta asi, con los datos de los dos sensores."""
+    posicion = reported.get("posicion")
+    if posicion not in POSICIONES:
+        return "El tendedero todavía no ha reportado su posición."
+    automatico = reported.get("modo") == "automatico"
+    manual = reported.get("modo") == "manual"
+    lluvia = reported.get("agua_detectada") is True
+    noche = reported.get("oscuro") is True
+    origen = reported.get("origen")
+
+    if posicion == "resguardado":
+        if origen == "voz":
+            frase = "el tendedero está resguardado porque se lo pediste."
+            if automatico:
+                frase += " No volverá a salir solo: pídelo cuando quieras."
+        elif lluvia:
+            frase = "el tendedero está resguardado porque está lloviendo."
+        elif noche:
+            frase = "el tendedero está resguardado porque ya oscureció."
+        else:
+            frase = "el tendedero está resguardado por la protección automática, porque llovió o anocheció."
+        if origen != "voz" and automatico:
+            minutos = reported.get("minutos_reexponer")
+            espera = " pasen {} minutos sin agua".format(minutos) if isinstance(minutos, int) else " pare la lluvia"
+            frase += " Volverá a salir cuando{} y haya luz.".format(espera)
+        elif manual:
+            frase += " Está en modo manual, así que solo saldrá cuando lo pidas."
+    else:
+        frase = "el tendedero está expuesto"
+        frase += " y recibiendo luz." if reported.get("oscuro") is False else "."
+        if manual:
+            frase += " Está en modo manual: si llueve o anochece, no se resguardará solo."
+        elif automatico:
+            frase += " Se resguardará solo si llueve o anochece."
+
+    texto = "Según el último reporte, " + frase
+    pedida = desired.get("posicion")
+    if pedida in POSICIONES and pedida != posicion:
+        texto += " Existe una orden pendiente para dejarlo {}.".format(pedida)
+    return texto
+
+
 class ConsultarPosicionHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return ask_utils.is_intent_name("ConsultarPosicionIntent")(handler_input)
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
-            state = ShadowService().read(thing_name)
-            actual = state.get("reported", {}).get("posicion")
-            desired = state.get("desired", {}).get("posicion")
-            if not actual:
-                return _answer(handler_input, "El tendedero todavía no ha reportado su posición.")
-            phrase = "Según el último reporte, el tendedero está {}.".format(actual)
-            if desired and desired != actual:
-                phrase += " Existe una orden pendiente para dejarlo {}.".format(desired)
-            return _answer(handler_input, phrase)
+            state = ShadowService().read(_destino(handler_input))
+            return _answer(handler_input, motivo_posicion(state.get("reported", {}), state.get("desired", {})))
         return _run_safe(handler_input, work)
 
 
@@ -371,9 +591,7 @@ class CalibrarSensorHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             condicion = _condicion(handler_input)
             if not condicion:
                 return _answer(handler_input, "Dime en qué condición está el sensor. Puedes decir: calibra el sensor seco, o calibra el sensor mojado.")
@@ -391,9 +609,7 @@ class ConsultarCalibracionHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             state = ShadowService().read(thing_name)
             reported = state.get("reported", {})
             pedido = state.get("desired", {}).get("calibracion_solicitada") or {}
@@ -421,16 +637,14 @@ class CambiarModoHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             modo = _modo(handler_input)
             if not modo:
                 return _answer(handler_input, "¿Qué modo quieres? Puedes decir: modo automático, o modo manual.")
             ShadowService().request_mode(thing_name, modo)
             if modo == "automatico":
-                return _answer(handler_input, "He activado el modo automático. El tendedero resguardará la ropa si detecta agua y la luz seguirá al sensor de luz.")
-            return _answer(handler_input, "He activado el modo manual. El tendedero y la luz solo cambiarán con tus órdenes.")
+                return _answer(handler_input, "He activado el modo automático. El tendedero resguardará la ropa si llueve o anochece, y la volverá a exponer cuando haya luz y no llueva.")
+            return _answer(handler_input, "He activado el modo manual. El tendedero solo se moverá con tus órdenes, aunque llueva o anochezca.")
         return _run_safe(handler_input, work)
 
 
@@ -440,9 +654,7 @@ class ConsultarModoHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             state = ShadowService().read(thing_name)
             reported = state.get("reported", {})
             modo = reported.get("modo")
@@ -451,7 +663,7 @@ class ConsultarModoHandler(AbstractRequestHandler):
             phrase = "El tendedero está en modo {}.".format("automático" if modo == "automatico" else "manual")
             minutos = reported.get("minutos_reexponer")
             if modo == "automatico" and isinstance(minutos, int):
-                phrase += " Vuelve a exponer la ropa después de {} minutos sin agua.".format(minutos)
+                phrase += " Resguarda la ropa si llueve o anochece, y la vuelve a exponer después de {} minutos sin agua, cuando hay luz.".format(minutos)
             pedido = state.get("desired", {}).get("modo")
             if pedido in MODOS and pedido != modo:
                 phrase += " Hay un cambio pendiente a modo {}.".format("automático" if pedido == "automatico" else "manual")
@@ -465,39 +677,37 @@ class ConfigurarEsperaHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             minutos = _minutos(handler_input)
             if minutos is None or not MINUTOS_MIN <= minutos <= MINUTOS_MAX:
                 return _answer(handler_input, "Dime un tiempo entre {} y {} minutos. Por ejemplo: espera treinta minutos para volver a exponer.".format(MINUTOS_MIN, MINUTOS_MAX))
             ShadowService().request_wait(thing_name, minutos)
-            return _answer(handler_input, "Listo. En modo automático, la ropa volverá a exponerse después de {} minutos sin agua.".format(minutos))
+            return _answer(handler_input, "Listo. En modo automático, la ropa volverá a exponerse después de {} minutos sin agua, cuando haya luz.".format(minutos))
         return _run_safe(handler_input, work)
 
 
 class ComandoLuzHandler(AbstractRequestHandler):
+    """Luz para recoger la ropa. Solo la controla la voz; el ESP32 la apaga sola."""
+
     def can_handle(self, handler_input):
         return (ask_utils.is_intent_name("EncenderLuzIntent")(handler_input)
                 or ask_utils.is_intent_name("ApagarLuzIntent")(handler_input))
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
+            thing_name = _destino(handler_input)
             name = handler_input.request_envelope.request.intent.name
             estado = "encendido" if name == "EncenderLuzIntent" else "apagado"
             shadow = ShadowService()
             reported = shadow.read(thing_name).get("reported", {})
             if reported.get("led") not in ESTADOS_LED:
                 return _answer(handler_input, "Tu tendedero no tiene la luz instalada o todavía no ha reportado su estado.")
-            # Convivencia con R5: en automatico con sensor de luz, decide el sensor.
-            if reported.get("modo") == "automatico" and isinstance(reported.get("oscuro"), bool):
-                actual = "encendida" if reported["led"] == "encendido" else "apagada"
-                return _answer(handler_input, "En modo automático la luz la controla el sensor de luz, y ahora está {}. Para controlarla tú, primero di: cambia a modo manual.".format(actual))
+            if reported["led"] == estado:
+                return _answer(handler_input, "La luz del tendedero ya está {}.".format("encendida" if estado == "encendido" else "apagada"))
             shadow.request_led(thing_name, estado)
-            return _answer(handler_input, "He pedido {} la luz del tendedero.".format("encender" if estado == "encendido" else "apagar"))
+            if estado == "encendido":
+                return _answer(handler_input, "He pedido encender la luz del tendedero. Se apagará sola en {} minutos.".format(MINUTOS_LUZ))
+            return _answer(handler_input, "He pedido apagar la luz del tendedero.")
         return _run_safe(handler_input, work)
 
 
@@ -507,18 +717,12 @@ class ConsultarLuzHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         def work():
-            thing_name = _bound_thing(handler_input)
-            if not thing_name:
-                return _answer(handler_input, SIN_VINCULO)
-            reported = ShadowService().read(thing_name).get("reported", {})
-            partes = []
-            if isinstance(reported.get("oscuro"), bool):
-                partes.append("Está oscuro." if reported["oscuro"] else "Hay luz.")
-            if reported.get("led") in ESTADOS_LED:
-                partes.append("La luz del tendedero está {}.".format("encendida" if reported["led"] == "encendido" else "apagada"))
-            if not partes:
-                return _answer(handler_input, "Tu tendedero no tiene el sensor de luz ni la luz instalados.")
-            return _answer(handler_input, " ".join(partes))
+            reported = ShadowService().read(_destino(handler_input)).get("reported", {})
+            if reported.get("led") not in ESTADOS_LED:
+                return _answer(handler_input, "Tu tendedero no tiene la luz instalada o todavía no ha reportado su estado.")
+            if reported["led"] == "encendido":
+                return _answer(handler_input, "La luz del tendedero está encendida. Se apaga sola a los {} minutos de encenderla.".format(MINUTOS_LUZ))
+            return _answer(handler_input, "La luz del tendedero está apagada.")
         return _run_safe(handler_input, work)
 
 
@@ -527,7 +731,7 @@ class HelpHandler(AbstractRequestHandler):
         return ask_utils.is_intent_name("AMAZON.HelpIntent")(handler_input)
 
     def handle(self, handler_input):
-        return _answer(handler_input, "Puedes vincular tu tendedero con su código, preguntar por el agua, exponer o resguardar la ropa, consultar su posición, calibrar el sensor, cambiar a modo automático o manual, decir cuántos minutos esperar para volver a exponer, y encender, apagar o consultar la luz.")
+        return _answer(handler_input, "Puedes vincular tus tendederos con su código y un nombre, preguntar qué tendederos tienes, preguntar por el agua, exponer o resguardar la ropa, preguntar cómo está el tendedero y por qué, calibrar el sensor, cambiar a modo automático o manual, decir cuántos minutos esperar para volver a exponer, y encender o apagar la luz para recoger la ropa.")
 
 
 class StopHandler(AbstractRequestHandler):
@@ -560,6 +764,7 @@ builder = SkillBuilder()
 builder.add_request_handler(LaunchHandler())
 builder.add_request_handler(VincularHandler())
 builder.add_request_handler(DesvincularHandler())
+builder.add_request_handler(ListarTendederosHandler())
 builder.add_request_handler(ComandoPosicionHandler())
 builder.add_request_handler(ConsultarAguaHandler())
 builder.add_request_handler(ConsultarPosicionHandler())

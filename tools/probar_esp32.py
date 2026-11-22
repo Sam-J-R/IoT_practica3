@@ -18,8 +18,9 @@ Pruebas (se eligen por nombre; "todo" corre las que no necesitan operador):
                 es guiada (la orden se da por Alexa o la consola de AWS IoT).
   edge          GUIADA: regla R1 (agua en automático -> resguardar), rechazo de
                 "exponer" con agua y modo manual. Mide agua -> servo (RNF Edge).
-  luz           GUIADA: regla R5 con el LDR (tapar -> LED encendido) y voz sobre
-                el LED en automático (rechazada) y en manual. Mide oscuro -> LED.
+  luz           GUIADA: regla R5 con el LDR (tapar -> resguardar la ropa), rechazo
+                de exponer de noche y luz para recoger la ropa por voz. Mide
+                oscuridad -> servo (con el LDR real incluye 5 min de confirmación).
                 Con --ldr-simulado no hace falta el LDR: el script envía
                 ldr_oscuro / ldr_claro en lugar de pedir que lo tapen.
   sin_conexion  GUIADA: R1 con el WiFi cortado y, al volver, que el desired viejo
@@ -75,13 +76,11 @@ RE = {
     "rechazo": r"\[EDGE\] Orden de exponer rechazada",
     "edge_pub": r"\[EDGE\] desired\.posicion=(\S+) origen=edge publicado",
     "servo_destino": r"\[SERVO\] destino=(\S+) origen=(\S+)",
-    # Luz automática (LDR + LED, regla R5).
+    # LDR (regla R5: de noche resguarda) y luz para recoger la ropa.
     "luz": r"\[LUZ\] ms=\d+ raw=(\d+) nivel=(-?\d+) oscuro=(-?\d+)",
-    "r5": r"\[EDGE\] R5: (oscuro|claro), LED (encendido|apagado)",
+    "r5": r"\[EDGE\] R5:",
     "led": r"\[LED\] estado=(encendido|apagado) origen=(\S+)",
     "led_pub": r"\[ENSAYO\] led (on|off) publicado",
-    "rechazo_luz": r"\[EDGE\] Orden de luz rechazada",
-    "edge_pub_led": r"\[EDGE\] desired\.led=(\S+) origen_led=edge publicado",
     "ldr_sim": r"\[ENSAYO\] ldr (simulado oscuro|simulado claro|real)",
 }
 
@@ -268,13 +267,22 @@ def p_frecuencia(mon, res, a):
     print(f"Observando reportes durante {a.minutos} min (no muevan el sensor)...")
     time.sleep(a.minutos * 60)
     acks = [t for t, _ in mon.todas("aceptado", t0)]
-    intervalos = [b - x for x, b in zip(acks, acks[1:])]
-    if len(intervalos) < 2:
+    caidas = [t for t, _ in mon.todas("mqtt_off", t0)]
+    # Un intervalo que contiene una caida de MQTT no mide la frecuencia de reporte:
+    # mide la reconexion (otro RNF). Se informa aparte.
+    normales, con_caida = [], []
+    for x, b in zip(acks, acks[1:]):
+        (con_caida if any(x < c < b for c in caidas) else normales).append(b - x)
+    if len(normales) < 2:
         res.agregar("frecuencia", "reportes periódicos", False, f"solo {len(acks)} reportes aceptados")
         return
-    maximo = max(intervalos)
-    res.agregar("frecuencia", f"intervalo máximo <= {a.objetivo_intervalo_s:.0f} s", maximo <= a.objetivo_intervalo_s,
-                f"n={len(intervalos)} media={statistics.mean(intervalos):.1f} s max={maximo:.1f} s")
+    maximo = max(normales)
+    res.agregar("frecuencia", f"intervalo máximo <= {a.objetivo_intervalo_s:.0f} s (con conexión)",
+                maximo <= a.objetivo_intervalo_s,
+                f"n={len(normales)} media={statistics.mean(normales):.1f} s max={maximo:.1f} s")
+    if con_caida:
+        res.agregar("frecuencia", "huecos por caída de MQTT", None,
+                    f"{len(con_caida)} caída(s), hueco máximo {max(con_caida):.1f} s; R3 alerta desde 300 s")
     rechazos = mon.todas("rechazado", t0)
     res.agregar("frecuencia", "sin reportes rechazados", not rechazos, f"{len(rechazos)} rechazados")
 
@@ -550,6 +558,7 @@ def _led(mon, orden):
 
 
 def p_luz(mon, res, a, preguntar=input):
+    """R5 (de noche resguarda), rechazo de exponer de noche y luz para recoger la ropa por voz."""
     def paso(texto, comando):
         # Con --ldr-simulado el script cambia la luz por comando; si no, la persona tapa el LDR.
         if a.ldr_simulado:
@@ -559,6 +568,8 @@ def p_luz(mon, res, a, preguntar=input):
         else:
             preguntar(texto)
 
+    # Con el LDR real, la noche se confirma tras 5 min de oscuridad sostenida (config.h).
+    objetivo_ms = a.objetivo_luz_ms or (3000.0 if a.ldr_simulado else 310000.0)
     t0 = time.time()
     if a.ldr_simulado:
         t0 = mon.enviar("ldr_claro")
@@ -567,50 +578,52 @@ def p_luz(mon, res, a, preguntar=input):
     if not mon.esperar("luz", t0 - 2, 4):
         raise Fallo("no hay líneas [LUZ]: falta luz_local.h con las referencias del LDR "
                     "(o usen --ldr-simulado)")
-    paso("\n[1/4] Dejen el LDR con LUZ y presionen Enter... ", None)
+    paso("\n[1/4] Dejen el LDR con LUZ y presionen Enter (la ropa se expone)... ", None)
     _modo(mon, "auto")
-    time.sleep(1)
+    t0 = mon.enviar("exponer")
+    mon.esperar("servo_destino", t0, a.timeout_orden, grupo="expuesto")
 
-    paso("\n[2/4] TAPEN el LDR con la mano y presionen Enter enseguida... ", "ldr_oscuro")
+    espera = "unos segundos" if a.ldr_simulado else "5 minutos"
+    paso(f"\n[2/4] TAPEN el LDR y presionen Enter. Manténganlo tapado unos {espera}... ", "ldr_oscuro")
     t_osc = _esperar_nivel(mon, time.time() - 1, 10, oscuro=True)
     if not t_osc:
         raise Fallo("el nivel del LDR no bajó de 350 (revisen luz_local.h)")
-    r5 = mon.esperar("r5", t_osc - 0.5, 8, grupo="oscuro")
-    encendido = mon.esperar("led", t_osc - 0.5, 8, grupo="encendido")
-    res.agregar("luz", "R5: oscuro en automático enciende el LED", bool(r5 and encendido),
-                "" if encendido else "sin '[LED] estado=encendido'")
-    if encendido:
-        res.agregar("luz", f"oscuro -> LED encendido <= {a.objetivo_luz_ms:.0f} ms",
-                    ms(t_osc, encendido[0]) <= a.objetivo_luz_ms, f"{ms(t_osc, encendido[0]):.0f} ms")
-    pub = mon.esperar("edge_pub_led", t_osc, 8, grupo="encendido")
-    res.agregar("luz", "R5 escribe desired.led con origen_led edge", bool(pub), "")
+    r5 = mon.esperar("r5", t_osc - 0.5, objetivo_ms / 1000 + 5)
+    servo = mon.esperar("servo_destino", t_osc - 0.5, objetivo_ms / 1000 + 5, grupo="resguardado")
+    res.agregar("luz", "R5: de noche en automático resguarda la ropa", bool(r5 and servo),
+                "" if servo else "el brazo no se movió")
+    if servo:
+        res.agregar("luz", "R5: el movimiento lo pidió el Edge", servo[1].group(2) == "edge",
+                    f"origen={servo[1].group(2)}")
+        res.agregar("luz", f"oscuridad -> resguardo <= {objetivo_ms:.0f} ms",
+                    ms(t_osc, servo[0]) <= objetivo_ms, f"{ms(t_osc, servo[0]):.0f} ms")
+    pub = mon.esperar("edge_pub", t_osc - 0.5, 8, grupo="resguardado")
+    res.agregar("luz", "R5 escribe desired.posicion con origen edge", bool(pub), "")
 
-    t0 = _led(mon, "led_off")
-    rechazo = mon.esperar("rechazo_luz", t0, a.timeout_orden)
+    t0 = mon.enviar("exponer")
+    rechazo = mon.esperar("rechazo", t0, a.timeout_orden)
     time.sleep(1.5)
-    apagado = [m for _, m in mon.todas("led", t0) if m.group(1) == "apagado"]
-    res.agregar("luz", "en automático, apagar el LED por voz se rechaza", bool(rechazo) and not apagado,
-                "el LED se apagó" if apagado else ("" if rechazo else "sin línea de rechazo"))
+    expuesto = [m for _, m in mon.todas("servo_destino", t0) if m.group(1) == "expuesto"]
+    res.agregar("luz", "de noche en automático, exponer por voz se rechaza", bool(rechazo) and not expuesto,
+                "el brazo se expuso" if expuesto else ("" if rechazo else "sin línea de rechazo"))
 
-    paso("\n[3/4] Mantengan el LDR TAPADO y presionen Enter (se pasa a manual)... ", None)
-    _modo(mon, "manual")
+    paso("\n[3/4] Mantengan el LDR TAPADO y presionen Enter (luz para recoger la ropa)... ", None)
+    t0 = _led(mon, "led_on")
+    m = mon.esperar("led", t0, a.timeout_orden, grupo="encendido")
+    res.agregar("luz", "la voz enciende la luz para recoger la ropa", bool(m),
+                f"origen={m[1].group(2)}" if m else "el LED no cambió")
     t0 = _led(mon, "led_off")
     m = mon.esperar("led", t0, a.timeout_orden, grupo="apagado")
-    res.agregar("luz", "en manual, la voz apaga el LED aunque esté oscuro", bool(m),
-                f"origen={m[1].group(2)}" if m else "el LED no cambió")
-    t0 = _led(mon, "led_on")
-    mon.esperar("led", t0, a.timeout_orden, grupo="encendido")
+    res.agregar("luz", "la voz apaga la luz", bool(m), f"origen={m[1].group(2)}" if m else "el LED no cambió")
+    res.agregar("luz", "apagado automático de la luz a los 10 min", True,
+                "no se mide aquí: dejar la luz encendida y buscar '[EDGE] LED encendido 10 min'")
 
-    paso("\n[4/4] DESTAPEN el LDR y presionen Enter (se vuelve a automático)... ", "ldr_claro")
-    t_claro = _esperar_nivel(mon, time.time() - 1, 10, oscuro=False)
-    _modo(mon, "auto")
-    m = mon.esperar("led", t_claro or time.time(), 8, grupo="apagado")
-    res.agregar("luz", "al volver a automático con luz, R5 apaga el LED", bool(m),
-                f"origen={m[1].group(2)}" if m else "el LED siguió encendido")
+    paso("\n[4/4] DESTAPEN el LDR y presionen Enter... ", "ldr_claro")
+    _esperar_nivel(mon, time.time() - 1, 10, oscuro=False)
     if a.ldr_simulado:
         mon.enviar("ldr_real")
         res.agregar("luz", "LDR simulado: falta repetir con el LDR real", True,
-                    "sin histéresis ni confirmación de 3 s")
+                    "sin histéresis ni confirmación de 5 min")
 
 
 PRUEBAS = {"arranque": p_arranque, "ordenes": p_ordenes, "frecuencia": p_frecuencia,
@@ -648,7 +661,8 @@ def argumentos(argv=None):
     # Muestreo de 500 ms + asentamiento del servo de 1000 ms + margen.
     ap.add_argument("--objetivo-edge-ms", type=float, default=2500.0)
     # Muestreo de 500 ms + confirmación del LDR de 3000 ms + margen.
-    ap.add_argument("--objetivo-luz-ms", type=float, default=4000.0)
+    ap.add_argument("--objetivo-luz-ms", type=float, default=None,
+                    help="máximo de oscuridad -> resguardo (por defecto 310000 con el LDR real, 3000 simulado)")
     ap.add_argument("--ldr-simulado", action="store_true",
                     help="prueba 'luz' sin LDR: usa los comandos ldr_oscuro / ldr_claro del firmware")
     return ap.parse_args(argv)

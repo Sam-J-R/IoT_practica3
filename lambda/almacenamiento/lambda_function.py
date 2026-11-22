@@ -2,10 +2,21 @@
 
 Disparadores (reglas de AWS IoT, ver aws/reglas/):
 - tendedero_lecturas: {"reported": {...}, "thingName": "...", "ts": <ms>}
-  -> una lectura (sk = "lectura#<fecha ISO>").
+  -> una lectura (sk = "lectura#<fecha ISO>") con SOLO los datos de los sensores.
+     Se guarda una por mensaje publicado: asi se mide la integridad (RNF).
 - tendedero_cambios: {"actual": {...}, "anterior": {...}, "thingName": "...", "ts": <ms>}
   -> un evento por cada cambio de posicion, agua, modo, LED o luz ambiente
-     (sk = "evento#<fecha ISO>#<cambio>"). Los del LED llevan origen_led.
+     (sk = "evento#<fecha ISO>#<cambio>"). La regla entrega todos los documentos
+     y esta Lambda compara: asi tambien se guarda el primer cambio de un campo
+     que el documento anterior no tenia.
+
+Que se guarda y para que (ver docs/practica4/CONTRATO.md, "Modelo del historico"):
+- Lecturas (TTL 30 dias): curva de luz por hora (reporte "mejor momento para
+  tender"), deriva del sensor de agua y verificacion de los RNF.
+- Eventos (TTL 365 dias): horas expuesta, lluvias, noches y quien movio el
+  tendedero. Los de posicion guardan ademas si habia agua y si era de noche,
+  para distinguir la proteccion por lluvia (R1) de la de la noche (R5).
+- Posicion, modo, origen y LED no se repiten en las lecturas: ya estan en los eventos.
 
 Valida tipos y rangos y descarta el mensaje completo si un campo conocido es
 invalido. Agrega thingName, marcas de tiempo (ts_iot de la regla, ts_guardado de
@@ -68,16 +79,22 @@ VALIDADORES = {
     "agua_detectada": lambda v: _booleano(v, "agua_detectada"),
     "posicion": lambda v: _opcion(v, POSICIONES, "posicion"),
     "modo": lambda v: _opcion(v, MODOS, "modo"),
-    "minutos_reexponer": lambda v: _entero(v, 5, 240, "minutos_reexponer"),
+    "minutos_reexponer": lambda v: _entero(v, 15, 240, "minutos_reexponer"),
     "origen": lambda v: _opcion(v, ORIGENES, "origen"),
     "ts_dispositivo": lambda v: _entero(v, 1, 10**14, "ts_dispositivo"),
     # Luz automatica (LDR + LED).
-    "luz_adc": lambda v: _entero(v, 0, 4095, "luz_adc"),
+    "nivel_luz": lambda v: _entero(v, 0, 100, "nivel_luz"),
     "oscuro": lambda v: _booleano(v, "oscuro"),
     "led": lambda v: _opcion(v, ESTADOS_LED, "led"),
     "origen_led": lambda v: _opcion(v, ORIGENES, "origen_led"),
     "luz_simulada": lambda v: _booleano(v, "luz_simulada"),
 }
+
+
+# Campos de los sensores: lo unico que guarda una lectura.
+SENSORES = ("lectura_adc", "agua_detectada", "nivel_luz", "oscuro", "luz_simulada", "ts_dispositivo")
+# Contexto que se guarda con cada evento de posicion: por que se movio.
+CONTEXTO_POSICION = ("agua_detectada", "oscuro")
 
 
 def validar_reported(reported):
@@ -109,7 +126,8 @@ def _comunes(thing, ts, tipo, dias):
 
 
 def item_lectura(thing, ts, valores):
-    return {**_comunes(thing, ts, "lectura", DIAS_LECTURAS), "sk": f"lectura#{iso(ts)}", **valores}
+    sensores = {campo: valores[campo] for campo in SENSORES if campo in valores}
+    return {**_comunes(thing, ts, "lectura", DIAS_LECTURAS), "sk": f"lectura#{iso(ts)}", **sensores}
 
 
 def items_eventos(thing, ts, actual, anterior):
@@ -122,8 +140,10 @@ def items_eventos(thing, ts, actual, anterior):
             continue
         item = {**_comunes(thing, ts, "evento", DIAS_EVENTOS),
                 "sk": f"evento#{iso(ts)}#{cambio}", "cambio": cambio, campo: actual[campo]}
-        if cambio == "posicion" and "origen" in actual:
-            item["origen"] = actual["origen"]
+        if cambio == "posicion":
+            if "origen" in actual:
+                item["origen"] = actual["origen"]
+            item.update({c: actual[c] for c in CONTEXTO_POSICION if c in actual})
         if cambio == "led" and "origen_led" in actual:
             item["origen_led"] = actual["origen_led"]
         if cambio == "luz" and actual.get("luz_simulada") is True:
@@ -150,8 +170,8 @@ def lambda_handler(event, context):
         thing, ts = validar_base(event)
         if "reported" in event:
             valores = validar_reported(event["reported"])
-            if not valores:
-                return {"guardados": 0, "motivo": "sin campos de telemetria"}
+            if not any(campo in valores for campo in SENSORES):
+                return {"guardados": 0, "motivo": "sin datos de sensores"}
             items = [item_lectura(thing, ts, valores)]
         elif "actual" in event:
             actual = validar_reported(_sin_origen_invalido(event["actual"]))

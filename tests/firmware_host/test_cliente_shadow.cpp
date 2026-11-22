@@ -96,9 +96,13 @@ static void reporte_incluye_modo_y_origen() {
   EstadoCalibracion cal; cal.umbralSeco = 200; cal.umbralAgua = 600; cal.revision = 1;
   reloj += 6000;
   shadow.reportar(reloj, t, cal);
-  CHECK(publicado(BASE + "/update",
-                  "\"modo\":\"automatico\",\"minutos_reexponer\":30,\"origen\":\"edge\",\"ts_dispositivo\":"),
-        "reported lleva modo, minutos, origen y ts_dispositivo");
+  CHECK(publicado(BASE + "/update", "\"modo\":\"automatico\",\"minutos_reexponer\":30,\"origen\":\"edge\""),
+        "reported lleva modo, minutos y origen");
+#ifdef MODO_ENSAYO_RNF
+  CHECK(publicado(BASE + "/update", "\"ts_dispositivo\":"), "ensayo: reported lleva ts_dispositivo");
+#else
+  CHECK(!publicado(BASE + "/update", "ts_dispositivo"), "produccion: reported no lleva ts_dispositivo");
+#endif
   CHECK(publicado(BASE + "/update", "\"umbral_seco\":200"), "reported sigue llevando la calibracion");
   // AWS acepta el reporte (token sesion-secuencia).
   std::string token;
@@ -122,17 +126,17 @@ static void luz_automatica() {
   Posicion p0; Origen o0;
   shadow.tomarOrden(p0, o0);
   __mensaje(BASE + "/update/delta",
-            "{\"version\":30,\"state\":{\"led\":\"encendido\",\"origen_led\":\"voz\"}}");
+            "{\"version\":30,\"state\":{\"led\":\"encendido\"}}");
   atender();
   CHECK(shadow.tomarOrdenLuz(l, o) && l == Luz::Encendida && o == Origen::Voz,
-        "delta led: entrega orden encendido con origen voz");
+        "delta led (sin origen_led): entrega orden encendido con origen voz");
   Posicion p; Origen op;
   CHECK(!shadow.tomarOrden(p, op), "un delta solo de led no genera orden de posicion");
   __publicados.clear();
   shadow.publicarDecisionEdge(Posicion::Resguardado);
   shadow.publicarDecisionLuz(Luz::Apagada);
-  CHECK(publicado(BASE + "/update", "\"led\":\"apagado\",\"origen_led\":\"edge\""),
-        "R5 escribe desired.led con origen_led edge");
+  CHECK(publicado(BASE + "/update", "\"led\":\"apagado\",\"origen_led\":null"),
+        "el apagado automatico escribe desired.led y borra el origen_led antiguo");
   // Sin conexion las dos decisiones esperan y salen juntas al reconectar.
   __evento(MQTT_EVENT_DISCONNECTED);
   atender();
@@ -141,26 +145,31 @@ static void luz_automatica() {
   conectar_y_sincronizar("{\"posicion\":\"expuesto\",\"led\":\"apagado\",\"origen_led\":\"voz\"}", 40);
   CHECK(!shadow.tomarOrdenLuz(l, o), "al reconectar, el desired.led viejo no deshace R5");
   CHECK(publicado(BASE + "/update",
-                  "{\"posicion\":\"resguardado\",\"origen\":\"edge\",\"led\":\"encendido\",\"origen_led\":\"edge\"}"),
-        "al reconectar publica juntas las decisiones de R1 y R5");
+                  "{\"posicion\":\"resguardado\",\"origen\":\"edge\",\"led\":\"encendido\",\"origen_led\":null}"),
+        "al reconectar publica juntas las decisiones pendientes");
   // Reporte con LDR y LED.
   __publicados.clear();
   Telemetria t;
   t.lecturaAdc = 100; t.agua = 0; t.posicion = Posicion::Resguardado; t.modo = Modo::Automatico;
   t.minutosReexponer = 30; t.origen = Origen::Edge;
-  t.luzInstalada = true; t.luzAdc = 640; t.oscuro = 1; t.led = Luz::Encendida; t.origenLed = Origen::Edge;
+  t.luzInstalada = true; t.nivelLuz = 64; t.oscuro = 1; t.led = Luz::Encendida; t.origenLed = Origen::Edge;
   EstadoCalibracion cal; cal.umbralSeco = 200; cal.umbralAgua = 600; cal.revision = 2;
   reloj += 70000;
   shadow.reportar(reloj, t, cal);
-  CHECK(publicado(BASE + "/update",
-                  "\"luz_adc\":640,\"oscuro\":true,\"luz_simulada\":null,\"led\":\"encendido\",\"origen_led\":\"edge\""),
-        "reported lleva luz_adc, oscuro, led y origen_led");
+  CHECK(publicado(BASE + "/update", "\"nivel_luz\":64,\"oscuro\":true"), "reported lleva nivel_luz y oscuro");
+  CHECK(publicado(BASE + "/update", "\"led\":\"encendido\",\"origen_led\":\"edge\""),
+        "reported lleva led y origen_led");
+#ifdef MODO_ENSAYO_RNF
+  CHECK(publicado(BASE + "/update", "\"luz_simulada\":null"), "ensayo: reported lleva luz_simulada");
+#else
+  CHECK(!publicado(BASE + "/update", "luz_simulada"), "produccion: reported no lleva luz_simulada");
+#endif
   __publicados.clear();
   Telemetria sinLuz = t;
   sinLuz.luzInstalada = false; sinLuz.led = Luz::Desconocida; sinLuz.origenLed = Origen::Ninguno;
   reloj += 70000;
   shadow.reportar(reloj, sinLuz, cal);
-  CHECK(!publicado(BASE + "/update", "luz_adc") && !publicado(BASE + "/update", "\"led\""),
+  CHECK(!publicado(BASE + "/update", "nivel_luz") && !publicado(BASE + "/update", "\"led\""),
         "sin LDR ni LED no se reportan sus campos");
 }
 

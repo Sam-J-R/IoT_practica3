@@ -9,41 +9,31 @@
 // resguardado, resguardar. Va en el Edge porque es urgente, solo depende del
 // sensor local y debe seguir funcionando sin Internet.
 //
-// R5 (Edge): en modo automatico, el LED se enciende cuando el LDR indica
-// oscuridad y se apaga cuando vuelve la luz. Va en el Edge por la misma razon
-// que R1: respuesta inmediata con datos locales y sin depender de la red.
+// R5 (Edge): en modo automatico, si el LDR indica que es de noche y el brazo no
+// esta resguardado, resguardar. De noche la humedad (sereno, rocio) vuelve a
+// mojar la ropa. Va en el Edge por la misma razon que R1. La Nube (R2) vuelve a
+// exponer la ropa cuando hay luz y no llueve.
 //
-// Convivencia con la voz: en automatico y con agua detectada, una orden de
-// exponer se rechaza (el ESP32 vuelve a escribir desired = resguardado).
-// Resguardar se acepta siempre. En manual se acepta cualquier orden.
-// Para el LED: en automatico con el LDR funcionando, la luz la decide el
-// sensor y la orden de voz se rechaza; en manual, o sin LDR, manda la voz.
+// Convivencia con la voz: en automatico, una orden de exponer se rechaza si hay
+// agua o es de noche (el ESP32 vuelve a escribir desired = resguardado), porque
+// R1 o R5 la deshacerian. Resguardar se acepta siempre. En manual se acepta
+// cualquier orden. El LED no tiene regla automatica: solo lo controla la voz.
 class LogicaEdge {
 public:
   // agua: -1 = sin dato, 0 = seco, 1 = agua. destino: ultima posicion ordenada al servo.
   // Devuelve Resguardado si R1 debe actuar; Desconocida si no hay nada que hacer.
   static Posicion evaluarR1(Modo modo, int agua, Posicion destino) {
-    if (modo == Modo::Automatico && agua == 1 && destino != Posicion::Resguardado) {
-      return Posicion::Resguardado;
-    }
-    return Posicion::Desconocida;
+    return resguardarSi(modo, agua == 1, destino);
   }
 
-  // oscuro: -1 sin dato (o sin LDR), 0 claro, 1 oscuro. actual: estado del LED.
-  // Devuelve el estado que R5 ordena, o Desconocida si no hay nada que hacer.
-  static Luz evaluarR5(Modo modo, int oscuro, Luz actual) {
-    if (modo != Modo::Automatico || oscuro < 0) return Luz::Desconocida;
-    const Luz deseada = oscuro == 1 ? Luz::Encendida : Luz::Apagada;
-    return deseada == actual ? Luz::Desconocida : deseada;
-  }
-
-  static bool aceptarOrdenLuz(Modo modo, int oscuro) {
-    return !(modo == Modo::Automatico && oscuro >= 0);
+  // oscuro: -1 = sin LDR o sin dato, 0 = de dia, 1 = de noche.
+  static Posicion evaluarR5(Modo modo, int oscuro, Posicion destino) {
+    return resguardarSi(modo, oscuro == 1, destino);
   }
 
   // true si una orden llegada por el Shadow (voz o nube) puede ejecutarse.
-  static bool aceptarOrden(Modo modo, int agua, Posicion pedida) {
-    return !(modo == Modo::Automatico && agua == 1 && pedida == Posicion::Expuesto);
+  static bool aceptarOrden(Modo modo, int agua, int oscuro, Posicion pedida) {
+    return !(modo == Modo::Automatico && pedida == Posicion::Expuesto && (agua == 1 || oscuro == 1));
   }
 
   // Un delta no trae "origen" cuando desired.origen es igual a reported.origen
@@ -51,5 +41,13 @@ public:
   static Origen resolverOrigen(Origen recibido, Origen ultimoReportado) {
     if (recibido != Origen::Ninguno) return recibido;
     return ultimoReportado != Origen::Ninguno ? ultimoReportado : Origen::Voz;
+  }
+
+private:
+  static Posicion resguardarSi(Modo modo, bool condicion, Posicion destino) {
+    if (modo == Modo::Automatico && condicion && destino != Posicion::Resguardado) {
+      return Posicion::Resguardado;
+    }
+    return Posicion::Desconocida;
   }
 };

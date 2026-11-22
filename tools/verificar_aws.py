@@ -6,7 +6,7 @@ Por defecto SOLO LEE: no cambia nada en la cuenta.
 
 Revisa:
   1. Tabla tendedero_dispositivos activa, índice codigoVinculacion-index, códigos válidos y únicos.
-  2. Tabla tendedero_vinculaciones activa.
+  2. Tabla tendedero_vinculaciones activa, con clave userId + thingName.
   3. Política IoT genérica (${iot:Connection.Thing.ThingName}, sin ACCOUNT_ID).
   4. Certificado del Thing físico asociado al Thing y con la política.
   5. Rol de la Lambda con dynamodb:Query sobre el índice.
@@ -32,8 +32,10 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
 ZIP = RAIZ / "lambda" / "lambda_deployment_p3.zip"
-ATRIBUTOS_P3 = ("cubierta", "sensor_raw")
-ATRIBUTOS_P4 = ("posicion", "agua_detectada", "lectura_adc", "calibracion")
+# Atributos que ya no se usan: los de la P3 y los que se quitaron en la P4
+# (luz_adc -> nivel_luz; desired.origen_led). Los borra shadow-migracion-practica4.json.
+ATRIBUTOS_P3 = ("cubierta", "sensor_raw", "luz_adc", "origen_led@desired")
+ATRIBUTOS_P4 = ("posicion", "agua_detectada", "lectura_adc", "calibracion", "modo", "minutos_reexponer")
 
 
 class Verificador:
@@ -82,6 +84,9 @@ class Verificador:
                         lambda: ddb.describe_table(TableName=self.a.tabla_vinculaciones)["Table"])
         if v:
             self.anotar("DynamoDB", "tendedero_vinculaciones activa", v["TableStatus"] == "ACTIVE")
+            claves = {k["AttributeName"]: k["KeyType"] for k in v["KeySchema"]}
+            self.anotar("DynamoDB", "vinculaciones con clave userId + thingName (varios por usuario)",
+                        claves == {"userId": "HASH", "thingName": "RANGE"}, claves)
 
     # 3 y 4 --------------------------------------------------------------
     def politica_iot(self):
@@ -128,9 +133,9 @@ class Verificador:
             return False
         self.anotar("IAM", "Query sobre el índice de dispositivos",
                     permite("dynamodb:Query", "table/tendedero_dispositivos/index/codigoVinculacion-index"))
-        self.anotar("IAM", "GetItem/PutItem/DeleteItem en vinculaciones",
+        self.anotar("IAM", "Query/PutItem/DeleteItem en vinculaciones",
                     all(permite(x, "table/tendedero_vinculaciones")
-                        for x in ("dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem")))
+                        for x in ("dynamodb:Query", "dynamodb:PutItem", "dynamodb:DeleteItem")))
 
     # 6 -------------------------------------------------------------------
     def funcion(self):
@@ -165,7 +170,8 @@ class Verificador:
             return None
         rep = doc.get("state", {}).get("reported", {})
         des = doc.get("state", {}).get("desired", {})
-        viejos = [x for x in ATRIBUTOS_P3 if x in rep or x in des]
+        viejos = [x for x in ATRIBUTOS_P3 if ("@desired" in x and x.split("@")[0] in des)
+                  or ("@" not in x and (x in rep or x in des))]
         self.anotar("Shadow", f"{thing} sin atributos de la P3", not viejos, viejos or "")
         return doc
 

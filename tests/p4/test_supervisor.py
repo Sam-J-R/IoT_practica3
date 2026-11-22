@@ -29,7 +29,14 @@ class SupervisorTests(unittest.TestCase):
         base.update(reported)
         self.aws.shadows["tendedero-uno"] = {"desired": {}, "reported": base}
 
-    def test_r3_alerta_si_no_reporta_en_3_min(self):
+    def test_r3_tolera_una_caida_breve_de_mqtt(self):
+        # Se midio un hueco de 134 s por una caida de MQTT que se recupero sola.
+        self.shadow()
+        self.hist.query_items = [{"thingName": "tendedero-uno", "sk": "lectura#" + hace(4), "tipo": "lectura"}]
+        self.handler({}, None)
+        self.assertEqual([i for i in self.hist.items if i["sk"].startswith("alerta#")], [])
+
+    def test_r3_alerta_si_no_reporta_en_5_min(self):
         self.shadow()
         self.hist.query_items = [{"thingName": "tendedero-uno", "sk": "lectura#" + hace(10), "tipo": "lectura"}]
         self.handler({}, None)
@@ -64,6 +71,40 @@ class SupervisorTests(unittest.TestCase):
         self.handler({}, None)
         self.assertFalse([d for _, d in self.aws.shadow_updates
                           if d["state"]["desired"].get("posicion") == "expuesto"])
+
+    def exposiciones(self):
+        return [d for _, d in self.aws.shadow_updates if d["state"]["desired"].get("posicion") == "expuesto"]
+
+    def test_r2_no_expone_de_noche(self):
+        self.shadow(posicion="resguardado", origen="edge", agua_detectada=False, oscuro=True)
+        self.hist.query_items = [
+            {"thingName": "tendedero-uno", "sk": "lectura#" + hace(1), "tipo": "lectura"},
+            {"thingName": "tendedero-uno", "sk": "evento#" + hace(300), "tipo": "evento",
+             "cambio": "agua", "agua_detectada": False},
+        ]
+        self.handler({}, None)
+        self.assertEqual(self.exposiciones(), [])
+
+    def test_r2_expone_a_la_manana_tras_una_noche_seca(self):
+        # R5 resguardo de noche y no llovio: no hay eventos de agua recientes.
+        self.shadow(posicion="resguardado", origen="edge", agua_detectada=False, oscuro=False)
+        self.hist.query_items = [
+            {"thingName": "tendedero-uno", "sk": "lectura#" + hace(1), "tipo": "lectura"},
+            {"thingName": "tendedero-uno", "sk": "evento#" + hace(20), "tipo": "evento",
+             "cambio": "luz", "oscuro": False},
+        ]
+        self.handler({}, None)
+        self.assertEqual(len(self.exposiciones()), 1)
+
+    def test_r2_no_expone_si_el_ultimo_evento_de_agua_es_lluvia(self):
+        self.shadow(posicion="resguardado", origen="edge", agua_detectada=False, oscuro=False)
+        self.hist.query_items = [
+            {"thingName": "tendedero-uno", "sk": "lectura#" + hace(1), "tipo": "lectura"},
+            {"thingName": "tendedero-uno", "sk": "evento#" + hace(60), "tipo": "evento",
+             "cambio": "agua", "agua_detectada": True},
+        ]
+        self.handler({}, None)
+        self.assertEqual(self.exposiciones(), [])
 
     def test_r2_no_actua_en_manual_ni_con_agua(self):
         for reported in ({"modo": "manual"}, {"agua_detectada": True}):

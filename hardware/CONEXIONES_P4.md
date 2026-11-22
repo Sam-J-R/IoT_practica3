@@ -1,6 +1,6 @@
-# Conexiones de la práctica 4: luz automática (LDR + LED)
+# Conexiones de la práctica 4: LDR (noche) y LED (luz para recoger la ropa)
 
-Amplía [CONEXIONES.md](CONEXIONES.md) (práctica 3), que no cambia: el sensor de agua sigue en GPIO34 y el servo en GPIO26. Se agregan un LDR, que mide la luz ambiente, y un LED de luz automática para el tendedero. El servo sigue siendo el actuador principal; el LED es un actuador adicional, como permite la consigna.
+Amplía [CONEXIONES.md](CONEXIONES.md) (práctica 3), que no cambia: el sensor de agua sigue en GPIO34 y el servo en GPIO26. Se agregan un LDR, que detecta la noche para resguardar la ropa (regla R5), y un LED, la luz para recoger la ropa, que se enciende por voz. El servo sigue siendo el actuador principal; el LED es un actuador adicional, como permite la consigna.
 
 Todo funciona a 3,3 V desde la placa. No hay cargas de más de 5 V.
 
@@ -58,7 +58,7 @@ Mientras no haya resistencia para el divisor, el LED se puede conectar igual y l
 3. Carguen `tendedero_ensayo`. En el monitor serie: `ldr_oscuro` y `ldr_claro` simulan la luz; `ldr_real` vuelve al LDR.
 4. Prueba automática: `python tools/probar_esp32.py --puerto COM3 luz --ldr-simulado`.
 
-El LDR simulado cambia al instante, sin histéresis ni los 3 s de confirmación, y el Shadow marca `luz_simulada: true` para no mezclar esos datos con lecturas reales. La medición del tiempo de respuesta de R5 hay que repetirla con el LDR real.
+El LDR simulado cambia al instante, sin histéresis ni los 5 min de confirmación, y el Shadow marca `luz_simulada: true` para no mezclar esos datos con lecturas reales. La medición del tiempo de respuesta de R5 hay que repetirla con el LDR real.
 
 No conecten el LDR solo con la resistencia de 220 Ω: con un valor tan bajo la lectura casi no cambia entre luz y oscuridad.
 
@@ -66,8 +66,8 @@ No conecten el LDR solo con la resistencia de 220 Ω: con un valor tan bajo la l
 
 - El nivel de luz se lleva a una escala de 0 (como la referencia oscura) a 1000 (como la clara).
 - Pasa a **oscuro** por debajo de 350 y vuelve a **claro** por encima de 650. Entre esos valores conserva el estado anterior (histéresis).
-- Un cambio debe mantenerse 3 s para aceptarse: una sombra que pasa no enciende el LED.
-- **Regla R5 (Edge):** en modo automático, oscuro enciende el LED y claro lo apaga, también sin Internet.
-- En modo automático, una orden de voz sobre el LED se rechaza: la luz la decide el LDR. En modo manual, o si no hay LDR, manda la voz.
+- Un cambio debe mantenerse 5 min para aceptarse: una nube o una sombra que pasa no es la noche.
+- **Regla R5 (Edge):** en modo automático, de noche resguarda la ropa, también sin Internet. En modo automático, «expón la ropa» se rechaza de noche.
+- El LED no depende del LDR: lo enciende y apaga la voz, y se apaga solo a los 10 minutos.
 
 Sin `luz_local.h`, o con valores −1, el firmware funciona igual que antes: no lee el LDR ni reporta los campos de luz.

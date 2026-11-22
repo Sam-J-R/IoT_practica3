@@ -14,11 +14,11 @@ struct Telemetria {
   Modo modo = Modo::Ninguno;   // Ninguno = no se reporta (perfiles de diagnostico).
   int minutosReexponer = 0;    // 0 = no se reporta.
   Origen origen = Origen::Ninguno; // Quien pidio el ultimo movimiento.
-  // Luz automatica (P4). Sin LDR no se reportan luz_adc ni oscuro;
+  // LDR (P4). Sin LDR no se reportan nivel_luz ni oscuro;
   // sin LED (Desconocida) no se reportan led ni origen_led.
   bool luzInstalada = false;
   bool luzSimulada = false; // Ensayo sin LDR: se marca para no mezclarlo con datos reales.
-  int luzAdc = 0;
+  int nivelLuz = 0; // 0..100 %, ya normalizado con las referencias del LDR.
   int oscuro = -1; // -1 sin dato, 0 claro, 1 oscuro.
   Luz led = Luz::Desconocida;
   Origen origenLed = Origen::Ninguno;
@@ -53,9 +53,9 @@ public:
   // que deshaga la decision. Sin conexion queda pendiente y se publica al
   // sincronizar, antes de aplicar el desired antiguo que traiga el GET.
   void publicarDecisionEdge(Posicion posicion);
-  // Igual que tomarOrden, para desired.led / desired.origen_led.
+  // Igual que tomarOrden, para desired.led. El origen es siempre la voz.
   bool tomarOrdenLuz(Luz& luz, Origen& origen);
-  // Igual que publicarDecisionEdge, para el LED (regla R5 o rechazo de voz).
+  // Igual que publicarDecisionEdge, para el LED (apagado automatico por tiempo).
   void publicarDecisionLuz(Luz luz);
   // La calibracion solo viaja al conectar y cuando cambia su revision.
   void reportar(unsigned long ahora, const Telemetria& telemetria,
@@ -67,7 +67,7 @@ public:
   bool solicitarDesired(Posicion destino);
   // Publica desired.modo con el mismo formato que usa Lambda.
   bool solicitarModo(Modo modo);
-  // Publica desired.led con el mismo formato que usara Lambda (origen_led voz).
+  // Publica desired.led con el mismo formato que usa la Lambda de Alexa.
   bool solicitarLed(Luz luz);
   // Publica desired.calibracion_solicitada con el mismo formato que Lambda.
   bool solicitarCalibracion(Condicion condicion);

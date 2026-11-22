@@ -11,6 +11,7 @@ La entrega de la práctica 3 queda recuperable en la etiqueta de git `practica3-
 | [CONTRATO.md](CONTRATO.md) | Shadow, tablas, intents y reglas de calibración. Es la referencia común. |
 | [GUIA_AWS.md](GUIA_AWS.md) | Pasos para actualizar la cuenta de AWS. |
 | [ALEXA.md](ALEXA.md) | Pasos para actualizar la Skill y frases de prueba. |
+| [MOCKUPS.md](MOCKUPS.md) | Mockups de los cuatro reportes (RF15) y de qué consulta sale cada elemento. |
 
 ## 1. Qué cambió y por qué
 
@@ -46,6 +47,68 @@ El usuario no dicta números: no tiene forma de saber qué valor poner, y un umb
 
 El respaldo periódico pasó de 5 s a 60 s. Los cambios de agua y de posición se siguen reportando de inmediato. Con 5 s, un dispositivo superaba las 500 000 actualizaciones al mes; con 60 s son unas 43 000.
 
+### 1.6 Varios tendederos por usuario
+
+**Antes.** `tendedero_vinculaciones` tenía solo `userId` como clave: cada usuario podía tener un tendedero, y vincular otro reemplazaba el anterior.
+
+**Ahora.** La clave es `userId` + `thingName` y cada vinculación lleva un `nombre` que elige el usuario («patio», «terraza»).
+
+- **Un solo tendedero:** no hace falta nombrarlo.
+- **Varios, con nombre en la frase** («resguarda el tendedero del patio»): la orden va a ese.
+- **Varios, sin nombre:** Alexa pregunta «¿En cuál tendedero?» y, con la respuesta, cumple la misma orden. No se guarda un tendedero «activo», para no actuar nunca sobre uno que el usuario no eligió.
+- **Con más de un tendedero:** Alexa antepone el nombre a cada respuesta, para que el usuario sepa sobre cuál actuó.
+
+Se elimina `CambiarThingIntent`, se agrega `ListarTendederosIntent` y todos los intents que actúan sobre un tendedero reciben el slot `nombre`. El diseño, sus decisiones y los patrones de acceso están en [CONTRATO.md](CONTRATO.md#varios-tendederos-por-usuario).
+
+Cambiar la clave obliga a recrear la tabla. Las vinculaciones de la práctica 3 se pierden y hay que volver a vincular ([GUIA_AWS.md](GUIA_AWS.md), paso 4.1).
+
+### 1.7 R4 duplica la espera en lugar de pasar a modo manual
+
+**Antes.** Con más de 6 movimientos en una hora, R4 escribía `desired.modo = manual`. El modo manual apagaba también R1, y la ropa quedaba sin protección contra la lluvia si alguien la volvía a exponer.
+
+**Ahora.** R4 duplica `desired.minutos_reexponer` (tope 240) y registra una alerta. El modo no cambia y R1 sigue protegiendo la ropa. Alexa informa la espera nueva al consultar el modo, y el usuario la puede cambiar por voz. R4 cuenta también el movimiento que trae el mensaje, porque la Lambda de almacenamiento lo guarda en paralelo y puede no haber terminado. Detalle en [CONTRATO.md](CONTRATO.md#por-qué-r4-duplica-la-espera-y-no-pasa-a-modo-manual).
+
+La espera mínima sube de 5 a 15 minutos: con menos, la ropa sale con la superficie todavía mojada. La inicial sigue en 30.
+
+### 1.8 El LDR detecta la noche y el LED es la luz para recoger la ropa
+
+**Antes.** El LED se encendía solo al oscurecer (R5) y la voz no podía controlarlo en modo automático. Para un tendedero, eso no resolvía ninguna necesidad.
+
+**Ahora.**
+
+- **R5 (ESP32):** en modo automático, al anochecer resguarda la ropa, igual que R1 con la lluvia. La noche se confirma tras 5 minutos de oscuridad sostenida, para que una nube no cuente.
+- **R2 (Nube):** solo vuelve a exponer la ropa si hay luz. La ropa guardada de noche sale sola a la mañana si no llueve.
+- **Voz:** en modo automático, «expón la ropa» se rechaza de noche, como con lluvia.
+- **LED:** es la luz para recoger la ropa. Solo lo controla la voz y el ESP32 lo apaga solo a los 10 minutos.
+- **Alexa:** «¿cómo está el tendedero?» responde la posición y el motivo (lluvia, noche, orden de voz o modo manual). «¿Cómo está la luz?» solo informa si la luz está encendida.
+
+### 1.9 Qué guarda el histórico y para qué
+
+El diseño parte de cuatro reportes para el usuario: secado, mejor momento para tender, protección y estado del equipo. Ver [CONTRATO.md](CONTRATO.md#modelo-del-histórico-rf11-rf12-rf15).
+
+- Las lecturas guardan solo los datos de los sensores. Posición, modo, origen y LED ya estaban en los eventos y se repetían en unas 43 000 lecturas al mes.
+- Los eventos de posición guardan si había agua y si era de noche, para distinguir la protección por lluvia de la de la noche.
+- La regla `tendedero_cambios` ya no compara en el SQL: perdía el primer valor de un campo después de limpiar el Shadow. Ahora compara la Lambda.
+
+### 1.10 R3 tolera caídas breves y R2 queda justificada
+
+- **R3:** alerta tras 5 minutos sin reportes, en lugar de 3. El hueco de 134 s de las pruebas fue una caída breve de MQTT que se recuperó en 11 s, no un error del firmware.
+- **Prueba de frecuencia:** separa los intervalos con una caída de MQTT. Con eso, la corrida del 21 de noviembre cumple el objetivo: 60,4 s como máximo con conexión.
+- **R2:** la justificación de por qué va en la Nube está en [CONTRATO.md](CONTRATO.md#por-qué-r2-va-en-la-nube).
+
+### 1.11 Cada campo del Shadow tiene quien lo use
+
+- Se quita `desired.origen_led`: solo la voz da órdenes de luz. `reported.origen_led` se mantiene, porque distingue la voz del apagado automático.
+- `luz_simulada` y `ts_dispositivo` solo los envía el perfil de ensayo (`tendedero_ensayo`). Las mediciones de latencia se hacen con ese perfil.
+- El criterio y los campos que quedan fuera a propósito están en [CONTRATO.md](CONTRATO.md#criterio-cada-campo-tiene-quien-lo-use).
+
+### 1.12 Correcciones menores
+
+- **Nivel de luz normalizado:** el ESP32 reporta `nivel_luz` (0–100 %) en lugar de la lectura cruda `luz_adc`. Las referencias del LDR solo las conoce el ESP32, así que la Nube no podía convertir la lectura cruda para el reporte de luz por hora.
+- **Permisos de la Lambda de Alexa:** las acciones de IoT pasan de `Resource: "*"` a `thing/tendedero-*`, con un procedimiento de respaldo en la guía si apareciera `AccessDeniedException`.
+- **Scripts de ensayo:** los de la P3 se movieron a `tools/practica3/` (observación de la P3). `grabar_rnf.py` se movió a `tools/` y usa los comandos de la P4.
+- **Alerta de facturación:** paso nuevo en la guía manual (sección 10).
+
 ## 2. Archivos modificados
 
 | Área | Archivos | Cambio |
@@ -62,6 +125,15 @@ El respaldo periódico pasó de 5 s a 60 s. Los cambios de agua y de posición s
 | AWS | `aws/lambda-iam-policy.template.json` | Permiso `dynamodb:Query` sobre el índice. |
 | AWS | `aws/dynamodb-dispositivos.*.json`, `aws/shadow-*.json` (nuevos) | Tabla nueva, ítems de ejemplo y JSON para migrar los Shadows. |
 | Pruebas | `tests/` | 19 pruebas: vinculación por código, calibración y contrato. |
+| Varios tendederos | `lambda/lambda_function.py` y el ZIP, `alexa/interaction-model-es-MX.json`, `aws/dynamodb-table.template.json`, `aws/lambda-iam-policy.template.json`, `aws/cloudformation/tendedero-base.yaml`, `tools/verificar_aws.py`, `tools/casos_alexa.json` | Clave `userId` + `thingName`, slot `nombre` en todos los intents del tendedero, pregunta «¿En cuál?» con `Dialog.ElicitSlot`, intent para listar, permiso `Query`. |
+| R4 | `lambda/logica/lambda_function.py`, `tests/p4/test_logica.py` | R4 duplica `minutos_reexponer` en lugar de pasar a manual y cuenta el movimiento del mensaje. |
+| Correcciones menores | `firmware/src/Tendedero.cpp`, `firmware/src/ClienteShadow.cpp`, `lambda/almacenamiento/lambda_function.py`, `aws/lambda-iam-policy.template.json`, `tools/grabar_rnf.py`, `tools/practica3/`, `README.md`, mockups | `nivel_luz`, IoT restringido, scripts movidos. |
+| Shadow | `firmware/src/ClienteShadow.cpp`, `firmware/src/Tendedero.cpp`, `lambda/lambda_function.py` y el ZIP, `aws/shadow-migracion-practica4.json`, pruebas | Sin `desired.origen_led`; `luz_simulada` y `ts_dispositivo` solo en el perfil de ensayo. |
+| R2 y R3 | `lambda/supervisor/lambda_function.py`, `tools/probar_esp32.py`, `aws/cloudformation/tendedero-p4.yaml`, pruebas | R3 alerta tras 5 min; la prueba de frecuencia separa las caídas de MQTT. |
+| Histórico | `lambda/almacenamiento/lambda_function.py`, `aws/reglas/tendedero_cambios.json`, `aws/cloudformation/tendedero-p4.yaml`, `tools/estimar_costo.py`, pruebas | Lecturas solo con sensores, contexto en los eventos de posición y regla de cambios sin filtro. |
+| LDR y LED | `firmware/include/LogicaEdge.h`, `firmware/src/Tendedero.cpp`, `firmware/include/config.h`, `lambda/lambda_function.py` y el ZIP, `lambda/supervisor/lambda_function.py`, `alexa/interaction-model-es-MX.json`, `tools/probar_esp32.py`, `tools/casos_alexa.json`, pruebas | R5 resguarda de noche; R2 solo con luz; luz por voz con apagado a los 10 min; motivo en la consulta de posición. |
+| Espera mínima | `firmware/include/config.h`, `lambda/lambda_function.py` y el ZIP, `lambda/almacenamiento/lambda_function.py`, pruebas y `tools/casos_alexa.json` | `minutos_reexponer` pasa de 5–240 a 15–240. |
+| Varios tendederos | `tests/fake_vinculaciones.py` (nuevo), `tests/test_lambda_integration.py`, `tests/test_herramientas_nube.py`, `tests/test_static_contract.py` | Tabla con clave compuesta en memoria; pruebas de varios tendederos, nombres, tope, renombrado y desvinculación. |
 
 ## 3. Pasos para cada integrante
 
@@ -74,7 +146,7 @@ Seguir [GUIA_AWS.md](GUIA_AWS.md) de principio a fin:
 1. Crear la tabla `tendedero_dispositivos` con su índice.
 2. Registrar los dos tendederos con sus códigos.
 3. Reemplazar la política IoT.
-4. Actualizar la política del rol de la Lambda.
+4. Actualizar la política del rol de la Lambda y recrear `tendedero_vinculaciones` con la clave `userId` + `thingName`.
 5. Subir el ZIP nuevo y cambiar las variables de entorno.
 6. Limpiar los Shadows.
 
@@ -113,7 +185,7 @@ Seguir [ALEXA.md](ALEXA.md):
 ## 4. Pendientes
 
 - **Evidencias.** Las capturas, los videos y los ensayos RNF son de la práctica 3 y muestran la cubierta. No se rehicieron.
-- **Scripts de ensayo** (`ensayo_rnf.py`, `orden_offline.py`, `grabar_rnf.py`, `analizar_rnf.py`). Siguen usando `cubierta` y los comandos `abrir` / `cerrar`, así que **no funcionan con el firmware nuevo** hasta que se actualicen.
+- **Scripts de ensayo de la P3.** `ensayo_rnf.py`, `orden_offline.py` y `analizar_rnf.py` se movieron a `tools/practica3/` y no funcionan con el firmware nuevo; los reemplazan `tools/probar_esp32.py` y los `tools/medir_*.py`. `grabar_rnf.py` se movió a `tools/` y ya usa los comandos de la P4.
 - **Informe.** `docs/INFORME.md` describe la práctica 3.
 - **Circuito y fotos.** Los pines no cambiaron, pero el esquema y la foto muestran el montaje anterior.
 - **Verificación en hardware.** El firmware compila en todos sus perfiles y las pruebas locales pasan. No se probó todavía en el ESP32 ni en las consolas de AWS y Alexa.

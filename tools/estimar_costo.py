@@ -10,9 +10,11 @@ la consola de Facturación, y pásenlos con los parámetros --libre-*.
 Supuestos (ajústenlos si su diseño es distinto):
 - Cada reporte del ESP32: 1 mensaje publicado + 1 entregado (update/accepted, al
   que el ESP32 está suscrito) + 1 operación de Shadow.
-- Cada reporte activa la regla de lecturas (1 acción) y es evaluado por las reglas
-  sobre update/documents. Se cuentan como disparadas, para no subestimar.
-- Lambda de almacenamiento: 1 invocación por reporte y 1 por evento.
+- Cada reporte activa la regla de lecturas y la de cambios (2 acciones: la de
+  cambios entrega todos los documentos y la Lambda compara) y es evaluado por la
+  regla de movimientos. Se cuentan como disparadas, para no subestimar.
+- Lambda de almacenamiento: 2 invocaciones por reporte (lectura y comparación de
+  documentos); Lambda de lógica: 1 por movimiento.
 - DynamoDB: 1 escritura por lectura, por evento y por alerta (ítems de hasta 1 KB).
 """
 import argparse
@@ -29,8 +31,8 @@ def estimar(a):
         "IoT: mensajes": reportes * 2 + alexa * 1 + eventos,   # + deltas entregados
         "IoT: operaciones de Shadow": reportes + alexa * 2 + supervisor_runs,
         "IoT: reglas disparadas": reportes * a.reglas,
-        "IoT: acciones": reportes + eventos * 2,
-        "Lambda: invocaciones": reportes + eventos * 2 + alexa,
+        "IoT: acciones": reportes * 2 + eventos,           # lecturas + cambios + movimientos
+        "Lambda: invocaciones": reportes * 2 + eventos + alexa,
         "DynamoDB: escrituras": reportes + eventos + a.alertas_dia * 30,
         "DynamoDB: lecturas": supervisor_runs * 2 + eventos + alexa,
     }

@@ -53,13 +53,18 @@
         ],
         [
           "sí",
+          "Qué nombre le pones"
+        ],
+        [
+          "patio",
           "No encontré un tendedero"
         ]
       ],
       "lambda": {
         "intent": "VincularThingIntent",
         "slots": {
-          "codigo": "999999"
+          "codigo": "999999",
+          "nombre": "patio"
         }
       },
       "espera": "No encontré un tendedero"
@@ -77,7 +82,7 @@
     },
     {
       "id": "C06",
-      "nombre": "Vincular pidiendo el codigo",
+      "nombre": "Vincular pidiendo el codigo y el nombre",
       "alexa": [
         [
           "vincula mi tendedero",
@@ -89,16 +94,21 @@
         ],
         [
           "sí",
-          "He vinculado tu tendedero"
+          "Qué nombre le pones"
+        ],
+        [
+          "patio",
+          "He vinculado tu tendedero patio"
         ]
       ],
       "lambda": {
         "intent": "VincularThingIntent",
         "slots": {
-          "codigo": "{codigo}"
+          "codigo": "{codigo}",
+          "nombre": "patio"
         }
       },
-      "espera": "He vinculado tu tendedero"
+      "espera": "He vinculado tu tendedero patio"
     },
     {
       "id": "C07",
@@ -277,10 +287,10 @@
     },
     {
       "id": "C17",
-      "nombre": "Cambiar a codigo inexistente conserva el vinculo",
+      "nombre": "Segundo tendedero con codigo inexistente conserva el vinculo",
       "alexa": [
         [
-          "cambia mi tendedero al código 999999",
+          "vincula el tendedero de la terraza con el código 999999",
           "Es correcto"
         ],
         [
@@ -293,9 +303,10 @@
         ]
       ],
       "lambda": {
-        "intent": "CambiarThingIntent",
+        "intent": "VincularThingIntent",
         "slots": {
-          "codigo": "999999"
+          "codigo": "999999",
+          "nombre": "terraza"
         }
       },
       "espera": "No encontré un tendedero"
@@ -357,7 +368,7 @@
       "alexa": [
         [
           "espera trescientos minutos para volver a exponer",
-          "entre 5 y 240"
+          "entre 15 y 240"
         ]
       ],
       "lambda": {
@@ -366,35 +377,35 @@
           "minutos": "300"
         }
       },
-      "espera": "entre 5 y 240"
+      "espera": "entre 15 y 240"
     },
     {
       "id": "C25",
-      "nombre": "Encender la luz en manual",
+      "nombre": "Encender la luz para recoger la ropa",
       "alexa": [
         [
           "enciende la luz",
-          "encender la luz|no tiene la luz instalada"
+          "encender la luz|ya está encendida|no tiene la luz instalada"
         ]
       ],
       "lambda": {
         "intent": "EncenderLuzIntent"
       },
-      "espera": "encender la luz|no tiene la luz instalada"
+      "espera": "encender la luz|ya está encendida|no tiene la luz instalada"
     },
     {
       "id": "C26",
-      "nombre": "Consultar la luz",
+      "nombre": "Consultar la luz para recoger la ropa",
       "alexa": [
         [
           "cómo está la luz",
-          "oscuro|Hay luz|luz del tendedero|no tiene el sensor de luz"
+          "luz del tendedero est|no tiene la luz instalada"
         ]
       ],
       "lambda": {
         "intent": "ConsultarLuzIntent"
       },
-      "espera": "oscuro|Hay luz|luz del tendedero|no tiene el sensor de luz"
+      "espera": "luz del tendedero est|no tiene la luz instalada"
     },
     {
       "id": "C27",
@@ -415,6 +426,37 @@
       "shadow": {
         "desired.modo": "automatico"
       }
+    },
+    {
+      "id": "C28",
+      "nombre": "Listar tendederos",
+      "alexa": [
+        [
+          "qué tendederos tengo",
+          "Tienes un tendedero vinculado: patio"
+        ]
+      ],
+      "lambda": {
+        "intent": "ListarTendederosIntent"
+      },
+      "espera": "Tienes un tendedero vinculado: patio"
+    },
+    {
+      "id": "C29",
+      "nombre": "Orden a un tendedero que no existe",
+      "alexa": [
+        [
+          "resguarda el tendedero de la azotea",
+          "No tienes un tendedero llamado azotea"
+        ]
+      ],
+      "lambda": {
+        "intent": "ResguardarTendederoIntent",
+        "slots": {
+          "nombre": "azotea"
+        }
+      },
+      "espera": "No tienes un tendedero llamado azotea"
     },
     {
       "id": "C18",

@@ -24,6 +24,12 @@ Ninguna guarda claves en archivos. Las que usan AWS toman las credenciales de
 
 `probar_esp32.py` escribe el log con el mismo formato que `grabar_rnf.py`
 (fuente, epoch, hora, dato), así que los scripts de medición sirven con ambos.
+`grabar_rnf.py` graba el monitor serie y marcas manuales para ensayos libres, y
+envía al ESP32 los comandos del perfil de ensayo (`exponer`, `resguardar`, `auto`,
+`manual`, `led_on`, `led_off`, `ldr_oscuro`, `ldr_claro`, `wifi_off`, `wifi_on`…).
+
+Los scripts de la práctica 3 están en [practica3/](practica3/README.md) y no
+funcionan con el firmware actual.
 
 ## Pruebas de estas herramientas
 

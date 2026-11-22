@@ -83,9 +83,8 @@ Luz ledDe(const cJSON* estado) {
   return Luz::Desconocida;
 }
 
-// clave: "origen" (brazo) u "origen_led" (LED).
-Origen origenDe(const cJSON* estado, const char* clave = "origen") {
-  const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(estado, clave));
+Origen origenDe(const cJSON* estado) {
+  const char* texto = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(estado, "origen"));
   if (texto && strcmp(texto, "voz") == 0) return Origen::Voz;
   if (texto && strcmp(texto, "nube") == 0) return Origen::Nube;
   if (texto && strcmp(texto, "edge") == 0) return Origen::Edge;
@@ -212,7 +211,8 @@ void ClienteShadow::decodificar(const esp_mqtt_event_t& mensaje) {
     evento.minutos = minutosDe(deseado);
     evento.origen = origenDe(deseado);
     evento.led = ledDe(deseado);
-    evento.origenLed = origenDe(deseado, "origen_led");
+    // Solo la voz ordena la luz por el Shadow: no hace falta desired.origen_led.
+    evento.origenLed = evento.led != Luz::Desconocida ? Origen::Voz : Origen::Ninguno;
     encolar(evento);
     return;
   }
@@ -336,7 +336,8 @@ void ClienteShadow::publicarDecisionLuz(Luz luz) {
 
 bool ClienteShadow::enviarDecisionEdge() {
   // Mismo formato que las Lambdas: desired.posicion + desired.origen y/o
-  // desired.led + desired.origen_led. Ambas decisiones pendientes van juntas.
+  // desired.led. Ambas decisiones pendientes van juntas. origen_led:null borra
+  // el campo que escribian las versiones anteriores, para que no quede un delta.
   char campos[128] = "";
   int usados = 0;
   if (decisionEdge_ != Posicion::Desconocida) {
@@ -344,7 +345,7 @@ bool ClienteShadow::enviarDecisionEdge() {
                        "\"posicion\":\"%s\",\"origen\":\"edge\"", nombre(decisionEdge_));
   }
   if (decisionLuz_ != Luz::Desconocida && usados < static_cast<int>(sizeof(campos))) {
-    snprintf(campos + usados, sizeof(campos) - usados, "%s\"led\":\"%s\",\"origen_led\":\"edge\"",
+    snprintf(campos + usados, sizeof(campos) - usados, "%s\"led\":\"%s\",\"origen_led\":null",
              usados ? "," : "", nombre(decisionLuz_));
   }
   if (!campos[0]) return true;
@@ -358,7 +359,7 @@ bool ClienteShadow::enviarDecisionEdge() {
     Serial.printf("[EDGE] desired.posicion=%s origen=edge publicado\n", nombre(decisionEdge_));
   }
   if (decisionLuz_ != Luz::Desconocida) {
-    Serial.printf("[EDGE] desired.led=%s origen_led=edge publicado\n", nombre(decisionLuz_));
+    Serial.printf("[EDGE] desired.led=%s publicado\n", nombre(decisionLuz_));
   }
   decisionEdge_ = Posicion::Desconocida;
   decisionLuz_ = Luz::Desconocida;
@@ -519,8 +520,8 @@ void ClienteShadow::reportar(unsigned long ahora, const Telemetria& telemetria,
     }
   }
 
-  // P4: modo, parametros y origen del ultimo movimiento (RF12, RF14), y la
-  // hora del ESP32 para medir la latencia de almacenamiento.
+  // P4: modo, parametros y origen del ultimo movimiento (RF12, RF14). En el
+  // perfil de ensayo, ademas, la hora del ESP32 para medir la latencia.
   char operacion[320] = "";
   int usados = 0;
   if (telemetria.modo != Modo::Ninguno) {
@@ -532,16 +533,19 @@ void ClienteShadow::reportar(unsigned long ahora, const Telemetria& telemetria,
     usados += snprintf(operacion + usados, sizeof(operacion) - usados, ",\"origen\":\"%s\"",
                        nombre(telemetria.origen));
   }
-  // Luz automatica: lectura del LDR, clasificacion, estado del LED y su origen.
+  // LDR: nivel de luz (0..100 %) y si es de noche; despues, el LED y su origen.
   if (telemetria.luzInstalada && usados < static_cast<int>(sizeof(operacion))) {
     usados += snprintf(operacion + usados, sizeof(operacion) - usados,
-                       ",\"luz_adc\":%d,\"oscuro\":%s", telemetria.luzAdc,
+                       ",\"nivel_luz\":%d,\"oscuro\":%s", telemetria.nivelLuz,
                        telemetria.oscuro < 0 ? "null" : (telemetria.oscuro ? "true" : "false"));
+#ifdef MODO_ENSAYO_RNF
+    // Solo en el perfil de ensayo, que es el unico que simula la luz.
     // null borra el atributo del Shadow cuando se vuelve al LDR real.
     if (usados < static_cast<int>(sizeof(operacion))) {
       usados += snprintf(operacion + usados, sizeof(operacion) - usados, ",\"luz_simulada\":%s",
                          telemetria.luzSimulada ? "true" : "null");
     }
+#endif
   }
   if (telemetria.led != Luz::Desconocida && usados < static_cast<int>(sizeof(operacion))) {
     usados += snprintf(operacion + usados, sizeof(operacion) - usados, ",\"led\":\"%s\"",
@@ -551,10 +555,13 @@ void ClienteShadow::reportar(unsigned long ahora, const Telemetria& telemetria,
     usados += snprintf(operacion + usados, sizeof(operacion) - usados, ",\"origen_led\":\"%s\"",
                        nombre(telemetria.origenLed));
   }
+#ifdef MODO_ENSAYO_RNF
+  // Hora del ESP32, solo para medir la latencia de almacenamiento en los ensayos.
   const double ts = epochMs();
   if (ts > 0 && usados < static_cast<int>(sizeof(operacion))) {
     snprintf(operacion + usados, sizeof(operacion) - usados, ",\"ts_dispositivo\":%.0f", ts);
   }
+#endif
 
   const uint32_t reporte = ++secuencia_;
   char payload[800];
@@ -615,7 +622,7 @@ bool ClienteShadow::solicitarLed(Luz luz) {
   if (!cliente_ || !conectado_ || luz == Luz::Desconocida) return false;
   char payload[96];
   snprintf(payload, sizeof(payload),
-           "{\"state\":{\"desired\":{\"led\":\"%s\",\"origen_led\":\"voz\"}}}", nombre(luz));
+           "{\"state\":{\"desired\":{\"led\":\"%s\"}}}", nombre(luz));
   return esp_mqtt_client_enqueue(cliente_, update_.c_str(), payload, 0, 1, 0, true) >= 0;
 }
 

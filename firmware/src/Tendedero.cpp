@@ -15,12 +15,14 @@
 //    Funciona aunque no haya Wi-Fi ni AWS.
 // 3. Se conecta a AWS IoT Core usando MQTT seguro (TLS).
 // 4. ClienteShadow recibe del Device Shadow: posicion (voz o nube), modo,
-//    minutos_reexponer y pedidos de calibracion. Antes de mover el brazo,
-//    LogicaEdge decide si la orden se acepta (en automatico con agua, exponer
-//    se rechaza).
-// 5. Regla R5 (Edge): en modo automatico, LDR oscuro -> LED encendido; claro
-//    -> apagado. Tambien sin red. En manual el LED obedece a la voz.
-// 6. Publica sensores, posicion ESTIMADA, LED, modo, origen y umbrales en reported.
+//    minutos_reexponer, luz y pedidos de calibracion. Antes de mover el brazo,
+//    LogicaEdge decide si la orden se acepta (en automatico, exponer se rechaza
+//    con agua o de noche).
+// 5. Regla R5 (Edge): en modo automatico, al anochecer (LDR oscuro sostenido)
+//    resguarda la ropa. Tambien sin red.
+// 6. El LED es la luz para recoger la ropa: lo enciende la voz y se apaga solo
+//    tras LED_APAGADO_AUTOMATICO_MS.
+// 7. Publica sensores, posicion ESTIMADA, LED, modo, origen y umbrales en reported.
 
 #if __has_include("calibracion_local.h")
 #include "calibracion_local.h"
@@ -53,10 +55,11 @@ Origen origen = Origen::Ninguno; // Quien pidio el ultimo movimiento del brazo.
 SensorLuz ldr(REFERENCIA_LUZ_CLARO, REFERENCIA_LUZ_OSCURO);
 LuzLed led;
 Origen origenLed = Origen::Ninguno; // Quien pidio el ultimo cambio del LED.
+unsigned long ledEncendidoDesde = 0; // Para apagarlo solo pasado el tiempo maximo.
 int luzRaw = 0;
 int oscuro = -1; // -1 = sin LDR o sin dato; 0 = claro; 1 = oscuro.
 // Solo en el perfil de ensayo: LDR simulado por comandos (ldr_oscuro,
-// ldr_claro, ldr_real) para probar R5 y el LED sin el LDR conectado.
+// ldr_claro, ldr_real) para probar R5 sin el LDR conectado.
 // -1 = usar el LDR real; 0 = claro; 1 = oscuro.
 int luzSimulada = -1;
 bool integracion = false; // Solo se activa con credenciales y calibracion validas.
@@ -118,33 +121,29 @@ const char* nombreOrigen(Origen quien) {
 bool cambiarLed(Luz luz, Origen quien, unsigned long ahora) {
   if (!LED_INSTALADO || !led.aplicar(luz)) return false;
   origenLed = quien;
+  if (luz == Luz::Encendida) ledEncendidoDesde = ahora;
   Serial.printf("[LED] estado=%s origen=%s ms=%lu\n",
                 luz == Luz::Encendida ? "encendido" : "apagado", nombreOrigen(quien), ahora);
   return true;
 }
 
-// Regla R5 (Edge): luz automatica segun el LDR. No depende de la red.
-void aplicarR5(unsigned long ahora) {
-  if (!LED_INSTALADO) return;
-  const Luz decision = LogicaEdge::evaluarR5(operacion.modo(), oscuro, led.estado());
-  if (decision == Luz::Desconocida) return;
-  Serial.printf("[EDGE] R5: %s, LED %s ms=%lu\n", oscuro == 1 ? "oscuro" : "claro",
-                decision == Luz::Encendida ? "encendido" : "apagado", ahora);
-  cambiarLed(decision, Origen::Edge, ahora);
-  shadow.publicarDecisionLuz(decision);
-}
-
-// Orden de voz (o de la Nube) para el LED.
+// Orden de voz para el LED (luz para recoger la ropa). Se cumple siempre.
 void atenderOrdenLuz(Luz pedida, Origen quien, unsigned long ahora) {
   if (!LED_INSTALADO) return;
-  quien = LogicaEdge::resolverOrigen(quien, origenLed);
-  if (!LogicaEdge::aceptarOrdenLuz(operacion.modo(), oscuro)) {
-    // En automatico la luz la decide el LDR: se mantiene el estado actual.
-    Serial.printf("[EDGE] Orden de luz rechazada: modo automatico con LDR ms=%lu\n", ahora);
-    shadow.publicarDecisionLuz(led.estado());
+  cambiarLed(pedida, quien, ahora);
+}
+
+// Apagado automatico del LED. Escribe desired.led = apagado para que el Shadow
+// no devuelva la orden de encender.
+void apagarLedPorTiempo(unsigned long ahora) {
+  if (!LED_INSTALADO || led.estado() != Luz::Encendida ||
+      ahora - ledEncendidoDesde < LED_APAGADO_AUTOMATICO_MS) {
     return;
   }
-  cambiarLed(pedida, quien, ahora);
+  Serial.printf("[EDGE] LED encendido %lu min: se apaga solo ms=%lu\n",
+                LED_APAGADO_AUTOMATICO_MS / 60000, ahora);
+  cambiarLed(Luz::Apagada, Origen::Edge, ahora);
+  shadow.publicarDecisionLuz(Luz::Apagada);
 }
 
 // Mueve el brazo y registra quien lo pidio. Devuelve true si hubo movimiento.
@@ -158,23 +157,30 @@ bool mover(Posicion destino, Origen quien, unsigned long ahora) {
   return true;
 }
 
-// Regla R1 (Edge). Se evalua tras cada lectura y no depende de la red.
-void aplicarR1(unsigned long ahora) {
-  const Posicion decision = LogicaEdge::evaluarR1(operacion.modo(), agua, servo.destino());
+// Mueve el brazo por una regla del Edge y escribe desired para que el Shadow
+// no devuelva la orden anterior.
+void resguardarPorRegla(Posicion decision, const char* regla, const char* motivo, unsigned long ahora) {
   if (decision == Posicion::Desconocida) return;
-  Serial.printf("[EDGE] R1: agua detectada en modo automatico, resguardando ms=%lu\n", ahora);
+  Serial.printf("[EDGE] %s: %s en modo automatico, resguardando ms=%lu\n", regla, motivo, ahora);
   mover(decision, Origen::Edge, ahora);
-  // Escribe desired para que el Shadow no devuelva la orden anterior.
   shadow.publicarDecisionEdge(decision);
+}
+
+// Reglas R1 (lluvia) y R5 (noche). Se evaluan tras cada lectura y no dependen de la red.
+void aplicarReglasEdge(unsigned long ahora) {
+  resguardarPorRegla(LogicaEdge::evaluarR1(operacion.modo(), agua, servo.destino()),
+                     "R1", "agua detectada", ahora);
+  resguardarPorRegla(LogicaEdge::evaluarR5(operacion.modo(), oscuro, servo.destino()),
+                     "R5", "es de noche", ahora);
 }
 
 // Orden llegada por el Shadow (Alexa o Lambdas de la Nube).
 void atenderOrden(Posicion pedida, Origen quien, unsigned long ahora) {
   quien = LogicaEdge::resolverOrigen(quien, origen);
-  if (!LogicaEdge::aceptarOrden(operacion.modo(), agua, pedida)) {
-    // Prioridad de la regla automatica: la ropa no sale con lluvia.
-    Serial.printf("[EDGE] Orden de exponer rechazada: hay agua y el modo es automatico ms=%lu\n",
-                  ahora);
+  if (!LogicaEdge::aceptarOrden(operacion.modo(), agua, oscuro, pedida)) {
+    // Prioridad de las reglas automaticas: la ropa no sale con lluvia ni de noche.
+    Serial.printf("[EDGE] Orden de exponer rechazada: %s y el modo es automatico ms=%lu\n",
+                  agua == 1 ? "hay agua" : "es de noche", ahora);
     mover(Posicion::Resguardado, Origen::Edge, ahora);
     shadow.publicarDecisionEdge(Posicion::Resguardado);
     return;
@@ -304,7 +310,7 @@ void atenderConsola(unsigned long ahora) {
 void setup() {
   Serial.begin(115200);
   sensor.iniciar();
-  // Luz automatica: opcional. Sin referencias del LDR o sin LED no se usa.
+  // LDR y LED: opcionales. Sin referencias del LDR o sin LED no se usan.
   ldr.iniciar();
   if (LED_INSTALADO) led.iniciar();
   // Referencias guardadas por una calibracion anterior o, si no hay, de fabrica.
@@ -347,11 +353,11 @@ void setup() {
 void loop() {
   const unsigned long ahora = millis();
 
-  // Paso 1: actualizar la lectura del sensor y evaluar R1 (sin depender de la red).
+  // Paso 1: actualizar las lecturas y evaluar R1 y R5 (sin depender de la red).
   if (ahora - ultimaLectura >= INTERVALO_SENSOR_MS) {
     muestrear(ahora);
-    if (integracion) aplicarR1(ahora);
-    aplicarR5(ahora); // La luz no necesita servo ni AWS.
+    if (integracion) aplicarReglasEdge(ahora);
+    apagarLedPorTiempo(ahora); // No necesita servo ni AWS.
   }
 
   // Paso 2: iniciar MQTT una vez haya Wi-Fi y reloj correcto para TLS.
@@ -378,8 +384,7 @@ void loop() {
     if (operacion.aplicarModo(modoPedido)) {
       Serial.printf("[OPERACION] modo=%s ms=%lu\n",
                     operacion.modo() == Modo::Manual ? "manual" : "automatico", ahora);
-      aplicarR1(ahora); // Pasar a automatico con agua resguarda de inmediato.
-      aplicarR5(ahora); // Y el LED pasa a seguir al LDR.
+      aplicarReglasEdge(ahora); // Pasar a automatico con agua o de noche resguarda de inmediato.
     }
     if (operacion.aplicarMinutos(minutosPedidos)) {
       Serial.printf("[OPERACION] minutos_reexponer=%d\n", operacion.minutosReexponer());
@@ -417,7 +422,14 @@ void loop() {
   telemetria.origen = origen;
   telemetria.luzInstalada = ldr.instalado() || luzSimulada >= 0;
   telemetria.luzSimulada = luzSimulada >= 0;
-  telemetria.luzAdc = luzRaw;
+  // Nivel 0..100 %: la Nube no conoce las referencias del LDR, asi que se envia
+  // ya normalizado (el reporte de luz por hora lo usa directamente).
+  // Sin LDR no se calcula: con referencias invalidas nivel() dividiria por cero.
+  if (luzSimulada >= 0) {
+    telemetria.nivelLuz = luzSimulada ? 0 : 100;
+  } else if (ldr.instalado()) {
+    telemetria.nivelLuz = constrain(static_cast<int>(ldr.nivel(luzRaw) / 10), 0, 100);
+  }
   telemetria.oscuro = oscuro;
   telemetria.led = LED_INSTALADO ? led.estado() : Luz::Desconocida;
   telemetria.origenLed = origenLed;

@@ -18,7 +18,7 @@ class StaticContract(unittest.TestCase):
         model = json.loads((ROOT / "alexa" / "interaction-model-es-MX.json").read_text(encoding="utf-8"))
         intents = {i["name"] for i in model["interactionModel"]["languageModel"]["intents"]}
         required = {
-            "VincularThingIntent", "CambiarThingIntent", "DesvincularThingIntent",
+            "VincularThingIntent", "ListarTendederosIntent", "DesvincularThingIntent",
             "ConsultarAguaIntent", "ExponerTendederoIntent", "ResguardarTendederoIntent",
             "ConsultarPosicionIntent", "CalibrarSensorIntent", "ConsultarCalibracionIntent"
         }
@@ -39,8 +39,9 @@ class StaticContract(unittest.TestCase):
     def test_binding_uses_numeric_code_without_thing_names(self):
         model = json.loads((ROOT / "alexa" / "interaction-model-es-MX.json").read_text(encoding="utf-8"))
         intents = {i["name"]: i for i in model["interactionModel"]["languageModel"]["intents"]}
-        for name in ("VincularThingIntent", "CambiarThingIntent"):
-            self.assertEqual(intents[name]["slots"], [{**intents[name]["slots"][0], "name": "codigo", "type": "AMAZON.NUMBER"}])
+        slots = {s["name"]: s["type"] for s in intents["VincularThingIntent"]["slots"]}
+        self.assertEqual(slots, {"codigo": "AMAZON.NUMBER", "nombre": "NombreTendedero"})
+        self.assertNotIn("CambiarThingIntent", intents)
         source = (ROOT / "lambda" / "lambda_function.py").read_text(encoding="utf-8")
         self.assertNotIn("THING_ALIASES_JSON", source)
         self.assertNotIn("tendedero-inteligente", source)
@@ -67,6 +68,40 @@ class StaticContract(unittest.TestCase):
         self.assertIn("calibracion.umbralSeco()", principal)
         self.assertNotIn("UMBRAL_SECO", principal)
 
+    def test_bindings_table_allows_several_tendederos_per_user(self):
+        # P4: clave userId + thingName en la plantilla JSON y en CloudFormation.
+        table = json.loads((ROOT / "aws" / "dynamodb-table.template.json").read_text(encoding="utf-8"))
+        self.assertEqual(table["KeySchema"], [{"AttributeName": "userId", "KeyType": "HASH"},
+                                              {"AttributeName": "thingName", "KeyType": "RANGE"}])
+        base = (ROOT / "aws" / "cloudformation" / "tendedero-base.yaml").read_text(encoding="utf-8")
+        self.assertIn("{AttributeName: thingName, KeyType: RANGE}", base)
+        policy = (ROOT / "aws" / "lambda-iam-policy.template.json").read_text(encoding="utf-8")
+        self.assertNotIn("dynamodb:GetItem", policy)
+        self.assertIn("dynamodb:Query", policy)
+        self.assertIn("dynamodb:Query", base)
+        # Sin tendedero "activo" no hay nada que actualizar: solo crear, leer y borrar.
+        self.assertNotIn("dynamodb:UpdateItem", policy)
+
+    def test_every_device_intent_can_name_the_tendedero(self):
+        # Con varios tendederos, la Lambda pregunta cual (ElicitSlot): el slot debe existir.
+        model = json.loads((ROOT / "alexa" / "interaction-model-es-MX.json").read_text(encoding="utf-8"))
+        intents = {i["name"]: i for i in model["interactionModel"]["languageModel"]["intents"]}
+        sin_nombre = {"ListarTendederosIntent", "VincularThingIntent"}
+        for name, intent in intents.items():
+            if name.startswith("AMAZON.") or name in sin_nombre:
+                continue
+            with self.subTest(intent=name):
+                self.assertIn("nombre", {s["name"] for s in intent.get("slots", [])})
+        self.assertNotIn("SeleccionarTendederoIntent", intents)
+
+    def test_change_rule_lets_the_lambda_compare(self):
+        # Comparar en el SQL pierde el primer valor de un campo (anterior indefinido) y,
+        # si falta un campo en los dos documentos, la condicion queda indefinida.
+        regla = json.loads((ROOT / "aws" / "reglas" / "tendedero_cambios.json").read_text(encoding="utf-8"))
+        self.assertTrue(regla["sql"].endswith("WHERE NOT isUndefined(current.state.reported)"), regla["sql"])
+        plantilla = (ROOT / "aws" / "cloudformation" / "tendedero-p4.yaml").read_text(encoding="utf-8")
+        self.assertIn("WHERE NOT isUndefined(current.state.reported)", plantilla)
+
     def test_deployment_zip_matches_source(self):
         # splitlines() ignora la diferencia entre finales de linea CRLF y LF.
         source = (ROOT / "lambda" / "lambda_function.py").read_bytes().splitlines()
@@ -76,7 +111,7 @@ class StaticContract(unittest.TestCase):
 
     def test_binding_ops_present(self):
         source = (ROOT / "lambda" / "lambda_function.py").read_text(encoding="utf-8")
-        for key in ("describe_thing", "get_item", "put_item", "delete_item", "query", "get_thing_shadow", "update_thing_shadow"):
+        for key in ("describe_thing", "put_item", "delete_item", "query", "get_thing_shadow", "update_thing_shadow"):
             self.assertIn(key, source)
 
     def test_sensor_is_analog(self):

@@ -32,14 +32,18 @@ Conditions:
 Resources:
   # ------------------------------------------------------------- DynamoDB
   # Capacidad aprovisionada de 1 unidad: dentro de la capa siempre gratuita.
+  # P4: un usuario puede tener varios tendederos (clave userId + thingName).
+  # Cambiar la clave reemplaza la tabla: las vinculaciones anteriores se pierden.
   TablaVinculaciones:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: tendedero_vinculaciones
       AttributeDefinitions:
         - {AttributeName: userId, AttributeType: S}
+        - {AttributeName: thingName, AttributeType: S}
       KeySchema:
         - {AttributeName: userId, KeyType: HASH}
+        - {AttributeName: thingName, KeyType: RANGE}
       BillingMode: PROVISIONED
       ProvisionedThroughput: {ReadCapacityUnits: 1, WriteCapacityUnits: 1}
 
@@ -121,7 +125,7 @@ Resources:
                 Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/${PrefijoThing}*
               - Sid: Vinculaciones
                 Effect: Allow
-                Action: [dynamodb:GetItem, dynamodb:PutItem, dynamodb:DeleteItem]
+                Action: [dynamodb:Query, dynamodb:PutItem, dynamodb:DeleteItem]
                 Resource: !GetAtt TablaVinculaciones.Arn
               - Sid: BuscarPorCodigo
                 Effect: Allow

@@ -1,11 +1,15 @@
 {
   "state": {
     "desired": {
-      "cubierta": null
+      "cubierta": null,
+      "origen_led": null
     },
     "reported": {
       "cubierta": null,
-      "sensor_raw": null
+      "sensor_raw": null,
+      "ts_dispositivo": null,
+      "luz_simulada": null,
+      "luz_adc": null
     }
   }
 }
