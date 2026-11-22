@@ -3,7 +3,7 @@
 Se ejecuta con EventBridge (por defecto cada 5 minutos), sin mensaje del objeto.
 Para cada tendedero registrado en la tabla de dispositivos:
 
-R3: si no hay una lectura en los ultimos MINUTOS_SIN_REPORTE, registra una alerta
+R3: si no hay una lectura en los ultimos MINUTOS_SIN_REPORTE (5), registra una alerta
     "sin_reporte" (una sola por desconexion). El objeto no puede avisar de su
     propia desconexion, por eso esta regla va en la Nube.
 R2: en modo automatico, si el Edge resguardo la ropa (R1 por lluvia o R5 por
@@ -33,7 +33,10 @@ logger.setLevel(logging.INFO)
 
 HISTORICO = os.environ.get("DDB_HISTORY_TABLE", "tendedero_historico")
 DISPOSITIVOS = os.environ.get("DDB_DEVICES_TABLE", "tendedero_dispositivos")
-MINUTOS_SIN_REPORTE = int(os.environ.get("MINUTOS_SIN_REPORTE", "3"))
+# 5 min = 5 reportes periodicos perdidos. Una caida breve de MQTT (medida: 134 s
+# entre reportes, con reconexion en 11 s) no cuenta como desconexion: R1 y R5
+# siguen funcionando en el ESP32 y el hueco se recupera solo.
+MINUTOS_SIN_REPORTE = int(os.environ.get("MINUTOS_SIN_REPORTE", "5"))
 DIAS_ALERTAS = int(os.environ.get("TTL_DIAS_EVENTOS", "365"))
 EVENTOS_A_REVISAR = 50
 

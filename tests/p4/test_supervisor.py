@@ -29,7 +29,14 @@ class SupervisorTests(unittest.TestCase):
         base.update(reported)
         self.aws.shadows["tendedero-uno"] = {"desired": {}, "reported": base}
 
-    def test_r3_alerta_si_no_reporta_en_3_min(self):
+    def test_r3_tolera_una_caida_breve_de_mqtt(self):
+        # Se midio un hueco de 134 s por una caida de MQTT que se recupero sola.
+        self.shadow()
+        self.hist.query_items = [{"thingName": "tendedero-uno", "sk": "lectura#" + hace(4), "tipo": "lectura"}]
+        self.handler({}, None)
+        self.assertEqual([i for i in self.hist.items if i["sk"].startswith("alerta#")], [])
+
+    def test_r3_alerta_si_no_reporta_en_5_min(self):
         self.shadow()
         self.hist.query_items = [{"thingName": "tendedero-uno", "sk": "lectura#" + hace(10), "tipo": "lectura"}]
         self.handler({}, None)

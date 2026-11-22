@@ -105,8 +105,24 @@ Sin calibración previa, el ESP32 usa las referencias de fábrica de `calibracio
 | R1 | Edge (`LogicaEdge::evaluarR1`) | Modo `automatico` y agua detectada → resguardar | Urgente, datos locales, debe funcionar sin Internet. |
 | R5 | Edge (`LogicaEdge::evaluarR5`) | Modo `automatico` y de noche (LDR oscuro 5 min) → resguardar | Datos locales y debe funcionar sin Internet, igual que R1. De noche la humedad (sereno, rocío) vuelve a mojar la ropa. |
 | R2 | Nube (Lambda supervisor, cada 5 min) | Modo `automatico`, resguardado por el Edge (R1 o R5), sin agua durante `minutos_reexponer` y con luz → `desired = {posicion: expuesto, origen: nube}` | Cruza el histórico de lluvia con la luz actual. Así la ropa guardada de noche sale sola a la mañana si no llueve. Tarda hasta 5 min en actuar. |
-| R3 | Nube (Lambda supervisor) | Sin reporte durante 3 min → alerta en el histórico | El objeto no puede reportar su propia desconexión. |
+| R3 | Nube (Lambda supervisor) | Sin reporte durante 5 min → alerta `sin_reporte` en el histórico (una por desconexión) | El objeto no puede reportar su propia desconexión. 5 min son 5 reportes periódicos perdidos: una caída breve de MQTT no cuenta (ver abajo). Tarda entre 5 y 10 min en detectarla, por el período del supervisor. |
 | R4 | Nube (Lambda de lógica, regla `tendedero_movimientos`) | Modo `automatico` y más de 6 movimientos en una hora → `desired.minutos_reexponer` × 2 (tope 240) y alerta `exceso_movimientos` en el histórico. El modo no cambia y R1 sigue activa. | Necesita el histórico de movimientos. |
+
+### Por qué R3 espera 5 minutos
+
+En las pruebas del ESP32 hubo un hueco de 134 s entre dos reportes aceptados. El registro muestra la causa: un envío no terminó a tiempo (`Writing didn't complete in specified timeout`), el cliente MQTT cerró la conexión y se reconectó en 11 s. No fue un error del firmware sino una caída breve de la red, que se recuperó sola. Mientras tanto, R1 y R5 siguieron funcionando en el ESP32.
+
+Con el umbral anterior de 3 minutos, una caída algo más larga habría generado una alerta por un problema que se resuelve solo. Con 5 minutos (5 reportes periódicos perdidos), la alerta marca desconexiones que el usuario sí debería revisar: Wi-Fi caído, equipo apagado o sin corriente. El supervisor corre cada 5 minutos, así que la desconexión se detecta entre 5 y 10 minutos después de la última lectura. Para un tendedero es suficiente, porque las reglas que protegen la ropa no dependen de la Nube.
+
+La prueba de frecuencia (`tools/probar_esp32.py frecuencia`) ahora separa los intervalos que contienen una caída de MQTT. Esos miden la reconexión, que es otro requisito no funcional. Con esa separación, la corrida del 21 de noviembre da un máximo de 60,4 s con conexión (objetivo ≤ 65 s), y el hueco de 134,5 s aparece como caída.
+
+### Por qué R2 va en la Nube
+
+R2 vuelve a exponer la ropa cuando pasó la espera sin agua y hay luz. El ESP32 podría medir el tiempo sin agua por su cuenta, pero R2 va en la Nube por tres razones:
+
+- **Usa el histórico:** cuándo paró la lluvia, aunque el ESP32 se haya reiniciado entretanto.
+- **No es urgente:** exponer la ropa unos minutos más tarde no la daña. Lo urgente (resguardar con lluvia o de noche) está en el Edge.
+- **Es la regla que conviene cambiar sin reprogramar el objeto:** la espera la ajustan la voz y R4, y la condición de exponer podría sumar datos externos, como el pronóstico del clima, sin tocar el firmware.
 
 ### Por qué R4 duplica la espera y no pasa a modo manual
 

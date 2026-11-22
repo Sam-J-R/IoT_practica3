@@ -267,13 +267,22 @@ def p_frecuencia(mon, res, a):
     print(f"Observando reportes durante {a.minutos} min (no muevan el sensor)...")
     time.sleep(a.minutos * 60)
     acks = [t for t, _ in mon.todas("aceptado", t0)]
-    intervalos = [b - x for x, b in zip(acks, acks[1:])]
-    if len(intervalos) < 2:
+    caidas = [t for t, _ in mon.todas("mqtt_off", t0)]
+    # Un intervalo que contiene una caida de MQTT no mide la frecuencia de reporte:
+    # mide la reconexion (otro RNF). Se informa aparte.
+    normales, con_caida = [], []
+    for x, b in zip(acks, acks[1:]):
+        (con_caida if any(x < c < b for c in caidas) else normales).append(b - x)
+    if len(normales) < 2:
         res.agregar("frecuencia", "reportes periódicos", False, f"solo {len(acks)} reportes aceptados")
         return
-    maximo = max(intervalos)
-    res.agregar("frecuencia", f"intervalo máximo <= {a.objetivo_intervalo_s:.0f} s", maximo <= a.objetivo_intervalo_s,
-                f"n={len(intervalos)} media={statistics.mean(intervalos):.1f} s max={maximo:.1f} s")
+    maximo = max(normales)
+    res.agregar("frecuencia", f"intervalo máximo <= {a.objetivo_intervalo_s:.0f} s (con conexión)",
+                maximo <= a.objetivo_intervalo_s,
+                f"n={len(normales)} media={statistics.mean(normales):.1f} s max={maximo:.1f} s")
+    if con_caida:
+        res.agregar("frecuencia", "huecos por caída de MQTT", None,
+                    f"{len(con_caida)} caída(s), hueco máximo {max(con_caida):.1f} s; R3 alerta desde 300 s")
     rechazos = mon.todas("rechazado", t0)
     res.agregar("frecuencia", "sin reportes rechazados", not rechazos, f"{len(rechazos)} rechazados")
 

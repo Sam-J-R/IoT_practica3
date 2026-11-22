@@ -37,7 +37,7 @@ Parameters:
     Default: 6
   MinutosSinReporte:
     Type: Number
-    Default: 3
+    Default: 5
 
 Conditions:
   ConPresupuesto: !Not [!Equals [!Ref CorreoAlertas, ""]]

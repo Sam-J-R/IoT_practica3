@@ -152,14 +152,14 @@ R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO
 | Lambda `tendedero_logica` | Código nuevo. Variables sin cambios (`DDB_HISTORY_TABLE`, `IOT_ENDPOINT`, `LIMITE_MOVIMIENTOS_HORA`). |
 | Lambda `tendedero_almacenamiento` | Código nuevo: las lecturas guardan solo los datos de los sensores, los eventos de posición guardan si había agua y si era de noche, y acepta `minutos_reexponer` entre 15 y 240. |
 | Regla `tendedero_cambios` | SQL nuevo: sin filtro, la Lambda compara los documentos. |
-| Lambda `tendedero_supervisor` | Código nuevo: R2 solo vuelve a exponer si hay luz, y después de una noche seca expone a la mañana. Variables sin cambios. |
+| Lambda `tendedero_supervisor` | Código nuevo: R2 solo vuelve a exponer si hay luz, y después de una noche seca expone a la mañana. R3 alerta tras 5 min sin reportes (antes, 3). |
 | Rol `tendedero-logica-role` | Sin cambios: sigue necesitando `iot:UpdateThingShadow` para escribir la espera nueva. |
 
 ### Pasos en la consola
 
 1. **Lambda → `tendedero_logica` → Code**: reemplazar `lambda_function.py` por [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) y elegir **Deploy**.
 2. **Lambda → `tendedero_almacenamiento` → Code**: reemplazar `lambda_function.py` por [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) y elegir **Deploy**.
-3. **Lambda → `tendedero_supervisor` → Code**: reemplazar `lambda_function.py` por [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) y elegir **Deploy**.
+3. **Lambda → `tendedero_supervisor` → Code**: reemplazar `lambda_function.py` por [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) y elegir **Deploy**. En **Configuration → Environment variables**, si existe `MINUTOS_SIN_REPORTE`, cambiarla a `5` (o eliminarla: el código usa 5 por defecto).
 4. **AWS IoT → Message routing → Rules → `tendedero_cambios` → Edit**: reemplazar la sentencia SQL por la de [tendedero_cambios.json](../../aws/reglas/tendedero_cambios.json) y guardar. La acción (invocar `tendedero_almacenamiento`) no cambia:
 
    ```sql

@@ -90,6 +90,12 @@ El diseño parte de cuatro reportes para el usuario: secado, mejor momento para 
 - Los eventos de posición guardan si había agua y si era de noche, para distinguir la protección por lluvia de la de la noche.
 - La regla `tendedero_cambios` ya no compara en el SQL: perdía el primer valor de un campo después de limpiar el Shadow. Ahora compara la Lambda.
 
+### 1.10 R3 tolera caídas breves y R2 queda justificada
+
+- **R3:** alerta tras 5 minutos sin reportes, en lugar de 3. El hueco de 134 s de las pruebas fue una caída breve de MQTT que se recuperó en 11 s, no un error del firmware.
+- **Prueba de frecuencia:** separa los intervalos con una caída de MQTT. Con eso, la corrida del 21 de noviembre cumple el objetivo: 60,4 s como máximo con conexión.
+- **R2:** la justificación de por qué va en la Nube está en [CONTRATO.md](CONTRATO.md#por-qué-r2-va-en-la-nube).
+
 ## 2. Archivos modificados
 
 | Área | Archivos | Cambio |
@@ -108,6 +114,7 @@ El diseño parte de cuatro reportes para el usuario: secado, mejor momento para 
 | Pruebas | `tests/` | 19 pruebas: vinculación por código, calibración y contrato. |
 | Varios tendederos | `lambda/lambda_function.py` y el ZIP, `alexa/interaction-model-es-MX.json`, `aws/dynamodb-table.template.json`, `aws/lambda-iam-policy.template.json`, `aws/cloudformation/tendedero-base.yaml`, `tools/verificar_aws.py`, `tools/casos_alexa.json` | Clave `userId` + `thingName`, slot `nombre` en todos los intents del tendedero, pregunta «¿En cuál?» con `Dialog.ElicitSlot`, intent para listar, permiso `Query`. |
 | R4 | `lambda/logica/lambda_function.py`, `tests/p4/test_logica.py` | R4 duplica `minutos_reexponer` en lugar de pasar a manual y cuenta el movimiento del mensaje. |
+| R2 y R3 | `lambda/supervisor/lambda_function.py`, `tools/probar_esp32.py`, `aws/cloudformation/tendedero-p4.yaml`, pruebas | R3 alerta tras 5 min; la prueba de frecuencia separa las caídas de MQTT. |
 | Histórico | `lambda/almacenamiento/lambda_function.py`, `aws/reglas/tendedero_cambios.json`, `aws/cloudformation/tendedero-p4.yaml`, `tools/estimar_costo.py`, pruebas | Lecturas solo con sensores, contexto en los eventos de posición y regla de cambios sin filtro. |
 | LDR y LED | `firmware/include/LogicaEdge.h`, `firmware/src/Tendedero.cpp`, `firmware/include/config.h`, `lambda/lambda_function.py` y el ZIP, `lambda/supervisor/lambda_function.py`, `alexa/interaction-model-es-MX.json`, `tools/probar_esp32.py`, `tools/casos_alexa.json`, pruebas | R5 resguarda de noche; R2 solo con luz; luz por voz con apagado a los 10 min; motivo en la consulta de posición. |
 | Espera mínima | `firmware/include/config.h`, `lambda/lambda_function.py` y el ZIP, `lambda/almacenamiento/lambda_function.py`, pruebas y `tools/casos_alexa.json` | `minutos_reexponer` pasa de 5–240 a 15–240. |
