@@ -1,36 +1,46 @@
-# Backend Lambda — práctica 4
+# Backend Lambda — desplegado y probado en AWS
 
-Fuente: [lambda_function.py](lambda_function.py). Dependencias declaradas: [requirements.txt](requirements.txt). Paquete para desplegar: [lambda_deployment_p3.zip](lambda_deployment_p3.zip).
+La función `tendedero-inteligente-alexa` está desplegada en `us-east-2`. Las pruebas directas comprobaron carga del handler, vinculación persistente, consultas del Shadow, escritura de `desired.cubierta`, cambio de Thing, rechazo de uno inexistente y desvinculación. CloudWatch conserva las ejecuciones revisadas.
 
-El código corresponde a la práctica 4. El contrato está en [docs/practica4/CONTRATO.md](../docs/practica4/CONTRATO.md) y los pasos de despliegue en [docs/practica4/GUIA_AWS.md](../docs/practica4/GUIA_AWS.md). La versión desplegada y probada en la práctica 3 se conserva en la etiqueta de git `practica3-entrega`.
+Fuente: [lambda_function.py](lambda_function.py). Dependencias declaradas: [requirements.txt](requirements.txt). Paquete entregado: [lambda_deployment_p3.zip](lambda_deployment_p3.zip).
 
-Esta versión se verificó con las pruebas locales de `tests/`, que usan AWS simulado. Todavía no se desplegó ni se probó en la cuenta de AWS.
-
-## Qué hace
-
-- **Vincular y cambiar.** Recibe el código de 6 dígitos de la etiqueta, busca el Thing en `tendedero_dispositivos` por el índice `codigoVinculacion-index`, valida que exista con `DescribeThing` y guarda `userId → thingName` en `tendedero_vinculaciones`.
-- **Consultas y órdenes.** Resuelve el Thing por `userId` en cada solicitud y lee o escribe su Shadow: `agua_detectada`, `posicion` (`expuesto` / `resguardado`) y `calibracion_solicitada`.
-- **Sin nombres de Things.** No hay Things fijos en el código ni en variables de entorno. La variable `THING_ALIASES_JSON` de la práctica 3 ya no existe.
+Las pruebas directas del backend se distinguen de las pruebas de la Skill y del dispositivo físico. La documentación de esas etapas se conserva en [ALEXA.md](../docs/ALEXA.md), el [informe consolidado](../docs/INFORME.md) y los [videos de integración](../docs/evidencias/integracion/README.md). El [manual AWS](../docs/GUIA_AWS.md) y la [documentación original de evidencias AWS](../docs/EVIDENCIAS_AWS.md) mantienen el procedimiento y su respaldo.
 
 ## Parámetros de despliegue
 
-- Función: `tendedero-inteligente-alexa`; región `us-east-2`.
-- Runtime: Python 3.11, arquitectura `x86_64`.
+- Función: `tendedero-inteligente-alexa`; región `us-east-2` para IoT Core, Lambda y DynamoDB.
+- Runtime documentado: Python 3.11, arquitectura `x86_64`.
 - Handler: `lambda_function.lambda_handler`.
-- Variables de entorno:
+- `IOT_ENDPOINT`: hostname ATS sin protocolo ni puerto.
+- `DDB_BINDINGS_TABLE`: `tendedero_vinculaciones`.
+- `AWS_REGION`: proporcionada automáticamente por Lambda.
+- Rol con `iot:DescribeThing`, `iot:GetThingShadow`, `iot:UpdateThingShadow` y `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:DeleteItem`, además de logging.
+- Trigger Alexa Skills Kit configurado y restringido al Skill ID.
 
-| Variable | Valor |
-|---|---|
-| `IOT_ENDPOINT` | Hostname ATS sin protocolo ni puerto. |
-| `DDB_BINDINGS_TABLE` | `tendedero_vinculaciones` |
-| `DDB_DEVICES_TABLE` | `tendedero_dispositivos` |
-| `AWS_REGION` | La proporciona Lambda. |
+Mapa de alias verificado, incluidas las variantes con dígitos observadas en el slot de Alexa:
 
-- Rol: `iot:DescribeThing`, `iot:GetThingShadow`, `iot:UpdateThingShadow`; `dynamodb:Query`, `PutItem` y `DeleteItem` sobre la tabla de vinculaciones; `dynamodb:Query` sobre el índice de la tabla de dispositivos; y logging. Plantilla: [lambda-iam-policy.template.json](../aws/lambda-iam-policy.template.json).
-- Trigger Alexa Skills Kit restringido al Skill ID.
+```json
+{
+  "tendedero inteligente": "tendedero-inteligente",
+  "prueba dos": "tendedero-prueba2",
+  "prueba 2": "tendedero-prueba2",
+  "tendedero prueba dos": "tendedero-prueba2",
+  "tendedero prueba 2": "tendedero-prueba2"
+}
+```
+
+## Configuración realizada
+
+1. Things físico y de prueba creados; certificado activo del físico asociado al Thing y a la política IoT.
+2. Tabla con `userId` String como clave; Lambda añade `thingName` y `fechaVinculacion` a cada ítem.
+3. ZIP, handler, variables y rol configurados y ejercitados mediante eventos directos.
+4. Skill ID recibido y trigger restringido a ese identificador.
+5. Skill conectada al backend. La vinculación y consulta del Thing simulado verificaron el mapa de alias; las pruebas posteriores del simulador y montaje de banco están documentadas por separado en el informe y las evidencias de integración.
+
+`userId` se obtiene de la solicitud y se resuelve en DynamoDB en cada consulta/control: no hay Thing fijo. `VincularThingIntent` y `CambiarThingIntent` comparten implementación, que valida existencia antes de crear o reemplazar el vínculo.
 
 ## Mantener el paquete
 
-El ZIP contiene el handler y el ASK SDK en su raíz. El fuente y su copia dentro del ZIP deben coincidir: la prueba `test_deployment_zip_matches_source` lo comprueba. Si cambia el código, hay que reemplazar `lambda_function.py` dentro del ZIP y volver a desplegarlo; no basta con cambiar el fuente del repositorio.
+El ZIP debe contener el handler y ASK SDK en su raíz, o usar una capa adecuada. El fuente y su copia dentro del ZIP deben coincidir. Si cambia el código, reconstruir y desplegar el paquete; no sustituir solo el fuente del repositorio.
 
-Las versiones de `requirements.txt` están fijadas a las que contiene el ZIP (`ask-sdk-core` 1.19.0 y `ask-sdk-model` 1.82.0). `boto3` no se empaqueta porque lo provee el runtime de Lambda. Reconstruir con otras versiones requiere verificar la compatibilidad con el runtime y repetir las pruebas. No incluir `.venv`, claves, certificados privados, credenciales ni identificadores completos de usuarios.
+Las versiones de `requirements.txt` no están fijadas. Reconstruir con paquetes diferentes requiere verificar compatibilidad con el runtime y repetir las pruebas. No incluir `.venv`, claves, certificados privados, credenciales ni identificadores completos de usuarios en las evidencias.

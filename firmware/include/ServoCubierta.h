@@ -1,15 +1,16 @@
 #pragma once
 
 #include <Arduino.h>
-#include "TiposTendedero.h"
 #include "config.h"
 
-// Mueve el brazo del tendedero con pulsos PWM. NO mide la posicion real del servo.
-class ServoTendedero {
+enum class Posicion { Desconocida, Abierta, Cerrada };
+
+// Controla la cubierta con pulsos PWM. NO mide la posicion real del servo.
+class ServoCubierta {
 public:
   // Los extremos se configuran en microsegundos (us), NO en grados.
-  ServoTendedero(int expuestoUs, int resguardadoUs, int hz, unsigned long asentamientoMs)
-      : expuestoUs_(expuestoUs), resguardadoUs_(resguardadoUs), hz_(hz),
+  ServoCubierta(int abiertaUs, int cerradaUs, int hz, unsigned long asentamientoMs)
+      : abiertaUs_(abiertaUs), cerradaUs_(cerradaUs), hz_(hz),
         asentamientoMs_(asentamientoMs) {}
 
   bool iniciar() {
@@ -21,7 +22,7 @@ public:
     if (posicion == Posicion::Desconocida || posicion == destino_) {
       return;
     }
-    const int pulsoUs = posicion == Posicion::Expuesto ? expuestoUs_ : resguardadoUs_;
+    const int pulsoUs = posicion == Posicion::Abierta ? abiertaUs_ : cerradaUs_;
     const uint32_t duty = (static_cast<uint64_t>(pulsoUs) * hz_ * (1UL << BITS)) / 1000000UL;
     if (destino_ == Posicion::Desconocida) {
       ledcAttachPin(PIN_SERVO_PWM, CANAL);
@@ -30,9 +31,6 @@ public:
     destino_ = posicion;
     inicioMs_ = ahora;
   }
-
-  // Ultima posicion ordenada (puede no haberse alcanzado todavia).
-  Posicion destino() const { return destino_; }
 
   Posicion estimada(unsigned long ahora) const {
     // Se considera alcanzado el destino al pasar el tiempo calibrado.
@@ -43,8 +41,8 @@ public:
 private:
   static constexpr int CANAL = 0;
   static constexpr int BITS = 16;
-  int expuestoUs_;
-  int resguardadoUs_;
+  int abiertaUs_;
+  int cerradaUs_;
   int hz_;
   unsigned long asentamientoMs_;
   Posicion destino_ = Posicion::Desconocida;
