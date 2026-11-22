@@ -342,7 +342,7 @@ class LambdaTests(unittest.TestCase):
         # La luz obedece a la voz en cualquier modo, de dia o de noche.
         shadow["reported"].update({"led": "apagado", "oscuro": True, "modo": "automatico"})
         self.assertIn("Se apagará sola en 10 minutos", self.ask("A", "EncenderLuzIntent"))
-        self.assertEqual(shadow["desired"], {"led": "encendido", "origen_led": "voz"})
+        self.assertEqual(shadow["desired"], {"led": "encendido"})  # sin origen_led: solo la voz ordena la luz
         shadow["reported"]["led"] = "encendido"
         self.assertIn("está encendida", self.ask("A", "ConsultarLuzIntent"))
         # Repetir la orden no escribe un desired que ya esta.

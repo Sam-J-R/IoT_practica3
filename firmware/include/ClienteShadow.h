@@ -53,7 +53,7 @@ public:
   // que deshaga la decision. Sin conexion queda pendiente y se publica al
   // sincronizar, antes de aplicar el desired antiguo que traiga el GET.
   void publicarDecisionEdge(Posicion posicion);
-  // Igual que tomarOrden, para desired.led / desired.origen_led.
+  // Igual que tomarOrden, para desired.led. El origen es siempre la voz.
   bool tomarOrdenLuz(Luz& luz, Origen& origen);
   // Igual que publicarDecisionEdge, para el LED (apagado automatico por tiempo).
   void publicarDecisionLuz(Luz luz);
@@ -67,7 +67,7 @@ public:
   bool solicitarDesired(Posicion destino);
   // Publica desired.modo con el mismo formato que usa Lambda.
   bool solicitarModo(Modo modo);
-  // Publica desired.led con el mismo formato que usara Lambda (origen_led voz).
+  // Publica desired.led con el mismo formato que usa la Lambda de Alexa.
   bool solicitarLed(Luz luz);
   // Publica desired.calibracion_solicitada con el mismo formato que Lambda.
   bool solicitarCalibracion(Condicion condicion);

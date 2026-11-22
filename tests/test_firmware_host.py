@@ -18,11 +18,11 @@ HOST = ROOT / "tests" / "firmware_host"
 
 @unittest.skipUnless(shutil.which("g++"), "g++ no esta instalado")
 class FirmwareHostTests(unittest.TestCase):
-    def compilar_y_correr(self, nombre, stubs="stubs", fuentes=()):
+    def compilar_y_correr(self, nombre, stubs="stubs", fuentes=(), defines=()):
         with tempfile.TemporaryDirectory() as tmp:
             exe = Path(tmp) / nombre
             build = subprocess.run(
-                ["g++", "-std=gnu++17", "-Wall", "-Wextra", "-I", str(HOST / stubs),
+                ["g++", "-std=gnu++17", "-Wall", "-Wextra", *[f"-D{d}" for d in defines], "-I", str(HOST / stubs),
                  "-I", str(ROOT / "firmware" / "include"), str(HOST / f"{nombre}.cpp"),
                  *[str(ROOT / "firmware" / "src" / f) for f in fuentes], "-o", str(exe)],
                 capture_output=True, text=True)
@@ -40,3 +40,8 @@ class FirmwareHostTests(unittest.TestCase):
     def test_cliente_shadow_real(self):
         """Compila firmware/src/ClienteShadow.cpp con MQTT y cJSON simulados."""
         self.compilar_y_correr("test_cliente_shadow", stubs="esp", fuentes=("ClienteShadow.cpp",))
+
+    def test_cliente_shadow_perfil_de_ensayo(self):
+        """El perfil de ensayo agrega ts_dispositivo y luz_simulada; produccion no."""
+        self.compilar_y_correr("test_cliente_shadow", stubs="esp", fuentes=("ClienteShadow.cpp",),
+                               defines=("MODO_ENSAYO_RNF",))

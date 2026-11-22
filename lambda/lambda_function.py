@@ -1,8 +1,8 @@
 """Backend P4: Alexa -> DynamoDB (dispositivos y vinculaciones) -> IoT Thing Shadow.
 
 P4: la voz convive con la logica automatica del ESP32 (R1 lluvia, R5 noche):
-- Toda orden de posicion se escribe con origen "voz"; las del LED, con
-  origen_led "voz" (RF12).
+- Toda orden de posicion se escribe con origen "voz" (RF12). Las del LED no
+  llevan origen: solo la voz las da, y el ESP32 reporta origen_led.
 - En modo automatico, "exponer" se rechaza con una explicacion si hay agua o
   es de noche, porque R1 o R5 la deshacerian. En manual, la voz manda siempre.
 - El LED es la luz para recoger la ropa: solo lo controla la voz y el ESP32
@@ -214,7 +214,7 @@ class ShadowService:
     def request_led(self, thing_name, estado):
         if estado not in ESTADOS_LED:
             raise ValueError("Estado de la luz no válido")
-        self._update_desired(thing_name, {"led": estado, "origen_led": "voz"})
+        self._update_desired(thing_name, {"led": estado})
 
     def request_calibration(self, thing_name, condicion):
         """Pide al ESP32 medir el sensor en la condicion indicada.

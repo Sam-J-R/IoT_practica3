@@ -130,7 +130,7 @@ bool cambiarLed(Luz luz, Origen quien, unsigned long ahora) {
 // Orden de voz para el LED (luz para recoger la ropa). Se cumple siempre.
 void atenderOrdenLuz(Luz pedida, Origen quien, unsigned long ahora) {
   if (!LED_INSTALADO) return;
-  cambiarLed(pedida, LogicaEdge::resolverOrigen(quien, origenLed), ahora);
+  cambiarLed(pedida, quien, ahora);
 }
 
 // Apagado automatico del LED. Escribe desired.led = apagado para que el Shadow

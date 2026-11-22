@@ -103,7 +103,7 @@ El handler (`lambda_function.lambda_handler`), el runtime y el trigger de Alexa 
 
 ## 6. Limpiar los Shadows
 
-Los Shadows conservan los atributos de la práctica 3 (`cubierta` y `sensor_raw`). Hay que borrarlos en los dos Things, o seguirán apareciendo en el documento.
+Los Shadows conservan atributos que ya no se usan: los de la práctica 3 (`cubierta` y `sensor_raw`), `desired.origen_led` y los de ensayo (`ts_dispositivo`, `luz_simulada`). Hay que borrarlos en los dos Things, o seguirán apareciendo en el documento. Si después se usa el perfil de ensayo, los de ensayo vuelven a aparecer: es lo esperado.
 
 1. Abrir **AWS IoT Core → Things → `tendedero-inteligente` → Device Shadows → Classic Shadow → Edit**.
 2. Pegar el contenido de [shadow-migracion-practica4.json](../../aws/shadow-migracion-practica4.json) y guardar. Escribir `null` en un atributo lo elimina.

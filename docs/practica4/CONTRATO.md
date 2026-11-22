@@ -24,7 +24,6 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
       "modo": "automatico",
       "minutos_reexponer": 30,
       "led": "encendido",
-      "origen_led": "voz",
       "calibracion_solicitada": { "condicion": "seco", "id": 1731600000000 }
     },
     "reported": {
@@ -38,7 +37,6 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
       "oscuro": true,
       "led": "encendido",
       "origen_led": "voz",
-      "ts_dispositivo": 1795110000123,
       "calibracion": { "umbral_seco": 200, "umbral_agua": 600, "estado": "aplicada" },
       "calibracion_solicitada": { "condicion": "seco", "id": 1731600000000 }
     }
@@ -52,8 +50,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 | `desired.origen` | string | `voz`, `nube`, `edge` | Quien escribe `desired.posicion` | Quién pidió el movimiento (RF12). |
 | `desired.modo` | string | `manual`, `automatico` | Lambda de Alexa | Modo de operación (RF14). Ninguna regla automática lo cambia. |
 | `desired.minutos_reexponer` | entero | 15–240 | Lambda de Alexa o Lambda de lógica (R4) | Minutos sin agua antes de que R2 vuelva a exponer. Fuera de rango, el ESP32 lo ignora. |
-| `desired.led` | string | `encendido`, `apagado` | Lambda de Alexa o ESP32 (apagado automático) | Luz para recoger la ropa. Siempre junto con `desired.origen_led`. |
-| `desired.origen_led` | string | `voz`, `nube`, `edge` | Quien escribe `desired.led` | Quién pidió el cambio del LED. |
+| `desired.led` | string | `encendido`, `apagado` | Lambda de Alexa o ESP32 (apagado automático) | Luz para recoger la ropa. No lleva origen: solo la voz da órdenes de luz, y el ESP32 sabe cuándo la apagó él. |
 | `desired.calibracion_solicitada.condicion` | string | `seco`, `mojado` | Lambda | Condición en la que el usuario dice que está el sensor. |
 | `desired.calibracion_solicitada.id` | entero | Hora del pedido en milisegundos | Lambda | Distingue cada pedido y permite saber su antigüedad. |
 | `reported.posicion` | string | `expuesto`, `resguardado`; ausente si es desconocida | ESP32 | Posición estimada tras el asentamiento del servo. |
@@ -70,8 +67,20 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 | `reported.oscuro` | booleano | `true`, `false`; `null` sin dato | ESP32 | `true` = es de noche. Clasificación del LDR con histéresis (oscuro < 350, claro > 650 en escala 0–1000) y 5 min de confirmación, para que una nube no cuente como noche. La usan R5, R2 y la respuesta de «¿cómo está el tendedero?». Ausente si no hay LDR. |
 | `reported.led` | string | `encendido`, `apagado` | ESP32 | Estado de la luz. Ausente si no hay LED. |
 | `reported.origen_led` | string | `voz`, `edge` | ESP32 | `voz` si la encendió o apagó el usuario; `edge` si se apagó sola a los 10 minutos. |
-| `reported.luz_simulada` | booleano | `true`; `null` lo borra | ESP32 (perfil de ensayo) | La luz viene de los comandos `ldr_oscuro` / `ldr_claro`, no del LDR. No mezclar con datos reales. |
-| `reported.ts_dispositivo` | entero | Epoch en ms (NTP) | ESP32 | Hora del ESP32 en cada reporte, para medir la latencia de almacenamiento. |
+| `reported.luz_simulada` | booleano | `true`; `null` lo borra | ESP32, **solo perfil de ensayo** | La luz viene de los comandos `ldr_oscuro` / `ldr_claro`, no del LDR. No mezclar con datos reales. El firmware de producción no lo envía. |
+| `reported.ts_dispositivo` | entero | Epoch en ms (NTP) | ESP32, **solo perfil de ensayo** | Hora del ESP32 en cada reporte, para medir la latencia de almacenamiento (`tools/medir_almacenamiento.py`). Nadie más lo usa, así que el firmware de producción no lo envía. |
+
+### Criterio: cada campo tiene quien lo use
+
+Un campo está en el Shadow solo si alguien lo lee (el ESP32, Alexa, una Lambda o el histórico) o si hace falta para cerrar un `delta`. Con ese criterio se quitaron o se limitaron tres campos:
+
+- `desired.origen_led`: solo la voz da órdenes de luz, así que el origen siempre era `voz`. El ESP32 escribe `origen_led: null` al apagar la luz, para borrar el valor de las versiones anteriores.
+- `reported.luz_simulada` y `reported.ts_dispositivo`: solo los envía el perfil de ensayo. El primero marca pruebas sin LDR y el segundo mide la latencia.
+
+Quedan fuera a propósito:
+
+- **Los umbrales del LDR (350/650) y su confirmación de 5 min:** son constantes del montaje, como los pulsos del servo. Cambiarlas por voz podría romper la detección de la noche.
+- **El límite de R4 (6 movimientos por hora):** es una variable de la Lambda de lógica, porque la regla vive en la Nube.
 
 Las palabras `state`, `desired`, `reported`, `delta`, `version`, `metadata` y `clientToken` son reservadas de AWS y no se pueden traducir.
 
