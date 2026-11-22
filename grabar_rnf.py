@@ -8,20 +8,12 @@ desconectaría al ESP32. La confirmación de AWS se toma de la línea serie
 "[SHADOW] reported aceptado", que el firmware imprime al recibir update/accepted.
 
 Con el firmware de ensayo (entorno tendedero_ensayo) estas palabras se envían al ESP32:
-  exponer | resguardar -> publica desired.posicion (se registra la marca 'envio' y 'orden')
-  auto | manual        -> publica desired.modo
-  led_on | led_off     -> publica desired.led (luz para recoger la ropa)
-  ldr_oscuro | ldr_claro | ldr_real -> simula la noche, el día o vuelve al LDR
-  calibrar_seco | calibrar_mojado   -> pide una calibración
-  wifi_off | wifi_on   -> corta o restablece el Wi-Fi
-  estado               -> pide el Shadow y lo imprime (se registra la marca 'consulta')
+  abrir | cerrar  -> publica desired.cubierta (se registra la marca 'envio' y 'orden')
+  estado          -> pide el Shadow y lo imprime (se registra la marca 'consulta')
 Cualquier otra palabra se guarda solo como marca: est_ini, est_fin, final, seco, agua,
-power_off, power_on...
+wifi_off, wifi_on, power_off, power_on...
 
-Para las pruebas automáticas usar probar_esp32.py; este script sirve para ensayos
-manuales libres. Su CSV lo leen medir_intervalos.py y medir_almacenamiento.py.
-
-Uso:  python tools/grabar_rnf.py --puerto COM3 --salida rnf-02.csv
+Uso:  python grabar_rnf.py --puerto COM3 --salida rnf-02.csv
 """
 import argparse
 import csv
@@ -37,11 +29,7 @@ ap.add_argument("--baud", type=int, default=115200)
 ap.add_argument("--salida", default="rnf-eventos.csv")
 a = ap.parse_args()
 
-COMANDOS = {"exponer": ("envio", "orden"), "resguardar": ("envio", "orden"), "estado": ("consulta",),
-            "auto": ("modo",), "manual": ("modo",), "led_on": ("luz",), "led_off": ("luz",),
-            "ldr_oscuro": ("ldr",), "ldr_claro": ("ldr",), "ldr_real": ("ldr",),
-            "calibrar_seco": ("calibracion",), "calibrar_mojado": ("calibracion",),
-            "wifi_off": ("wifi",), "wifi_on": ("wifi",)}
+COMANDOS = {"abrir": ("envio", "orden"), "cerrar": ("envio", "orden"), "estado": ("consulta",)}
 
 lock = threading.Lock()
 f = open(a.salida, "a", newline="", encoding="utf-8")

@@ -62,7 +62,7 @@ void loop() {
   }
 
   // No aplicar ordenes al actuador en esta prueba. Es un perfil separado del final.
-  shadow.atender(ahora, static_cast<ServoTendedero*>(nullptr));
+  shadow.atender(ahora, static_cast<ServoCubierta*>(nullptr));
   shadow.reportarSensor(ahora, raw);
   delay(10);
 }

@@ -1,4 +1,4 @@
-# Versiones exactas empaquetadas en lambda_deployment_p3.zip.
-ask-sdk-core==1.19.0
-ask-sdk-model==1.82.0
-# boto3 no se empaqueta: lo provee el runtime de Python de AWS Lambda.
+ask-sdk-core
+ask-sdk-model
+boto3
+
