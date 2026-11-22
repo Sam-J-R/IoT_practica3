@@ -32,7 +32,7 @@ En las tablas, «Consulta» es la operación sobre `tendedero_historico` con `th
 | Elemento | Consulta | Cálculo |
 |---|---|---|
 | Días con lluvia a cada hora | `sk BETWEEN evento#<hace 30 días> AND evento#<hoy>`, eventos `cambio = agua` | Para cada hora, en cuántos días hubo lluvia (entre un evento `agua_detectada = true` y el siguiente `false`) |
-| Luz promedio a cada hora | `sk BETWEEN lectura#<hace 30 días> AND lectura#<hoy>` | Promedio de `luz_adc` por hora, llevado a 0–100 % con las referencias del LDR |
+| Luz promedio a cada hora | `sk BETWEEN lectura#<hace 30 días> AND lectura#<hoy>` | Promedio de `nivel_luz` por hora (el ESP32 ya lo envía en 0–100 %) |
 | Mejor franja | Las dos anteriores | Franja de 4 h con menos días de lluvia y más luz promedio |
 
 Las lecturas se guardan 30 días (TTL), así que este reporte no puede mirar más atrás. Es el único que usa lecturas: los demás usan eventos, que se guardan un año.

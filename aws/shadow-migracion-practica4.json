@@ -8,7 +8,8 @@
       "cubierta": null,
       "sensor_raw": null,
       "ts_dispositivo": null,
-      "luz_simulada": null
+      "luz_simulada": null,
+      "luz_adc": null
     }
   }
 }

@@ -533,10 +533,10 @@ void ClienteShadow::reportar(unsigned long ahora, const Telemetria& telemetria,
     usados += snprintf(operacion + usados, sizeof(operacion) - usados, ",\"origen\":\"%s\"",
                        nombre(telemetria.origen));
   }
-  // Luz automatica: lectura del LDR, clasificacion, estado del LED y su origen.
+  // LDR: nivel de luz (0..100 %) y si es de noche; despues, el LED y su origen.
   if (telemetria.luzInstalada && usados < static_cast<int>(sizeof(operacion))) {
     usados += snprintf(operacion + usados, sizeof(operacion) - usados,
-                       ",\"luz_adc\":%d,\"oscuro\":%s", telemetria.luzAdc,
+                       ",\"nivel_luz\":%d,\"oscuro\":%s", telemetria.nivelLuz,
                        telemetria.oscuro < 0 ? "null" : (telemetria.oscuro ? "true" : "false"));
 #ifdef MODO_ENSAYO_RNF
     // Solo en el perfil de ensayo, que es el unico que simula la luz.

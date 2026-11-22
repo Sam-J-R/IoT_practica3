@@ -14,11 +14,11 @@ struct Telemetria {
   Modo modo = Modo::Ninguno;   // Ninguno = no se reporta (perfiles de diagnostico).
   int minutosReexponer = 0;    // 0 = no se reporta.
   Origen origen = Origen::Ninguno; // Quien pidio el ultimo movimiento.
-  // Luz automatica (P4). Sin LDR no se reportan luz_adc ni oscuro;
+  // LDR (P4). Sin LDR no se reportan nivel_luz ni oscuro;
   // sin LED (Desconocida) no se reportan led ni origen_led.
   bool luzInstalada = false;
   bool luzSimulada = false; // Ensayo sin LDR: se marca para no mezclarlo con datos reales.
-  int luzAdc = 0;
+  int nivelLuz = 0; // 0..100 %, ya normalizado con las referencias del LDR.
   int oscuro = -1; // -1 sin dato, 0 claro, 1 oscuro.
   Luz led = Luz::Desconocida;
   Origen origenLed = Origen::Ninguno;

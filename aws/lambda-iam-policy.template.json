@@ -9,7 +9,7 @@
         "iot:GetThingShadow",
         "iot:UpdateThingShadow"
       ],
-      "Resource": "*"
+      "Resource": "arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*"
     },
     {
       "Sid": "PersistUserBindings",

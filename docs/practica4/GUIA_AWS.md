@@ -6,7 +6,7 @@ Pasos para actualizar la cuenta de AWS que ya funciona con la práctica 3. La [g
 |---|---|
 | Tabla `tendedero_dispositivos` | **Nueva.** |
 | Política IoT del dispositivo | Se reemplaza por una genérica. |
-| Rol de la Lambda | Se agrega un permiso. |
+| Rol de la Lambda | Permisos nuevos sobre DynamoDB e IoT restringido a los Things `tendedero-*`. |
 | Lambda `tendedero-inteligente-alexa` | ZIP nuevo y cambio de variables de entorno. |
 | Shadows de los dos Things | Se borran los atributos antiguos. |
 | Tabla `tendedero_vinculaciones` | **Se recrea** con clave `userId` + `thingName`, para que un usuario tenga varios tendederos (paso 4.1). |
@@ -61,7 +61,7 @@ Esta variable solo funciona si se cumplen dos condiciones, que la práctica 3 ya
 
 Si el ESP32 deja de conectarse después de este cambio, volver a activar la versión anterior de la política y revisar esas dos condiciones.
 
-## 4. Agregar el permiso al rol de la Lambda
+## 4. Actualizar la política del rol de la Lambda
 
 1. Abrir **IAM → Roles → `tendedero-inteligente-lambda-role`**.
 2. Editar la política en línea y reemplazarla por [lambda-iam-policy.template.json](../../aws/lambda-iam-policy.template.json), sustituyendo `ACCOUNT_ID`.
@@ -84,7 +84,13 @@ En DynamoDB, la clave de una tabla no se puede cambiar: hay que borrarla y crear
 
 Hacerlo justo antes de subir la Lambda nueva (paso 5). La Lambda antigua usa `GetItem` con solo `userId` y falla contra la tabla nueva.
 
-El comodín `Resource: "*"` de las tres acciones de IoT se mantiene, por el mismo motivo documentado en la práctica 3. El mínimo para producción sigue siendo `arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*`.
+Las tres acciones de IoT (`DescribeThing`, `GetThingShadow` y `UpdateThingShadow`) pasan de `Resource: "*"` a `arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*`: la Lambda solo puede leer y escribir los Shadows de los tendederos, que es el mínimo privilegio que pide la rúbrica. El Shadow clásico de un Thing usa el ARN del propio Thing, así que este recurso alcanza.
+
+Si después del cambio aparece `AccessDeniedException` en CloudWatch al consultar o mover el tendedero:
+
+1. Revisar que `ACCOUNT_ID` se haya reemplazado por el número de la cuenta y que la región sea `us-east-2`.
+2. Revisar que el nombre del Thing empiece con `tendedero-`.
+3. Si aun así falla, volver temporalmente a `"Resource": "*"` (lo que se usó en la práctica 3) y documentarlo en el informe junto con el permiso mínimo para producción.
 
 ## 5. Actualizar la Lambda
 
@@ -116,7 +122,7 @@ El Shadow de `tendedero-inteligente` se completa solo cuando el ESP32 se conecta
 
 - [ ] La tabla `tendedero_dispositivos` y su índice están en **Active**, con dos ítems.
 - [ ] La versión activa de la política IoT contiene `${iot:Connection.Thing.ThingName}` y no contiene `ACCOUNT_ID`.
-- [ ] El rol de la Lambda tiene la declaración `FindDeviceByBindingCode`, y `PersistUserBindings` incluye `Query`.
+- [ ] El rol de la Lambda tiene la declaración `FindDeviceByBindingCode`, `PersistUserBindings` incluye `Query` y las acciones de IoT apuntan a `thing/tendedero-*`, no a `*`.
 - [ ] `tendedero_vinculaciones` tiene partition key `userId` y sort key `thingName`.
 - [ ] La Lambda tiene `DDB_DEVICES_TABLE` y ya no tiene `THING_ALIASES_JSON`.
 - [ ] Los Shadows no muestran `cubierta` ni `sensor_raw`.
@@ -176,12 +182,25 @@ R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO
    "anterior": {"posicion": "expuesto", "modo": "automatico"}}
   ```
 
+## 10. Alerta de facturación
+
+La rúbrica recomienda configurar una alerta de facturación. Se hace una sola vez por cuenta:
+
+1. Abrir **Billing and Cost Management → Budgets → Create budget**.
+2. Elegir **Use a template → Zero spend budget**. Avisa por correo apenas haya un cargo, aunque sea de centavos.
+3. Escribir el correo del equipo y guardar.
+4. Tomar una captura del presupuesto creado para las evidencias.
+
+Con la frecuencia de reporte de 60 s, el consumo estimado queda dentro de la capa gratuita (`python tools/estimar_costo.py`). La alerta avisa si algo se sale de lo previsto, por ejemplo un ESP32 que reporta en bucle.
+
 ## Orden de todo lo pendiente
 
-1. Paso 4: rol de la Lambda de Alexa (`Query` sobre vinculaciones).
+1. Paso 4: política del rol de la Lambda de Alexa (`Query` sobre vinculaciones e IoT restringido a `tendedero-*`).
 2. Paso 4.1: recrear `tendedero_vinculaciones`. **Borra las vinculaciones actuales.**
 3. Paso 5: subir el ZIP nuevo de la Lambda de Alexa.
 4. [ALEXA.md](ALEXA.md): pegar el modelo nuevo y compilar.
-5. Paso 9: Lambdas de lógica (R4), almacenamiento y supervisor (R2), y la regla `tendedero_cambios`.
-6. Volver a vincular los tendederos desde Alexa, con nombre.
-7. Fuera de AWS: cargar el firmware nuevo en el ESP32 (R5 de noche, luz con apagado automático y espera mínima de 15 minutos).
+5. Paso 9: Lambdas de lógica (R4), almacenamiento y supervisor (R2 y R3), y la regla `tendedero_cambios`.
+6. Paso 6: limpiar los Shadows con [shadow-migracion-practica4.json](../../aws/shadow-migracion-practica4.json) (borra `cubierta`, `sensor_raw`, `luz_adc`, `desired.origen_led` y los campos de ensayo).
+7. Paso 10: alerta de facturación, si la cuenta todavía no la tiene.
+8. Volver a vincular los tendederos desde Alexa, con nombre.
+9. Fuera de AWS: cargar el firmware nuevo en el ESP32 (R5 de noche, luz con apagado automático y espera mínima de 15 minutos).

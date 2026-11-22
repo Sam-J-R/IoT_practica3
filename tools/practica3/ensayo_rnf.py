@@ -34,7 +34,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent
+RAIZ = Path(__file__).resolve().parents[2]  # raiz del repositorio (antes estaba ahi)
 RE_GET = r"\[SHADOW\] get v=(\d+) desired=(\S+) reported=(\S+)"
 RE_SENSOR = r"\[SENSOR\] ms=(\d+) raw=(-?\d+) agua=(-?\d+)"
 RE_ACK = r"\[SHADOW\] reported aceptado"

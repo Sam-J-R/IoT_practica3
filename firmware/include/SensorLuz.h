@@ -29,7 +29,9 @@ public:
 
   // Nivel de luz de 0 (como la referencia oscura) a 1000 (como la clara).
   // Puede salir de ese rango si el ambiente es mas extremo que la calibracion.
+  // Sin referencias validas devuelve 0 en lugar de dividir por cero.
   long nivel(int raw) const {
+    if (claro_ == oscuro_) return 0;
     return (static_cast<long>(raw) - oscuro_) * 1000L / (claro_ - oscuro_);
   }
 

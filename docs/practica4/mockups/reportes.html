@@ -165,7 +165,7 @@
     <h3>Luz promedio a cada hora</h3>
     <div class="leyenda"><span><i style="background:var(--series-2)"></i>Nivel de luz (0 a 100 %)</span></div>
     <svg id="lineaLuz" viewBox="0 0 360 150" role="img" aria-label="Nivel de luz promedio por hora"></svg>
-    <div class="fuente">Promedio de <code>luz_adc</code> por hora, llevado a 0–100 % con las referencias del LDR. <code>Query sk BETWEEN lectura#hace 30 días AND lectura#hoy</code> (lecturas con TTL de 30 días: este reporte no puede mirar más atrás).</div>
+    <div class="fuente">Promedio de <code>nivel_luz</code> por hora (el ESP32 ya lo envía en 0–100 %). <code>Query sk BETWEEN lectura#hace 30 días AND lectura#hoy</code> (lecturas con TTL de 30 días: este reporte no puede mirar más atrás).</div>
     <div class="ficticio">Datos de ejemplo.</div>
   </section>
 

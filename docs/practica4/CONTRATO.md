@@ -33,7 +33,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
       "lectura_adc": 1830,
       "modo": "automatico",
       "minutos_reexponer": 30,
-      "luz_adc": 640,
+      "nivel_luz": 64,
       "oscuro": true,
       "led": "encendido",
       "origen_led": "voz",
@@ -63,7 +63,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 | `reported.origen` | string | `voz`, `nube`, `edge` | ESP32 | Quién pidió el último movimiento del brazo. |
 | `reported.modo` | string | `manual`, `automatico` | ESP32 | Modo vigente; se guarda en la memoria del ESP32 y sobrevive a reinicios sin Internet. |
 | `reported.minutos_reexponer` | entero | 15–240 (inicial 30) | ESP32 | Espera vigente para R2. |
-| `reported.luz_adc` | entero | 0–4095 | ESP32 | Lectura cruda del LDR. Ausente si no hay LDR. |
+| `reported.nivel_luz` | entero | 0–100 (%) | ESP32 | Luz ambiente, ya normalizada con las referencias del LDR (`luz_local.h`), que solo conoce el ESP32. La usa el reporte de luz por hora. Ausente si no hay LDR. La lectura cruda del LDR solo se ve en el monitor serie. |
 | `reported.oscuro` | booleano | `true`, `false`; `null` sin dato | ESP32 | `true` = es de noche. Clasificación del LDR con histéresis (oscuro < 350, claro > 650 en escala 0–1000) y 5 min de confirmación, para que una nube no cuente como noche. La usan R5, R2 y la respuesta de «¿cómo está el tendedero?». Ausente si no hay LDR. |
 | `reported.led` | string | `encendido`, `apagado` | ESP32 | Estado de la luz. Ausente si no hay LED. |
 | `reported.origen_led` | string | `voz`, `edge` | ESP32 | `voz` si la encendió o apagó el usuario; `edge` si se apagó sola a los 10 minutos. |
@@ -103,7 +103,7 @@ Sin calibración previa, el ESP32 usa las referencias de fábrica de `calibracio
 
 ### Frecuencia de reporte
 
-- **Por evento:** un cambio en `agua_detectada`, `posicion`, `origen`, `modo`, `minutos_reexponer`, `oscuro`, `led`, `origen_led` o en la calibración se reporta de inmediato. `lectura_adc` y `luz_adc` solo viajan en esos reportes y en el periódico.
+- **Por evento:** un cambio en `agua_detectada`, `posicion`, `origen`, `modo`, `minutos_reexponer`, `oscuro`, `led`, `origen_led` o en la calibración se reporta de inmediato. `lectura_adc` y `nivel_luz` solo viajan en esos reportes y en el periódico.
 - **Periódico de respaldo:** cada 60 s desde la última aceptación (antes eran 5 s).
 - El bloque `calibracion` solo viaja en el primer reporte tras conectar y cuando cambia. El reporte periódico lleva `lectura_adc`, `agua_detectada` y `posicion`.
 
@@ -279,7 +279,7 @@ Se parte de las decisiones del usuario, no de la forma de los mensajes:
 | Reporte | Pregunta del usuario | Datos que usa |
 |---|---|---|
 | A. Secado de la semana | ¿Cuántas horas estuvo afuera la ropa y cuánta luz recibió? | Eventos de posición y de luz |
-| B. Mejor momento para tender | ¿A qué horas suele llover y cuándo hay más luz? | Eventos de agua y lecturas de `luz_adc` |
+| B. Mejor momento para tender | ¿A qué horas suele llover y cuándo hay más luz? | Eventos de agua y lecturas de `nivel_luz` |
 | C. Protección | ¿Cuántas veces la protegió de la lluvia y de la noche? ¿Quién movió el tendedero? | Eventos de posición con `origen`, `agua_detectada` y `oscuro` |
 | D. Estado del equipo | ¿Estuvo conectado? ¿Cuánto se movió el brazo? | Alertas de R3 y R4, eventos de posición, `lectura_adc` |
 
@@ -289,7 +289,7 @@ Las duraciones (horas afuera, de lluvia, de luz) no se guardan: se calculan rest
 
 | Tipo de ítem | `sk` | Campos | TTL | Por qué |
 |---|---|---|---|---|
-| Lectura | `lectura#<fecha>` | `lectura_adc`, `agua_detectada`, `luz_adc`, `oscuro`, `ts_dispositivo` (y `luz_simulada` en ensayos) | 30 días | Una por mensaje publicado, para medir la integridad del almacenamiento. Sirven para la curva de luz del último mes y la deriva del sensor. Posición, modo, origen y LED no se repiten: están en los eventos. |
+| Lectura | `lectura#<fecha>` | `lectura_adc`, `agua_detectada`, `nivel_luz`, `oscuro`, `ts_dispositivo` (y `luz_simulada` en ensayos) | 30 días | Una por mensaje publicado, para medir la integridad del almacenamiento. Sirven para la curva de luz del último mes y la deriva del sensor. Posición, modo, origen y LED no se repiten: están en los eventos. |
 | Evento de posición | `evento#<fecha>#posicion` | `posicion`, `origen`, `agua_detectada`, `oscuro` | 365 días | El contexto distingue la protección por lluvia (R1) de la de la noche (R5); `origen` dice quién lo movió. |
 | Evento de agua | `evento#<fecha>#agua` | `agua_detectada` | 365 días | Inicio y fin de cada lluvia. |
 | Evento de luz | `evento#<fecha>#luz` | `oscuro` | 365 días | Anochecer y amanecer: horas de luz por día. |

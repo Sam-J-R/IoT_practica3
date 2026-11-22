@@ -102,6 +102,13 @@ El diseño parte de cuatro reportes para el usuario: secado, mejor momento para 
 - `luz_simulada` y `ts_dispositivo` solo los envía el perfil de ensayo (`tendedero_ensayo`). Las mediciones de latencia se hacen con ese perfil.
 - El criterio y los campos que quedan fuera a propósito están en [CONTRATO.md](CONTRATO.md#criterio-cada-campo-tiene-quien-lo-use).
 
+### 1.12 Correcciones menores
+
+- **Nivel de luz normalizado:** el ESP32 reporta `nivel_luz` (0–100 %) en lugar de la lectura cruda `luz_adc`. Las referencias del LDR solo las conoce el ESP32, así que la Nube no podía convertir la lectura cruda para el reporte de luz por hora.
+- **Permisos de la Lambda de Alexa:** las acciones de IoT pasan de `Resource: "*"` a `thing/tendedero-*`, con un procedimiento de respaldo en la guía si apareciera `AccessDeniedException`.
+- **Scripts de ensayo:** los de la P3 se movieron a `tools/practica3/` (observación de la P3). `grabar_rnf.py` se movió a `tools/` y usa los comandos de la P4.
+- **Alerta de facturación:** paso nuevo en la guía manual (sección 10).
+
 ## 2. Archivos modificados
 
 | Área | Archivos | Cambio |
@@ -120,6 +127,7 @@ El diseño parte de cuatro reportes para el usuario: secado, mejor momento para 
 | Pruebas | `tests/` | 19 pruebas: vinculación por código, calibración y contrato. |
 | Varios tendederos | `lambda/lambda_function.py` y el ZIP, `alexa/interaction-model-es-MX.json`, `aws/dynamodb-table.template.json`, `aws/lambda-iam-policy.template.json`, `aws/cloudformation/tendedero-base.yaml`, `tools/verificar_aws.py`, `tools/casos_alexa.json` | Clave `userId` + `thingName`, slot `nombre` en todos los intents del tendedero, pregunta «¿En cuál?» con `Dialog.ElicitSlot`, intent para listar, permiso `Query`. |
 | R4 | `lambda/logica/lambda_function.py`, `tests/p4/test_logica.py` | R4 duplica `minutos_reexponer` en lugar de pasar a manual y cuenta el movimiento del mensaje. |
+| Correcciones menores | `firmware/src/Tendedero.cpp`, `firmware/src/ClienteShadow.cpp`, `lambda/almacenamiento/lambda_function.py`, `aws/lambda-iam-policy.template.json`, `tools/grabar_rnf.py`, `tools/practica3/`, `README.md`, mockups | `nivel_luz`, IoT restringido, scripts movidos. |
 | Shadow | `firmware/src/ClienteShadow.cpp`, `firmware/src/Tendedero.cpp`, `lambda/lambda_function.py` y el ZIP, `aws/shadow-migracion-practica4.json`, pruebas | Sin `desired.origen_led`; `luz_simulada` y `ts_dispositivo` solo en el perfil de ensayo. |
 | R2 y R3 | `lambda/supervisor/lambda_function.py`, `tools/probar_esp32.py`, `aws/cloudformation/tendedero-p4.yaml`, pruebas | R3 alerta tras 5 min; la prueba de frecuencia separa las caídas de MQTT. |
 | Histórico | `lambda/almacenamiento/lambda_function.py`, `aws/reglas/tendedero_cambios.json`, `aws/cloudformation/tendedero-p4.yaml`, `tools/estimar_costo.py`, pruebas | Lecturas solo con sensores, contexto en los eventos de posición y regla de cambios sin filtro. |
@@ -177,7 +185,7 @@ Seguir [ALEXA.md](ALEXA.md):
 ## 4. Pendientes
 
 - **Evidencias.** Las capturas, los videos y los ensayos RNF son de la práctica 3 y muestran la cubierta. No se rehicieron.
-- **Scripts de ensayo** (`ensayo_rnf.py`, `orden_offline.py`, `grabar_rnf.py`, `analizar_rnf.py`). Siguen usando `cubierta` y los comandos `abrir` / `cerrar`, así que **no funcionan con el firmware nuevo** hasta que se actualicen.
+- **Scripts de ensayo de la P3.** `ensayo_rnf.py`, `orden_offline.py` y `analizar_rnf.py` se movieron a `tools/practica3/` y no funcionan con el firmware nuevo; los reemplazan `tools/probar_esp32.py` y los `tools/medir_*.py`. `grabar_rnf.py` se movió a `tools/` y ya usa los comandos de la P4.
 - **Informe.** `docs/INFORME.md` describe la práctica 3.
 - **Circuito y fotos.** Los pines no cambiaron, pero el esquema y la foto muestran el montaje anterior.
 - **Verificación en hardware.** El firmware compila en todos sus perfiles y las pruebas locales pasan. No se probó todavía en el ESP32 ni en las consolas de AWS y Alexa.

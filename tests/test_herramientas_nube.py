@@ -199,6 +199,7 @@ def clientes_ok(**cambios):
             "IOT_ENDPOINT": "abc-ats.iot.us-east-2.amazonaws.com", "DDB_BINDINGS_TABLE": "tendedero_vinculaciones",
             "DDB_DEVICES_TABLE": "tendedero_dispositivos"})}}
     reported = cambios.get("reported", {"posicion": "expuesto", "agua_detectada": False, "lectura_adc": 3,
+                                        "modo": "automatico", "minutos_reexponer": 30,
                                         "calibracion": {"umbral_seco": 200, "umbral_agua": 600, "estado": "fabrica"}})
     estado = {"tendedero-inteligente": {"state": {"reported": reported},
                                         "metadata": {"reported": {"lectura_adc": {"timestamp": cambios.get("ts", time.time() - 30)}}}},

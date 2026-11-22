@@ -56,13 +56,13 @@ class AlmacenamientoTests(unittest.TestCase):
 
     def test_lectura_guarda_solo_los_sensores(self):
         """Posicion, modo, origen y LED ya estan en los eventos: no se repiten en cada lectura."""
-        self.handler(self.lectura(origen="voz", minutos_reexponer=30, luz_adc=900, oscuro=False,
+        self.handler(self.lectura(origen="voz", minutos_reexponer=30, nivel_luz=90, oscuro=False,
                                   led="apagado", origen_led="voz"), None)
         item = self.tabla.items[0]
         for campo in ("posicion", "modo", "origen", "minutos_reexponer", "led", "origen_led"):
             self.assertNotIn(campo, item)
-        self.assertEqual((int(item["lectura_adc"]), item["agua_detectada"], int(item["luz_adc"]), item["oscuro"]),
-                         (120, False, 900, False))
+        self.assertEqual((int(item["lectura_adc"]), item["agua_detectada"], int(item["nivel_luz"]), item["oscuro"]),
+                         (120, False, 90, False))
 
     def test_lectura_invalida_se_descarta_aunque_el_campo_no_se_guarde(self):
         self.handler(self.lectura(modo="turbo"), None)
@@ -136,15 +136,16 @@ class LuzAutomaticaTests(unittest.TestCase):
         self.tabla = self.aws.table(TABLA)
 
     def test_lectura_guarda_la_luz_pero_no_el_led(self):
-        self.handler({"reported": {"lectura_adc": 10, "luz_adc": 640, "oscuro": True, "led": "encendido",
+        self.handler({"reported": {"lectura_adc": 10, "nivel_luz": 64, "oscuro": True, "led": "encendido",
                                    "origen_led": "edge"},
                       "thingName": "tendedero-uno", "ts": AHORA_MS}, None)
         item = self.tabla.items[0]
-        self.assertEqual((int(item["luz_adc"]), item["oscuro"]), (640, True))
+        self.assertEqual((int(item["nivel_luz"]), item["oscuro"]), (64, True))
         self.assertNotIn("led", item, "el LED es un actuador: se registra en sus eventos")
 
     def test_descarta_luz_invalida(self):
-        for malo in ({"luz_adc": 9000}, {"oscuro": "si"}, {"led": "prendido"}, {"luz_simulada": 1}):
+        for malo in ({"nivel_luz": 101}, {"nivel_luz": "alto"}, {"oscuro": "si"}, {"led": "prendido"},
+                     {"luz_simulada": 1}):
             self.handler({"reported": {"lectura_adc": 10, **malo}, "thingName": "tendedero-uno",
                           "ts": AHORA_MS}, None)
         self.assertEqual(self.tabla.items, [])

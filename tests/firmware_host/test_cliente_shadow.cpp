@@ -152,11 +152,11 @@ static void luz_automatica() {
   Telemetria t;
   t.lecturaAdc = 100; t.agua = 0; t.posicion = Posicion::Resguardado; t.modo = Modo::Automatico;
   t.minutosReexponer = 30; t.origen = Origen::Edge;
-  t.luzInstalada = true; t.luzAdc = 640; t.oscuro = 1; t.led = Luz::Encendida; t.origenLed = Origen::Edge;
+  t.luzInstalada = true; t.nivelLuz = 64; t.oscuro = 1; t.led = Luz::Encendida; t.origenLed = Origen::Edge;
   EstadoCalibracion cal; cal.umbralSeco = 200; cal.umbralAgua = 600; cal.revision = 2;
   reloj += 70000;
   shadow.reportar(reloj, t, cal);
-  CHECK(publicado(BASE + "/update", "\"luz_adc\":640,\"oscuro\":true"), "reported lleva luz_adc y oscuro");
+  CHECK(publicado(BASE + "/update", "\"nivel_luz\":64,\"oscuro\":true"), "reported lleva nivel_luz y oscuro");
   CHECK(publicado(BASE + "/update", "\"led\":\"encendido\",\"origen_led\":\"edge\""),
         "reported lleva led y origen_led");
 #ifdef MODO_ENSAYO_RNF
@@ -169,7 +169,7 @@ static void luz_automatica() {
   sinLuz.luzInstalada = false; sinLuz.led = Luz::Desconocida; sinLuz.origenLed = Origen::Ninguno;
   reloj += 70000;
   shadow.reportar(reloj, sinLuz, cal);
-  CHECK(!publicado(BASE + "/update", "luz_adc") && !publicado(BASE + "/update", "\"led\""),
+  CHECK(!publicado(BASE + "/update", "nivel_luz") && !publicado(BASE + "/update", "\"led\""),
         "sin LDR ni LED no se reportan sus campos");
 }
 

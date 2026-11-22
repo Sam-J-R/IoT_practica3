@@ -422,7 +422,14 @@ void loop() {
   telemetria.origen = origen;
   telemetria.luzInstalada = ldr.instalado() || luzSimulada >= 0;
   telemetria.luzSimulada = luzSimulada >= 0;
-  telemetria.luzAdc = luzRaw;
+  // Nivel 0..100 %: la Nube no conoce las referencias del LDR, asi que se envia
+  // ya normalizado (el reporte de luz por hora lo usa directamente).
+  // Sin LDR no se calcula: con referencias invalidas nivel() dividiria por cero.
+  if (luzSimulada >= 0) {
+    telemetria.nivelLuz = luzSimulada ? 0 : 100;
+  } else if (ldr.instalado()) {
+    telemetria.nivelLuz = constrain(static_cast<int>(ldr.nivel(luzRaw) / 10), 0, 100);
+  }
   telemetria.oscuro = oscuro;
   telemetria.led = LED_INSTALADO ? led.estado() : Luz::Desconocida;
   telemetria.origenLed = origenLed;

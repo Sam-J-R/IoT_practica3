@@ -83,7 +83,7 @@ VALIDADORES = {
     "origen": lambda v: _opcion(v, ORIGENES, "origen"),
     "ts_dispositivo": lambda v: _entero(v, 1, 10**14, "ts_dispositivo"),
     # Luz automatica (LDR + LED).
-    "luz_adc": lambda v: _entero(v, 0, 4095, "luz_adc"),
+    "nivel_luz": lambda v: _entero(v, 0, 100, "nivel_luz"),
     "oscuro": lambda v: _booleano(v, "oscuro"),
     "led": lambda v: _opcion(v, ESTADOS_LED, "led"),
     "origen_led": lambda v: _opcion(v, ORIGENES, "origen_led"),
@@ -92,7 +92,7 @@ VALIDADORES = {
 
 
 # Campos de los sensores: lo unico que guarda una lectura.
-SENSORES = ("lectura_adc", "agua_detectada", "luz_adc", "oscuro", "luz_simulada", "ts_dispositivo")
+SENSORES = ("lectura_adc", "agua_detectada", "nivel_luz", "oscuro", "luz_simulada", "ts_dispositivo")
 # Contexto que se guarda con cada evento de posicion: por que se movio.
 CONTEXTO_POSICION = ("agua_detectada", "oscuro")
 

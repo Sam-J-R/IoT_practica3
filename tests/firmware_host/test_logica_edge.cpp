@@ -74,6 +74,7 @@ static void r5() {
 static void sensor_luz() {
   SensorLuz sin(-1, -1);
   CHECK(!sin.instalado() && sin.actualizar(100, 0) == -1, "LDR sin referencias: no instalado, sin dato");
+  CHECK(sin.nivel(100) == 0, "LDR sin referencias: nivel 0, sin dividir por cero");
   CHECK(!SensorLuz(1000, 1100).instalado(), "referencias demasiado cercanas se rechazan");
   // Divisor que SUBE con la luz: claro 3000, oscuro 500 (nivel 0..1000).
   SensorLuz s(3000, 500);

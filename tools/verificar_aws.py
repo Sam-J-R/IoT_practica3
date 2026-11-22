@@ -32,8 +32,10 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
 ZIP = RAIZ / "lambda" / "lambda_deployment_p3.zip"
-ATRIBUTOS_P3 = ("cubierta", "sensor_raw")
-ATRIBUTOS_P4 = ("posicion", "agua_detectada", "lectura_adc", "calibracion")
+# Atributos que ya no se usan: los de la P3 y los que se quitaron en la P4
+# (luz_adc -> nivel_luz; desired.origen_led). Los borra shadow-migracion-practica4.json.
+ATRIBUTOS_P3 = ("cubierta", "sensor_raw", "luz_adc", "origen_led@desired")
+ATRIBUTOS_P4 = ("posicion", "agua_detectada", "lectura_adc", "calibracion", "modo", "minutos_reexponer")
 
 
 class Verificador:
@@ -168,7 +170,8 @@ class Verificador:
             return None
         rep = doc.get("state", {}).get("reported", {})
         des = doc.get("state", {}).get("desired", {})
-        viejos = [x for x in ATRIBUTOS_P3 if x in rep or x in des]
+        viejos = [x for x in ATRIBUTOS_P3 if ("@desired" in x and x.split("@")[0] in des)
+                  or ("@" not in x and (x in rep or x in des))]
         self.anotar("Shadow", f"{thing} sin atributos de la P3", not viejos, viejos or "")
         return doc
 

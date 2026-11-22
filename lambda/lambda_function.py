@@ -663,7 +663,7 @@ class ConsultarModoHandler(AbstractRequestHandler):
             phrase = "El tendedero está en modo {}.".format("automático" if modo == "automatico" else "manual")
             minutos = reported.get("minutos_reexponer")
             if modo == "automatico" and isinstance(minutos, int):
-                phrase += " Vuelve a exponer la ropa después de {} minutos sin agua.".format(minutos)
+                phrase += " Resguarda la ropa si llueve o anochece, y la vuelve a exponer después de {} minutos sin agua, cuando hay luz.".format(minutos)
             pedido = state.get("desired", {}).get("modo")
             if pedido in MODOS and pedido != modo:
                 phrase += " Hay un cambio pendiente a modo {}.".format("automático" if pedido == "automatico" else "manual")
@@ -682,7 +682,7 @@ class ConfigurarEsperaHandler(AbstractRequestHandler):
             if minutos is None or not MINUTOS_MIN <= minutos <= MINUTOS_MAX:
                 return _answer(handler_input, "Dime un tiempo entre {} y {} minutos. Por ejemplo: espera treinta minutos para volver a exponer.".format(MINUTOS_MIN, MINUTOS_MAX))
             ShadowService().request_wait(thing_name, minutos)
-            return _answer(handler_input, "Listo. En modo automático, la ropa volverá a exponerse después de {} minutos sin agua.".format(minutos))
+            return _answer(handler_input, "Listo. En modo automático, la ropa volverá a exponerse después de {} minutos sin agua, cuando haya luz.".format(minutos))
         return _run_safe(handler_input, work)
 
 
