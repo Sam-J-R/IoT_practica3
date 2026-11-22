@@ -26,7 +26,7 @@ Esta versión se verificó con las pruebas locales de `tests/`, que usan AWS sim
 | `DDB_DEVICES_TABLE` | `tendedero_dispositivos` |
 | `AWS_REGION` | La proporciona Lambda. |
 
-- Rol: `iot:DescribeThing`, `iot:GetThingShadow`, `iot:UpdateThingShadow`; `dynamodb:GetItem`, `PutItem` y `DeleteItem` sobre la tabla de vinculaciones; `dynamodb:Query` sobre el índice de la tabla de dispositivos; y logging. Plantilla: [lambda-iam-policy.template.json](../aws/lambda-iam-policy.template.json).
+- Rol: `iot:DescribeThing`, `iot:GetThingShadow`, `iot:UpdateThingShadow`; `dynamodb:Query`, `PutItem` y `DeleteItem` sobre la tabla de vinculaciones; `dynamodb:Query` sobre el índice de la tabla de dispositivos; y logging. Plantilla: [lambda-iam-policy.template.json](../aws/lambda-iam-policy.template.json).
 - Trigger Alexa Skills Kit restringido al Skill ID.
 
 ## Mantener el paquete

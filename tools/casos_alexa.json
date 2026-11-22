@@ -368,7 +368,7 @@
       "alexa": [
         [
           "espera trescientos minutos para volver a exponer",
-          "entre 5 y 240"
+          "entre 15 y 240"
         ]
       ],
       "lambda": {
@@ -377,7 +377,7 @@
           "minutos": "300"
         }
       },
-      "espera": "entre 5 y 240"
+      "espera": "entre 15 y 240"
     },
     {
       "id": "C25",
@@ -443,15 +443,15 @@
     },
     {
       "id": "C29",
-      "nombre": "Elegir un tendedero que no existe",
+      "nombre": "Orden a un tendedero que no existe",
       "alexa": [
         [
-          "usa el tendedero de la azotea",
+          "resguarda el tendedero de la azotea",
           "No tienes un tendedero llamado azotea"
         ]
       ],
       "lambda": {
-        "intent": "SeleccionarTendederoIntent",
+        "intent": "ResguardarTendederoIntent",
         "slots": {
           "nombre": "azotea"
         }

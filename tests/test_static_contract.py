@@ -18,7 +18,7 @@ class StaticContract(unittest.TestCase):
         model = json.loads((ROOT / "alexa" / "interaction-model-es-MX.json").read_text(encoding="utf-8"))
         intents = {i["name"] for i in model["interactionModel"]["languageModel"]["intents"]}
         required = {
-            "VincularThingIntent", "SeleccionarTendederoIntent", "ListarTendederosIntent", "DesvincularThingIntent",
+            "VincularThingIntent", "ListarTendederosIntent", "DesvincularThingIntent",
             "ConsultarAguaIntent", "ExponerTendederoIntent", "ResguardarTendederoIntent",
             "ConsultarPosicionIntent", "CalibrarSensorIntent", "ConsultarCalibracionIntent"
         }
@@ -77,9 +77,22 @@ class StaticContract(unittest.TestCase):
         self.assertIn("{AttributeName: thingName, KeyType: RANGE}", base)
         policy = (ROOT / "aws" / "lambda-iam-policy.template.json").read_text(encoding="utf-8")
         self.assertNotIn("dynamodb:GetItem", policy)
-        for accion in ("dynamodb:Query", "dynamodb:UpdateItem"):
-            self.assertIn(accion, policy)
-            self.assertIn(accion, base)
+        self.assertIn("dynamodb:Query", policy)
+        self.assertIn("dynamodb:Query", base)
+        # Sin tendedero "activo" no hay nada que actualizar: solo crear, leer y borrar.
+        self.assertNotIn("dynamodb:UpdateItem", policy)
+
+    def test_every_device_intent_can_name_the_tendedero(self):
+        # Con varios tendederos, la Lambda pregunta cual (ElicitSlot): el slot debe existir.
+        model = json.loads((ROOT / "alexa" / "interaction-model-es-MX.json").read_text(encoding="utf-8"))
+        intents = {i["name"]: i for i in model["interactionModel"]["languageModel"]["intents"]}
+        sin_nombre = {"ListarTendederosIntent", "VincularThingIntent"}
+        for name, intent in intents.items():
+            if name.startswith("AMAZON.") or name in sin_nombre:
+                continue
+            with self.subTest(intent=name):
+                self.assertIn("nombre", {s["name"] for s in intent.get("slots", [])})
+        self.assertNotIn("SeleccionarTendederoIntent", intents)
 
     def test_deployment_zip_matches_source(self):
         # splitlines() ignora la diferencia entre finales de linea CRLF y LF.
@@ -90,7 +103,7 @@ class StaticContract(unittest.TestCase):
 
     def test_binding_ops_present(self):
         source = (ROOT / "lambda" / "lambda_function.py").read_text(encoding="utf-8")
-        for key in ("describe_thing", "update_item", "put_item", "delete_item", "query", "get_thing_shadow", "update_thing_shadow"):
+        for key in ("describe_thing", "put_item", "delete_item", "query", "get_thing_shadow", "update_thing_shadow"):
             self.assertIn(key, source)
 
     def test_sensor_is_analog(self):

@@ -68,7 +68,7 @@ VALIDADORES = {
     "agua_detectada": lambda v: _booleano(v, "agua_detectada"),
     "posicion": lambda v: _opcion(v, POSICIONES, "posicion"),
     "modo": lambda v: _opcion(v, MODOS, "modo"),
-    "minutos_reexponer": lambda v: _entero(v, 5, 240, "minutos_reexponer"),
+    "minutos_reexponer": lambda v: _entero(v, 15, 240, "minutos_reexponer"),
     "origen": lambda v: _opcion(v, ORIGENES, "origen"),
     "ts_dispositivo": lambda v: _entero(v, 1, 10**14, "ts_dispositivo"),
     # Luz automatica (LDR + LED).

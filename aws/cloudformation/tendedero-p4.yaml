@@ -100,7 +100,7 @@ Resources:
                 Effect: Allow
                 Action: [dynamodb:Query, dynamodb:PutItem]
                 Resource: !GetAtt TablaHistorico.Arn
-              - Sid: CambiarModo
+              - Sid: AjustarEspera
                 Effect: Allow
                 Action: iot:UpdateThingShadow
                 Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/${PrefijoThing}*

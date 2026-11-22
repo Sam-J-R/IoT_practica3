@@ -15,12 +15,14 @@ dispositivos para obtener el Thing; no hay nombres de Things en variables de
 entorno ni en el codigo.
 
 Un usuario puede tener varios tendederos (clave userId + thingName en la tabla
-de vinculaciones). En cada solicitud se usa:
-1. el tendedero nombrado en la frase ("resguarda el tendedero del patio"), o
-2. el tendedero activo: el ultimo que el usuario vinculo o eligio
-   ("usa el tendedero de la terraza"), segun fechaSeleccion.
-Si tiene mas de uno, cada respuesta empieza con el nombre del tendedero, para
-que el usuario sepa sobre cual actuo.
+de vinculaciones). Cada orden se dirige asi:
+1. Con un solo tendedero, a ese; no hace falta decir el nombre.
+2. Con varios, al que se nombra en la frase ("resguarda el tendedero del
+   patio"). Si la frase no nombra ninguno, Alexa pregunta cual (Dialog.ElicitSlot
+   sobre el slot nombre) y retoma la misma orden con la respuesta.
+No hay un tendedero "activo" guardado: nunca se actua sobre uno que el usuario
+no eligio en esa orden. Con varios, la respuesta empieza con el nombre del
+tendedero para confirmar sobre cual se actuo.
 """
 
 import json
@@ -36,6 +38,7 @@ from botocore.exceptions import ClientError
 import ask_sdk_core.utils as ask_utils
 from ask_sdk_core.dispatch_components import AbstractExceptionHandler, AbstractRequestHandler
 from ask_sdk_core.skill_builder import SkillBuilder
+from ask_sdk_model.dialog import ElicitSlotDirective
 
 
 LOG = logging.getLogger(__name__)
@@ -50,8 +53,9 @@ DEVICES_CODE_INDEX = os.getenv("DDB_DEVICES_CODE_INDEX", "codigoVinculacion-inde
 POSICIONES = ("expuesto", "resguardado")
 MODOS = ("manual", "automatico")
 ESTADOS_LED = ("encendido", "apagado")
-# Rango de minutos_reexponer aceptado por el ESP32 y la Lambda supervisor.
-MINUTOS_MIN, MINUTOS_MAX = 5, 240
+# Rango de minutos_reexponer aceptado por el ESP32 (config.h). Menos de 15 minutos
+# expone la ropa con la superficie aun mojada y con probabilidad de otro chubasco.
+MINUTOS_MIN, MINUTOS_MAX = 15, 240
 # Palabras que puede decir el usuario -> modo que entiende el ESP32.
 MODOS_HABLADOS = {
     "manual": "manual", "a mano": "manual", "modo manual": "manual",
@@ -67,7 +71,7 @@ CONDICIONES = {
 
 
 # Tope de tendederos por usuario: acota la Query de cada solicitud y la lista
-# que Alexa lee en voz alta.
+# que Alexa lee al preguntar en cual actuar.
 MAX_TENDEDEROS = 10
 # Nombre que recibe el primer tendedero si el usuario no dijo ninguno.
 NOMBRE_POR_DEFECTO = "principal"
@@ -84,8 +88,7 @@ class BindingRepository:
 
     Clave de particion userId y de ordenamiento thingName: un usuario tiene
     varios tendederos y no puede vincular dos veces el mismo. Cada item guarda
-    el nombre que le dio el usuario y fechaSeleccion; el tendedero activo es
-    el de fechaSeleccion mas reciente, asi elegir uno es una sola escritura.
+    el nombre que le dio el usuario, para distinguirlos por voz.
     """
 
     def __init__(self):
@@ -100,23 +103,13 @@ class BindingRepository:
         ).get("Items", [])
 
     def bind(self, user_id, thing_name, nombre, fecha_vinculacion=None):
-        """Crea o renombra la vinculacion y la deja como tendedero activo."""
-        ahora = _ahora()
+        """Crea la vinculacion o, si ya existia, le cambia el nombre."""
         self._table.put_item(Item={
             "userId": user_id,
             "thingName": thing_name,
             "nombre": nombre,
-            "fechaVinculacion": fecha_vinculacion or ahora,
-            "fechaSeleccion": ahora,
+            "fechaVinculacion": fecha_vinculacion or _ahora(),
         })
-
-    def select(self, user_id, thing_name):
-        self._table.update_item(
-            Key={"userId": user_id, "thingName": thing_name},
-            UpdateExpression="SET fechaSeleccion = :f",
-            ConditionExpression="attribute_exists(userId)",
-            ExpressionAttributeValues={":f": _ahora()},
-        )
 
     def unbind(self, user_id, thing_name):
         self._table.delete_item(Key={"userId": user_id, "thingName": thing_name})
@@ -135,23 +128,23 @@ def limpiar_nombre(texto):
     return _RELLENO_NOMBRE.sub("", nombre).strip()
 
 
-def tendedero_activo(vinculos):
-    """El de fechaSeleccion mas reciente (ISO-8601 UTC se ordena como texto)."""
-    if not vinculos:
-        return None
-    return max(vinculos, key=lambda v: (v.get("fechaSeleccion") or v.get("fechaVinculacion") or "",
-                                        v["thingName"]))
-
-
 def buscar_por_nombre(vinculos, nombre):
     clave = clave_nombre(nombre)
     return next((v for v in vinculos if clave_nombre(v.get("nombre")) == clave), None)
 
 
-def lista_hablada(vinculos):
-    """['patio', 'terraza', 'azotea'] -> 'patio, terraza y azotea'."""
+def lista_hablada(vinculos, conjuncion="y"):
+    """['patio', 'terraza', 'azotea'] -> 'patio, terraza y azotea' (o '... o azotea')."""
     nombres = sorted(v.get("nombre") or v["thingName"] for v in vinculos)
-    return nombres[0] if len(nombres) == 1 else ", ".join(nombres[:-1]) + " y " + nombres[-1]
+    if len(nombres) == 1:
+        return nombres[0]
+    return ", ".join(nombres[:-1]) + " " + conjuncion + " " + nombres[-1]
+
+
+def tus_tendederos(vinculos):
+    if len(vinculos) == 1:
+        return "Tu tendedero se llama {}.".format(lista_hablada(vinculos))
+    return "Tus tendederos son: {}.".format(lista_hablada(vinculos))
 
 
 class DeviceRepository:
@@ -321,11 +314,37 @@ def _answer(handler_input, message, keep_open=True):
 
 
 class SinDestino(Exception):
-    """No se puede saber sobre que tendedero actuar; el mensaje explica por que."""
+    """No se puede actuar: el mensaje explica por que."""
+
+
+class PedirNombre(Exception):
+    """Hay varios tendederos y la frase no dice cual: Alexa debe preguntarlo."""
+
+    def __init__(self, vinculos, pregunta="¿En cuál tendedero? Tienes {}."):
+        super().__init__(pregunta)
+        self.vinculos = vinculos
+        self.pregunta = pregunta
+
+
+def _preguntar_nombre(handler_input, vinculos, pregunta):
+    """Pide el slot nombre y conserva el intent con sus demas slots.
+
+    Alexa hace la pregunta, el usuario responde ("el del patio") y la Lambda
+    recibe de nuevo el mismo intent, ahora con el nombre completado.
+    """
+    texto = pregunta.format(lista_hablada(vinculos, "o"))
+    intent = handler_input.request_envelope.request.intent
+    return (handler_input.response_builder.speak(texto).ask(texto)
+            .add_directive(ElicitSlotDirective(slot_to_elicit="nombre", updated_intent=intent))
+            .response)
 
 
 def _destino(handler_input):
-    """Thing sobre el que actua la solicitud: el nombrado en la frase o el activo."""
+    """Thing sobre el que actua la solicitud.
+
+    Un solo tendedero: ese. Varios: el nombrado en la frase; si no nombra
+    ninguno, se pregunta (PedirNombre).
+    """
     vinculos = BindingRepository().list(_user_id(handler_input))
     if not vinculos:
         raise SinDestino(SIN_VINCULO)
@@ -333,10 +352,11 @@ def _destino(handler_input):
     if nombre:
         vinculo = buscar_por_nombre(vinculos, nombre)
         if not vinculo:
-            raise SinDestino("No tienes un tendedero llamado {}. Tus tendederos son: {}.".format(
-                nombre, lista_hablada(vinculos)))
+            raise SinDestino("No tienes un tendedero llamado {}. {}".format(nombre, tus_tendederos(vinculos)))
+    elif len(vinculos) == 1:
+        vinculo = vinculos[0]
     else:
-        vinculo = tendedero_activo(vinculos)
+        raise PedirNombre(vinculos)
     if len(vinculos) > 1:
         handler_input.attributes_manager.request_attributes["prefijo"] = "Tendedero {}: ".format(
             vinculo.get("nombre") or vinculo["thingName"])
@@ -348,6 +368,8 @@ def _run_safe(handler_input, operation):
         return operation()
     except SinDestino as exc:
         return _answer(handler_input, str(exc))
+    except PedirNombre as exc:
+        return _preguntar_nombre(handler_input, exc.vinculos, exc.pregunta)
     except (ClientError, ValueError, RuntimeError, json.JSONDecodeError):
         LOG.exception("Falló la operación del tendedero")
         return _answer(handler_input, "No pude completar la solicitud. Revisa el código, la conexión y los permisos de AWS.")
@@ -365,7 +387,7 @@ class LaunchHandler(AbstractRequestHandler):
 
 
 class VincularHandler(AbstractRequestHandler):
-    """Agrega un tendedero al usuario, o renombra uno que ya tenia, y lo deja activo."""
+    """Agrega un tendedero al usuario, o renombra uno que ya tenia."""
 
     def can_handle(self, handler_input):
         return ask_utils.is_intent_name("VincularThingIntent")(handler_input)
@@ -406,35 +428,12 @@ class VincularHandler(AbstractRequestHandler):
             repo.bind(user_id, thing_name, nombre, existente.get("fechaVinculacion") if existente else None)
             if existente:
                 if clave_nombre(existente.get("nombre")) == clave_nombre(nombre):
-                    return _answer(handler_input, "Ese tendedero ya estaba vinculado con el nombre {}. Ahora es el tendedero activo.".format(nombre))
-                return _answer(handler_input, "Ese tendedero ya estaba vinculado. Ahora se llama {} y es el tendedero activo.".format(nombre))
+                    return _answer(handler_input, "Ese tendedero ya estaba vinculado con el nombre {}.".format(nombre))
+                return _answer(handler_input, "Ese tendedero ya estaba vinculado. Ahora se llama {}.".format(nombre))
             if not vinculos:
                 return _answer(handler_input, "He vinculado tu tendedero {}. Ahora puedes consultar el agua, moverlo o calibrar el sensor.".format(nombre))
-            return _answer(handler_input, "He vinculado tu tendedero {}. Ahora tienes {} tendederos y uso el tendedero {}. Para cambiar, di: usa el tendedero, y su nombre.".format(nombre, len(vinculos) + 1, nombre))
-        return _run_safe(handler_input, work)
-
-
-class SeleccionarTendederoHandler(AbstractRequestHandler):
-    """Elige el tendedero activo: el que se usa cuando la frase no nombra ninguno."""
-
-    def can_handle(self, handler_input):
-        return ask_utils.is_intent_name("SeleccionarTendederoIntent")(handler_input)
-
-    def handle(self, handler_input):
-        def work():
-            repo = BindingRepository()
-            user_id = _user_id(handler_input)
-            vinculos = repo.list(user_id)
-            if not vinculos:
-                return _answer(handler_input, SIN_VINCULO)
-            nombre = _nombre(handler_input)
-            if not nombre:
-                return _answer(handler_input, "¿Qué tendedero quieres usar? Tus tendederos son: {}.".format(lista_hablada(vinculos)))
-            vinculo = buscar_por_nombre(vinculos, nombre)
-            if not vinculo:
-                return _answer(handler_input, "No tienes un tendedero llamado {}. Tus tendederos son: {}.".format(nombre, lista_hablada(vinculos)))
-            repo.select(user_id, vinculo["thingName"])
-            return _answer(handler_input, "Listo. Ahora uso el tendedero {}.".format(vinculo.get("nombre")))
+            return _answer(handler_input, "He vinculado tu tendedero {}. Ahora tienes {} tendederos: {}. En cada orden di en cuál, por ejemplo: resguarda el tendedero del patio. Si no lo dices, te preguntaré.".format(
+                nombre, len(vinculos) + 1, lista_hablada(vinculos + [{"thingName": thing_name, "nombre": nombre}])))
         return _run_safe(handler_input, work)
 
 
@@ -449,8 +448,8 @@ class ListarTendederosHandler(AbstractRequestHandler):
                 return _answer(handler_input, SIN_VINCULO)
             if len(vinculos) == 1:
                 return _answer(handler_input, "Tienes un tendedero vinculado: {}.".format(vinculos[0].get("nombre")))
-            return _answer(handler_input, "Tienes {} tendederos: {}. Ahora uso el tendedero {}.".format(
-                len(vinculos), lista_hablada(vinculos), tendedero_activo(vinculos).get("nombre")))
+            return _answer(handler_input, "Tienes {} tendederos: {}. En cada orden di en cuál, por ejemplo: resguarda el tendedero del patio.".format(
+                len(vinculos), lista_hablada(vinculos)))
         return _run_safe(handler_input, work)
 
 
@@ -469,20 +468,18 @@ class DesvincularHandler(AbstractRequestHandler):
             if nombre:
                 vinculo = buscar_por_nombre(vinculos, nombre)
                 if not vinculo:
-                    return _answer(handler_input, "No tienes un tendedero llamado {}. Tus tendederos son: {}.".format(nombre, lista_hablada(vinculos)))
+                    return _answer(handler_input, "No tienes un tendedero llamado {}. {}".format(nombre, tus_tendederos(vinculos)))
             elif len(vinculos) == 1:
                 vinculo = vinculos[0]
             else:
                 # Con varios, no se adivina: desvincular el equivocado deja al usuario sin control.
-                ejemplo = sorted(v.get("nombre") or "" for v in vinculos)[0]
-                return _answer(handler_input, "Tienes {} tendederos: {}. ¿Cuál quieres desvincular? Di, por ejemplo: desvincula el tendedero {}.".format(
-                    len(vinculos), lista_hablada(vinculos), ejemplo))
+                return _preguntar_nombre(handler_input, vinculos, "¿Cuál quieres desvincular? Tienes {}.")
             repo.unbind(user_id, vinculo["thingName"])
             restantes = [v for v in vinculos if v["thingName"] != vinculo["thingName"]]
             if not restantes:
                 return _answer(handler_input, "He eliminado la vinculación de tu tendedero.")
-            return _answer(handler_input, "He desvinculado el tendedero {}. Ahora uso el tendedero {}.".format(
-                vinculo.get("nombre"), tendedero_activo(restantes).get("nombre")))
+            return _answer(handler_input, "He desvinculado el tendedero {}. {}".format(
+                vinculo.get("nombre"), tus_tendederos(restantes)))
         return _run_safe(handler_input, work)
 
 
@@ -694,7 +691,7 @@ class HelpHandler(AbstractRequestHandler):
         return ask_utils.is_intent_name("AMAZON.HelpIntent")(handler_input)
 
     def handle(self, handler_input):
-        return _answer(handler_input, "Puedes vincular tus tendederos con su código y un nombre, elegir cuál usar diciendo: usa el tendedero del patio, preguntar por el agua, exponer o resguardar la ropa, consultar su posición, calibrar el sensor, cambiar a modo automático o manual, decir cuántos minutos esperar para volver a exponer, y encender, apagar o consultar la luz.")
+        return _answer(handler_input, "Puedes vincular tus tendederos con su código y un nombre, preguntar qué tendederos tienes, preguntar por el agua, exponer o resguardar la ropa, consultar su posición, calibrar el sensor, cambiar a modo automático o manual, decir cuántos minutos esperar para volver a exponer, y encender, apagar o consultar la luz.")
 
 
 class StopHandler(AbstractRequestHandler):
@@ -727,7 +724,6 @@ builder = SkillBuilder()
 builder.add_request_handler(LaunchHandler())
 builder.add_request_handler(VincularHandler())
 builder.add_request_handler(DesvincularHandler())
-builder.add_request_handler(SeleccionarTendederoHandler())
 builder.add_request_handler(ListarTendederosHandler())
 builder.add_request_handler(ComandoPosicionHandler())
 builder.add_request_handler(ConsultarAguaHandler())

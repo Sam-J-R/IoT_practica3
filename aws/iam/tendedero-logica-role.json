@@ -11,7 +11,7 @@
       "Resource": "arn:aws:dynamodb:us-east-2:ACCOUNT_ID:table/tendedero_historico"
     },
     {
-      "Sid": "CambiarModo",
+      "Sid": "AjustarEspera",
       "Effect": "Allow",
       "Action": "iot:UpdateThingShadow",
       "Resource": "arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*"

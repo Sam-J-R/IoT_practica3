@@ -17,7 +17,6 @@
       "Action": [
         "dynamodb:Query",
         "dynamodb:PutItem",
-        "dynamodb:UpdateItem",
         "dynamodb:DeleteItem"
       ],
       "Resource": "arn:aws:dynamodb:us-east-2:ACCOUNT_ID:table/tendedero_vinculaciones"

@@ -30,10 +30,11 @@ Hacerlo **después** de que la Lambda nueva esté desplegada ([GUIA_AWS.md](GUIA
 | Intent | Cambio |
 |---|---|
 | `VincularThingIntent` | Nuevo slot `nombre` (tipo propio `NombreTendedero`). Después de confirmar el código, Alexa pregunta: «¿Qué nombre le pones a este tendedero?». |
-| `CambiarThingIntent` | **Se elimina.** Para agregar otro tendedero se usa `VincularThingIntent` y para cambiar de tendedero, `SeleccionarTendederoIntent`. |
-| `SeleccionarTendederoIntent` | **Nuevo.** «usa el tendedero de la terraza». |
+| `CambiarThingIntent` | **Se elimina.** Para agregar otro tendedero se usa `VincularThingIntent`. |
 | `ListarTendederosIntent` | **Nuevo.** «qué tendederos tengo». |
-| `DesvincularThingIntent`, `ExponerTendederoIntent`, `ResguardarTendederoIntent`, `ConsultarAguaIntent`, `ConsultarPosicionIntent` | Slot `nombre` opcional, para nombrar el tendedero en la misma frase: «resguarda el tendedero del patio». |
+| Todos los que actúan sobre un tendedero (agua, posición, calibración, modo, espera, luz y desvincular) | Slot `nombre` opcional, para nombrarlo en la frase: «resguarda el tendedero del patio». |
+
+Con un solo tendedero no hace falta nombrarlo. Con varios y sin nombre en la frase, la Lambda pide el slot con `Dialog.ElicitSlot`: Alexa pregunta «¿En cuál tendedero? Tienes patio o terraza», el usuario responde «el del patio» y la orden se cumple sin repetirla.
 
 `NombreTendedero` trae valores de ejemplo (patio, terraza, azotea, balcón…), pero Alexa también reconoce otros nombres.
 
@@ -61,23 +62,23 @@ Usar **Test → Development**, en español (MX). Los códigos son los de ejemplo
 | 7 | dónde está el tendedero | «Según el último reporte, el tendedero está…» |
 | 8 | resguarda la ropa | «He solicitado que el tendedero quede resguardado…» |
 | 9 | expón el tendedero | «He solicitado que el tendedero quede expuesto…» |
-| 10 | vincula el tendedero del patio con el código 483920 | Confirma el código y agrega el tendedero físico: «Ahora tienes 2 tendederos y uso el tendedero patio…» |
-| 10a | qué tendederos tengo | «Tienes 2 tendederos: patio y terraza. Ahora uso el tendedero patio». |
-| 10b | hay agua en el tendedero de la terraza | «Tendedero terraza: el sensor…» (el activo sigue siendo patio). |
-| 10c | usa el tendedero de la terraza | «Listo. Ahora uso el tendedero terraza». |
-| 10d | usa el tendedero del patio | Vuelve al tendedero físico para las frases 11 a 14. |
-| 10e | usa el tendedero de la azotea | «No tienes un tendedero llamado azotea…» |
-| 11 | calibra el sensor seco | «He solicitado la calibración en seco… di: calibra el sensor mojado». |
-| 12 | calibra el sensor mojado | «He solicitado la calibración con agua…» |
+| 10 | vincula el tendedero del patio con el código 483920 | Confirma el código y agrega el tendedero físico: «Ahora tienes 2 tendederos: patio y terraza…» |
+| 10a | qué tendederos tengo | «Tienes 2 tendederos: patio y terraza…» |
+| 10b | hay agua en el tendedero de la terraza | «Tendedero terraza: el sensor…» |
+| 10c | resguarda la ropa | «¿En cuál tendedero? Tienes patio o terraza». Responder «el del patio»: «Tendedero patio: he solicitado…» |
+| 10d | resguarda el tendedero de la azotea | «No tienes un tendedero llamado azotea…» |
+| 11 | calibra el sensor seco en el patio | «He solicitado la calibración en seco… di: calibra el sensor mojado». |
+| 12 | calibra el sensor mojado en el patio | «He solicitado la calibración con agua…» |
 | 13 | calibra el sensor | Alexa pregunta en qué condición está el sensor. |
 | 14 | cómo está la calibración | Aplicada, rechazada, caducada, pendiente o de fábrica. |
-| 15 | desvincula mi tendedero | Con dos tendederos, Alexa pregunta cuál. |
-| 15a | desvincula el tendedero de la terraza | «He desvinculado el tendedero terraza. Ahora uso el tendedero patio». |
+| 15 | desvincula mi tendedero | Con dos tendederos: «¿Cuál quieres desvincular? Tienes patio o terraza». |
+| 15a | la terraza | «He desvinculado el tendedero terraza. Tu tendedero se llama patio». |
 | 15b | desvincula mi tendedero | Con uno solo: «He eliminado la vinculación de tu tendedero». |
 | 16 | ayuda | Lista de operaciones. |
 
 Notas para la prueba:
 
+- Con dos tendederos, las frases sin nombre (13 y 14) hacen que Alexa pregunte cuál: responder «el del patio».
 - Las frases 11 a 14 necesitan el tendedero físico vinculado (frase 10), encendido y conectado. Con el Thing de prueba, la calibración queda siempre «pendiente», porque no hay un ESP32 que la atienda.
 - Para la frase 11 el sensor debe estar seco; para la 12, mojado. Si se pide «seco» con el sensor mojado, la calibración se rechaza y se conservan los valores anteriores.
 - Cerrar la conversación no elimina el vínculo.
@@ -86,5 +87,6 @@ Notas para la prueba:
 
 - El modelo no se pudo compilar ni probar en la consola de Alexa desde el repositorio. La primera compilación es la verificación real del JSON, en particular de la sección `dialog` y de la confirmación del código con SSML.
 - Si la confirmación del código diera problemas en la consola, se puede poner `"confirmationRequired": false` en el slot `codigo` y quitar el *prompt* `Confirm.Slot…`. La Lambda funciona igual con o sin confirmación.
+- La pregunta «¿En cuál tendedero?» usa `Dialog.ElicitSlot` desde la Lambda en intents sin diálogo propio, con la delegación automática activada. La primera prueba en la consola confirma que Alexa devuelve la respuesta al mismo intent.
 - Si Alexa entiende el nombre con el artículo («del patio»), la Lambda lo quita igual. Si confunde un nombre poco común, conviene agregarlo como valor de `NombreTendedero`.
 - La Lambda responde a la calibración sin esperar al dispositivo. El resultado se consulta después con «cómo está la calibración».

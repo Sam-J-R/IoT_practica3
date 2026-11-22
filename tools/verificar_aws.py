@@ -131,10 +131,9 @@ class Verificador:
             return False
         self.anotar("IAM", "Query sobre el índice de dispositivos",
                     permite("dynamodb:Query", "table/tendedero_dispositivos/index/codigoVinculacion-index"))
-        self.anotar("IAM", "Query/PutItem/UpdateItem/DeleteItem en vinculaciones",
+        self.anotar("IAM", "Query/PutItem/DeleteItem en vinculaciones",
                     all(permite(x, "table/tendedero_vinculaciones")
-                        for x in ("dynamodb:Query", "dynamodb:PutItem", "dynamodb:UpdateItem",
-                                  "dynamodb:DeleteItem")))
+                        for x in ("dynamodb:Query", "dynamodb:PutItem", "dynamodb:DeleteItem")))
 
     # 6 -------------------------------------------------------------------
     def funcion(self):

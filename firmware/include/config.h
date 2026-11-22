@@ -29,7 +29,7 @@ constexpr Modo MODO_INICIAL = Modo::Automatico;
 // Espera sin agua antes de que la Nube (regla R2) vuelva a exponer la ropa.
 // El ESP32 solo la guarda y la reporta; la decision se toma en la Lambda.
 constexpr int MINUTOS_REEXPONER_INICIAL = 30;
-constexpr int MINUTOS_REEXPONER_MIN = 5;
+constexpr int MINUTOS_REEXPONER_MIN = 15;  // Menos: la ropa sale con la superficie aun mojada.
 constexpr int MINUTOS_REEXPONER_MAX = 240;
 
 // Luz automatica (regla R5). La lectura del LDR se lleva a una escala de

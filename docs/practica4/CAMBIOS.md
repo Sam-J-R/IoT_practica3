@@ -52,13 +52,22 @@ El respaldo periódico pasó de 5 s a 60 s. Los cambios de agua y de posición s
 
 **Ahora.** La clave es `userId` + `thingName` y cada vinculación lleva un `nombre` que elige el usuario («patio», «terraza»).
 
-- **Sin nombre en la frase:** las órdenes van al tendedero activo, que es el último que el usuario vinculó o eligió con «usa el tendedero de la terraza».
-- **Con nombre en la frase** («resguarda el tendedero del patio»): la orden va a ese tendedero y el activo no cambia.
+- **Un solo tendedero:** no hace falta nombrarlo.
+- **Varios, con nombre en la frase** («resguarda el tendedero del patio»): la orden va a ese.
+- **Varios, sin nombre:** Alexa pregunta «¿En cuál tendedero?» y, con la respuesta, cumple la misma orden. No se guarda un tendedero «activo», para no actuar nunca sobre uno que el usuario no eligió.
 - **Con más de un tendedero:** Alexa antepone el nombre a cada respuesta, para que el usuario sepa sobre cuál actuó.
 
-`CambiarThingIntent` se reemplaza por `SeleccionarTendederoIntent` y se agrega `ListarTendederosIntent`. El diseño, sus decisiones y los patrones de acceso están en [CONTRATO.md](CONTRATO.md#varios-tendederos-por-usuario).
+Se elimina `CambiarThingIntent`, se agrega `ListarTendederosIntent` y todos los intents que actúan sobre un tendedero reciben el slot `nombre`. El diseño, sus decisiones y los patrones de acceso están en [CONTRATO.md](CONTRATO.md#varios-tendederos-por-usuario).
 
 Cambiar la clave obliga a recrear la tabla. Las vinculaciones de la práctica 3 se pierden y hay que volver a vincular ([GUIA_AWS.md](GUIA_AWS.md), paso 4.1).
+
+### 1.7 R4 duplica la espera en lugar de pasar a modo manual
+
+**Antes.** Con más de 6 movimientos en una hora, R4 escribía `desired.modo = manual`. El modo manual apagaba también R1, y la ropa quedaba sin protección contra la lluvia si alguien la volvía a exponer.
+
+**Ahora.** R4 duplica `desired.minutos_reexponer` (tope 240) y registra una alerta. El modo no cambia y R1 sigue protegiendo la ropa. Alexa informa la espera nueva al consultar el modo, y el usuario la puede cambiar por voz. R4 cuenta también el movimiento que trae el mensaje, porque la Lambda de almacenamiento lo guarda en paralelo y puede no haber terminado. Detalle en [CONTRATO.md](CONTRATO.md#por-qué-r4-duplica-la-espera-y-no-pasa-a-modo-manual).
+
+La espera mínima sube de 5 a 15 minutos: con menos, la ropa sale con la superficie todavía mojada. La inicial sigue en 30.
 
 ## 2. Archivos modificados
 
@@ -76,7 +85,9 @@ Cambiar la clave obliga a recrear la tabla. Las vinculaciones de la práctica 3 
 | AWS | `aws/lambda-iam-policy.template.json` | Permiso `dynamodb:Query` sobre el índice. |
 | AWS | `aws/dynamodb-dispositivos.*.json`, `aws/shadow-*.json` (nuevos) | Tabla nueva, ítems de ejemplo y JSON para migrar los Shadows. |
 | Pruebas | `tests/` | 19 pruebas: vinculación por código, calibración y contrato. |
-| Varios tendederos | `lambda/lambda_function.py` y el ZIP, `alexa/interaction-model-es-MX.json`, `aws/dynamodb-table.template.json`, `aws/lambda-iam-policy.template.json`, `aws/cloudformation/tendedero-base.yaml`, `tools/verificar_aws.py`, `tools/casos_alexa.json` | Clave `userId` + `thingName`, slot `nombre`, intents para elegir y listar, permisos `Query` y `UpdateItem`. |
+| Varios tendederos | `lambda/lambda_function.py` y el ZIP, `alexa/interaction-model-es-MX.json`, `aws/dynamodb-table.template.json`, `aws/lambda-iam-policy.template.json`, `aws/cloudformation/tendedero-base.yaml`, `tools/verificar_aws.py`, `tools/casos_alexa.json` | Clave `userId` + `thingName`, slot `nombre` en todos los intents del tendedero, pregunta «¿En cuál?» con `Dialog.ElicitSlot`, intent para listar, permiso `Query`. |
+| R4 | `lambda/logica/lambda_function.py`, `tests/p4/test_logica.py` | R4 duplica `minutos_reexponer` en lugar de pasar a manual y cuenta el movimiento del mensaje. |
+| Espera mínima | `firmware/include/config.h`, `lambda/lambda_function.py` y el ZIP, `lambda/almacenamiento/lambda_function.py`, pruebas y `tools/casos_alexa.json` | `minutos_reexponer` pasa de 5–240 a 15–240. |
 | Varios tendederos | `tests/fake_vinculaciones.py` (nuevo), `tests/test_lambda_integration.py`, `tests/test_herramientas_nube.py`, `tests/test_static_contract.py` | Tabla con clave compuesta en memoria; pruebas de varios tendederos, nombres, tope, renombrado y desvinculación. |
 
 ## 3. Pasos para cada integrante

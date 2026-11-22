@@ -253,10 +253,13 @@ class VerificarAwsTests(unittest.TestCase):
         _, f = self.correr(clave_vinculaciones=[{"AttributeName": "userId", "KeyType": "HASH"}])
         self.assertEqual(f[("DynamoDB", "vinculaciones con clave userId + thingName (varios por usuario)")][0], "FALLA")
 
-    def test_rol_sin_permiso_para_elegir_tendedero(self):
-        politica = (ROOT / "aws/lambda-iam-policy.template.json").read_text().replace('"dynamodb:UpdateItem",', "")
-        _, f = self.correr(politica_rol=politica.replace("ACCOUNT_ID", "123456789012"))
-        self.assertEqual(f[("IAM", "Query/PutItem/UpdateItem/DeleteItem en vinculaciones")][0], "FALLA")
+    def test_rol_sin_query_en_vinculaciones(self):
+        politica = json.loads((ROOT / "aws/lambda-iam-policy.template.json").read_text())
+        for s in politica["Statement"]:
+            if s.get("Sid") == "PersistUserBindings":
+                s["Action"] = [a for a in s["Action"] if a != "dynamodb:Query"]
+        _, f = self.correr(politica_rol=json.dumps(politica).replace("ACCOUNT_ID", "123456789012"))
+        self.assertEqual(f[("IAM", "Query/PutItem/DeleteItem en vinculaciones")][0], "FALLA")
 
 
 if __name__ == "__main__":

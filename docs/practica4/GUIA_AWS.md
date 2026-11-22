@@ -69,7 +69,7 @@ Si el ESP32 deja de conectarse después de este cambio, volver a activar la vers
 Cambian dos declaraciones:
 
 - **`FindDeviceByBindingCode`** (nueva): `dynamodb:Query` sobre el índice `codigoVinculacion-index` de `tendedero_dispositivos`. La Lambda no necesita más permisos sobre esa tabla, porque solo la lee por código.
-- **`PersistUserBindings`**: sobre `tendedero_vinculaciones` pasa de `GetItem`, `PutItem` y `DeleteItem` a `Query`, `PutItem`, `UpdateItem` y `DeleteItem`. `Query` lee todos los tendederos del usuario. `UpdateItem` cambia el tendedero activo. `GetItem` se quita porque la Lambda ya no lo usa.
+- **`PersistUserBindings`**: sobre `tendedero_vinculaciones` pasa de `GetItem`, `PutItem` y `DeleteItem` a `Query`, `PutItem` y `DeleteItem`. `Query` lee todos los tendederos del usuario. `GetItem` se quita porque la Lambda ya no lo usa.
 
 ## 4.1 Recrear la tabla de vinculaciones
 
@@ -82,23 +82,7 @@ En DynamoDB, la clave de una tabla no se puede cambiar: hay que borrarla y crear
    - Capacidad: bajo demanda, igual que [dynamodb-table.template.json](../../aws/dynamodb-table.template.json).
 3. Esperar a que quede en **Active**.
 
-Desde la terminal es lo mismo:
-
-```powershell
-aws dynamodb delete-table --table-name tendedero_vinculaciones --region us-east-2
-```
-
-```powershell
-aws dynamodb wait table-not-exists --table-name tendedero_vinculaciones --region us-east-2
-```
-
-```powershell
-aws dynamodb create-table --cli-input-json file://aws/dynamodb-table.template.json --region us-east-2
-```
-
 Hacerlo justo antes de subir la Lambda nueva (paso 5). La Lambda antigua usa `GetItem` con solo `userId` y falla contra la tabla nueva.
-
-En una cuenta propia montada con CloudFormation ([tendedero-base.yaml](../../aws/cloudformation/tendedero-base.yaml)), la tabla tiene nombre fijo y CloudFormation no puede reemplazarla. Primero hay que borrarla a mano y después actualizar la pila.
 
 El comodín `Resource: "*"` de las tres acciones de IoT se mantiene, por el mismo motivo documentado en la práctica 3. El mínimo para producción sigue siendo `arn:aws:iot:us-east-2:ACCOUNT_ID:thing/tendedero-*`.
 
@@ -132,7 +116,7 @@ El Shadow de `tendedero-inteligente` se completa solo cuando el ESP32 se conecta
 
 - [ ] La tabla `tendedero_dispositivos` y su índice están en **Active**, con dos ítems.
 - [ ] La versión activa de la política IoT contiene `${iot:Connection.Thing.ThingName}` y no contiene `ACCOUNT_ID`.
-- [ ] El rol de la Lambda tiene la declaración `FindDeviceByBindingCode`, y `PersistUserBindings` incluye `Query` y `UpdateItem`.
+- [ ] El rol de la Lambda tiene la declaración `FindDeviceByBindingCode`, y `PersistUserBindings` incluye `Query`.
 - [ ] `tendedero_vinculaciones` tiene partition key `userId` y sort key `thingName`.
 - [ ] La Lambda tiene `DDB_DEVICES_TABLE` y ya no tiene `THING_ALIASES_JSON`.
 - [ ] Los Shadows no muestran `cubierta` ni `sensor_raw`.
@@ -158,3 +142,38 @@ Con muchos dispositivos, el alta manual no escala. Hay dos formas de automatizar
 - **Fleet Provisioning de AWS IoT.** El ESP32 sale de fábrica con un certificado genérico y se registra solo la primera vez que se conecta. Es la opción para producción masiva.
 
 La tabla `tendedero_dispositivos` también queda preparada para guardar más datos de cada producto (ubicación, modelo, versión de firmware), que servirán para el análisis de datos de la siguiente fase.
+
+## 9. Actualizar la lógica de la Nube (R4 corregida)
+
+R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO.md#por-qué-r4-duplica-la-espera-y-no-pasa-a-modo-manual)). Los permisos y la Lambda supervisor no cambian.
+
+| Recurso | Cambio |
+|---|---|
+| Lambda `tendedero_logica` | Código nuevo. Variables sin cambios (`DDB_HISTORY_TABLE`, `IOT_ENDPOINT`, `LIMITE_MOVIMIENTOS_HORA`). |
+| Lambda `tendedero_almacenamiento` | Código nuevo: acepta `minutos_reexponer` entre 15 y 240. |
+| Rol `tendedero-logica-role` | Sin cambios: sigue necesitando `iot:UpdateThingShadow` para escribir la espera nueva. |
+
+### Pasos en la consola
+
+1. **Lambda → `tendedero_logica` → Code**: reemplazar `lambda_function.py` por [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) y elegir **Deploy**.
+2. **Lambda → `tendedero_almacenamiento` → Code**: reemplazar `lambda_function.py` por [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) y elegir **Deploy**.
+
+### Verificar
+
+- [ ] Prueba en `tendedero_logica` (**Test**) con este evento: responde `{"accion": "ninguna", "movimientos": ...}` sin errores.
+
+  ```json
+  {"thingName": "tendedero-prueba2", "ts": 1795110000000,
+   "actual": {"posicion": "resguardado", "modo": "automatico", "minutos_reexponer": 30},
+   "anterior": {"posicion": "expuesto", "modo": "automatico"}}
+  ```
+
+## Orden de todo lo pendiente
+
+1. Paso 4: rol de la Lambda de Alexa (`Query` sobre vinculaciones).
+2. Paso 4.1: recrear `tendedero_vinculaciones`. **Borra las vinculaciones actuales.**
+3. Paso 5: subir el ZIP nuevo de la Lambda de Alexa.
+4. [ALEXA.md](ALEXA.md): pegar el modelo nuevo y compilar.
+5. Paso 9: Lambdas de lógica (R4) y de almacenamiento.
+6. Volver a vincular los tendederos desde Alexa, con nombre.
+7. Fuera de AWS: cargar el firmware nuevo en el ESP32, que ya no acepta esperas menores a 15 minutos.

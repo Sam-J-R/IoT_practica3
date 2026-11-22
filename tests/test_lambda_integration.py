@@ -67,7 +67,7 @@ class LambdaTests(unittest.TestCase):
         with patch.dict(sys.modules, modules), patch.dict(os.environ, env):
             self.module = runpy.run_path(str(ROOT / "lambda/lambda_function.py"))
         self.handler = self.module["lambda_handler"]
-        # Reloj que siempre avanza: el tendedero activo se decide por fechaSeleccion.
+        # Reloj que siempre avanza, para fechas de vinculacion distintas y deterministas.
         self.tick = 0
 
         def ahora():
@@ -100,6 +100,10 @@ class LambdaTests(unittest.TestCase):
             self.shadows[thingName].setdefault(section, {}).update(values)
 
     def ask(self, user, intent, **slots):
+        return self.ask_full(user, intent, **slots)["outputSpeech"]["ssml"]
+
+    def ask_full(self, user, intent, **slots):
+        """Respuesta completa de la skill (texto, directivas y fin de sesion)."""
         event = {
             "version": "1.0",
             "session": {"new": True, "sessionId": "prueba", "user": {"userId": "ignorar"}},
@@ -116,7 +120,7 @@ class LambdaTests(unittest.TestCase):
                 },
             },
         }
-        return self.handler(event, None)["response"]["outputSpeech"]["ssml"]
+        return self.handler(event, None)["response"]
 
     def test_dynamic_binding_and_shadow_routing(self):
         self.assertIn("No tienes un tendedero vinculado", self.ask("A", "ConsultarAguaIntent"))
@@ -146,45 +150,55 @@ class LambdaTests(unittest.TestCase):
 
     def test_un_usuario_con_varios_tendederos(self):
         self.ask("A", "VincularThingIntent", codigo="111111", nombre="patio")
+        # Con un solo tendedero no hace falta nombrarlo.
+        self.assertIn("detecta agua", self.ask("A", "ConsultarAguaIntent"))
         # Un segundo tendedero necesita nombre para distinguirlo del primero.
         self.assertIn("necesita un nombre", self.ask("A", "VincularThingIntent", codigo="222222"))
         self.assertIn("Ya tienes un tendedero llamado pátio",
                       self.ask("A", "VincularThingIntent", codigo="222222", nombre="Pátio"))
         respuesta = self.ask("A", "VincularThingIntent", codigo="222222", nombre="la Terraza")
-        self.assertIn("Ahora tienes 2 tendederos y uso el tendedero terraza", respuesta)
+        self.assertIn("Ahora tienes 2 tendederos: patio y terraza", respuesta)
+        self.assertIn("te preguntaré", respuesta)
         self.assertEqual(self.bound("A"), {"tendedero-uno": "patio", "tendedero-dos": "terraza"})
+        self.assertNotIn("fechaSeleccion", self.bindings_table.de("A")["tendedero-dos"])
 
-        # Sin nombre en la frase se usa el activo (el ultimo vinculado) y la respuesta lo nombra.
-        respuesta = self.ask("A", "ConsultarAguaIntent")
+        # Sin nombre en la frase, Alexa pregunta cual y conserva el intent con sus slots.
+        lecturas = self.data.get_thing_shadow.call_count
+        respuesta = self.ask_full("A", "CalibrarSensorIntent", condicion="seco")
+        self.assertIn("¿En cuál tendedero? Tienes patio o terraza", respuesta["outputSpeech"]["ssml"])
+        directiva = respuesta["directives"][0]
+        self.assertEqual(directiva["type"], "Dialog.ElicitSlot")
+        self.assertEqual(directiva["slotToElicit"], "nombre")
+        self.assertEqual(directiva["updatedIntent"]["name"], "CalibrarSensorIntent")
+        self.assertEqual(directiva["updatedIntent"]["slots"]["condicion"]["value"], "seco")
+        self.assertFalse(respuesta["shouldEndSession"])
+        # No se leyo ni escribio ningun Shadow mientras no se sabe cual.
+        self.assertEqual(self.data.get_thing_shadow.call_count, lecturas)
+        self.data.update_thing_shadow.assert_not_called()
+        # Alexa vuelve con la respuesta del usuario en el slot: se cumple la orden original.
+        respuesta = self.ask("A", "CalibrarSensorIntent", condicion="seco", nombre="el de la terraza")
         self.assertIn("Tendedero terraza:", respuesta)
-        self.assertIn("no detecta agua", respuesta)
-        respuesta = self.ask("A", "ListarTendederosIntent")
-        self.assertIn("Tienes 2 tendederos: patio y terraza", respuesta)
-        self.assertIn("uso el tendedero terraza", respuesta)
+        self.assertEqual(self.shadows["tendedero-dos"]["desired"]["calibracion_solicitada"]["condicion"], "seco")
+        self.assertNotIn("desired", self.shadows["tendedero-uno"])
 
-        # Nombrar un tendedero en la frase actua sobre ese, sin cambiar el activo.
+        # Nombrar el tendedero en la frase actua sobre ese y la respuesta lo confirma.
         respuesta = self.ask("A", "ResguardarTendederoIntent", nombre="del patio")
         self.assertIn("Tendedero patio:", respuesta)
         self.assertEqual(self.shadows["tendedero-uno"]["desired"]["posicion"], "resguardado")
-        self.assertNotIn("desired", self.shadows["tendedero-dos"])
-        self.assertIn("Tendedero terraza:", self.ask("A", "ConsultarPosicionIntent"))
+        self.assertNotIn("posicion", self.shadows["tendedero-dos"]["desired"])
+        # Ninguna orden queda dirigida a un tendedero por defecto: siempre se pregunta.
+        self.assertEqual(self.ask_full("A", "ConsultarPosicionIntent")["directives"][0]["type"], "Dialog.ElicitSlot")
         self.assertIn("No tienes un tendedero llamado azotea. Tus tendederos son: patio y terraza",
                       self.ask("A", "ExponerTendederoIntent", nombre="azotea"))
-
-        # Elegir el activo: una sola escritura (UpdateItem), sin reescribir el item.
-        self.assertIn("Tus tendederos son", self.ask("A", "SeleccionarTendederoIntent"))
-        antes = len(self.bindings_table.llamadas)
-        self.assertIn("Ahora uso el tendedero patio", self.ask("A", "SeleccionarTendederoIntent", nombre="Patio"))
-        nuevas = self.bindings_table.llamadas[antes:]
-        self.assertEqual([x for x in nuevas if x != "query"], ["update_item"])
-        respuesta = self.ask("A", "ConsultarAguaIntent")
-        self.assertIn("Tendedero patio:", respuesta)
-        self.assertIn("El sensor detecta agua", respuesta)
+        respuesta = self.ask("A", "ListarTendederosIntent")
+        self.assertIn("Tienes 2 tendederos: patio y terraza", respuesta)
+        self.assertIn("di en cuál", respuesta)
 
         # Otro usuario puede vincular el mismo tendedero (una casa con dos cuentas).
         self.ask("B", "VincularThingIntent", codigo="111111", nombre="casa")
         self.assertEqual(self.bound("B"), {"tendedero-uno": "casa"})
         self.assertEqual(self.bound("A")["tendedero-uno"], "patio")
+        self.assertNotIn("Tendedero casa:", self.ask("B", "ConsultarAguaIntent"))
 
         # Volver a vincular el mismo codigo renombra y conserva la fecha de vinculacion.
         fecha = self.bindings_table.de("A")["tendedero-dos"]["fechaVinculacion"]
@@ -192,14 +206,18 @@ class LambdaTests(unittest.TestCase):
         self.assertEqual(self.bindings_table.de("A")["tendedero-dos"]["fechaVinculacion"], fecha)
         self.assertEqual(len(self.bound("A")), 2)
 
-        # Con varios, desvincular sin nombre no adivina.
-        self.assertIn("¿Cuál quieres desvincular?", self.ask("A", "DesvincularThingIntent"))
+        # Con varios, desvincular sin nombre tambien pregunta cual.
+        respuesta = self.ask_full("A", "DesvincularThingIntent")
+        self.assertIn("¿Cuál quieres desvincular? Tienes azotea o patio", respuesta["outputSpeech"]["ssml"])
+        self.assertEqual(respuesta["directives"][0]["updatedIntent"]["name"], "DesvincularThingIntent")
         self.assertEqual(len(self.bound("A")), 2)
         respuesta = self.ask("A", "DesvincularThingIntent", nombre="azotea")
-        self.assertIn("He desvinculado el tendedero azotea. Ahora uso el tendedero patio", respuesta)
+        self.assertIn("He desvinculado el tendedero azotea. Tu tendedero se llama patio", respuesta)
         self.assertEqual(self.bound("A"), {"tendedero-uno": "patio"})
-        # Con uno solo, las respuestas ya no llevan el nombre delante.
-        self.assertNotIn("Tendedero patio:", self.ask("A", "ConsultarAguaIntent"))
+        # Con uno solo, vuelve a no hacer falta el nombre ni el prefijo.
+        respuesta = self.ask("A", "ConsultarAguaIntent")
+        self.assertIn("detecta agua", respuesta)
+        self.assertNotIn("Tendedero patio:", respuesta)
 
     def test_tope_de_tendederos_por_usuario(self):
         self.module["BindingRepository"].bind.__globals__["MAX_TENDEDEROS"] = 1
@@ -311,8 +329,8 @@ class LambdaTests(unittest.TestCase):
         self.assertIn("pendiente a modo manual", respuesta)
         self.assertIn("45 minutos", self.ask("A", "ConfigurarEsperaIntent", minutos="45"))
         self.assertEqual(shadow["desired"]["minutos_reexponer"], 45)
-        for fuera in ("2", "300", "?"):
-            self.assertIn("entre 5 y 240", self.ask("A", "ConfigurarEsperaIntent", minutos=fuera))
+        for fuera in ("2", "10", "300", "?"):
+            self.assertIn("entre 15 y 240", self.ask("A", "ConfigurarEsperaIntent", minutos=fuera))
         self.assertEqual(shadow["desired"]["minutos_reexponer"], 45)
 
     def test_luz_por_voz(self):

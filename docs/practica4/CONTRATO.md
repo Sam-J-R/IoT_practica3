@@ -11,7 +11,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 - Shadow: clásico (sin nombre).
 - El actuador es un brazo que gira el tendedero hasta debajo de un techo fijo. Ya no existe una cubierta que se abre y se cierra.
 - Actuadores: el brazo (servo MG90S, principal) y un LED de luz automática. Sensores: agua (MH, GPIO34) y luz (LDR, GPIO35).
-- Lógica automática: el ESP32 resguarda la ropa si detecta agua (R1) y enciende el LED si está oscuro (R5), en modo `automatico` y también sin Internet. La Nube vuelve a exponer la ropa (R2), registra alertas (R3) y pasa a `manual` si hay demasiados movimientos (R4). Ver [Lógica de control](#lógica-de-control).
+- Lógica automática: el ESP32 resguarda la ropa si detecta agua (R1) y enciende el LED si está oscuro (R5), en modo `automatico` y también sin Internet. La Nube vuelve a exponer la ropa (R2), registra alertas (R3) y, si hay demasiados movimientos, duplica la espera antes de volver a exponer (R4). Ver [Lógica de control](#lógica-de-control).
 
 ## Documento Shadow
 
@@ -50,8 +50,8 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 |---|---|---|---|---|
 | `desired.posicion` | string | `expuesto`, `resguardado` | Lambda de Alexa, Lambda supervisor (R2) o ESP32 (R1) | Orden de movimiento. Siempre se escribe junto con `desired.origen`. |
 | `desired.origen` | string | `voz`, `nube`, `edge` | Quien escribe `desired.posicion` | Quién pidió el movimiento (RF12). |
-| `desired.modo` | string | `manual`, `automatico` | Lambda de Alexa o Lambda de lógica (R4) | Modo de operación (RF14). |
-| `desired.minutos_reexponer` | entero | 5–240 | Lambda de Alexa | Minutos sin agua antes de que R2 vuelva a exponer. Fuera de rango, el ESP32 lo ignora. |
+| `desired.modo` | string | `manual`, `automatico` | Lambda de Alexa | Modo de operación (RF14). Ninguna regla automática lo cambia. |
+| `desired.minutos_reexponer` | entero | 15–240 | Lambda de Alexa o Lambda de lógica (R4) | Minutos sin agua antes de que R2 vuelva a exponer. Fuera de rango, el ESP32 lo ignora. |
 | `desired.led` | string | `encendido`, `apagado` | Lambda de Alexa o ESP32 (R5) | Orden para el LED. Siempre junto con `desired.origen_led`. |
 | `desired.origen_led` | string | `voz`, `nube`, `edge` | Quien escribe `desired.led` | Quién pidió el cambio del LED. |
 | `desired.calibracion_solicitada.condicion` | string | `seco`, `mojado` | Lambda | Condición en la que el usuario dice que está el sensor. |
@@ -65,7 +65,7 @@ Referencia para mantener compatibles el firmware, la Lambda y la Skill. Reemplaz
 | `reported.calibracion_solicitada` | objeto | Copia del pedido atendido | ESP32 | Confirma qué pedido se atendió y elimina su `delta`. |
 | `reported.origen` | string | `voz`, `nube`, `edge` | ESP32 | Quién pidió el último movimiento del brazo. |
 | `reported.modo` | string | `manual`, `automatico` | ESP32 | Modo vigente; se guarda en la memoria del ESP32 y sobrevive a reinicios sin Internet. |
-| `reported.minutos_reexponer` | entero | 5–240 | ESP32 | Espera vigente para R2. |
+| `reported.minutos_reexponer` | entero | 15–240 (inicial 30) | ESP32 | Espera vigente para R2. |
 | `reported.luz_adc` | entero | 0–4095 | ESP32 | Lectura cruda del LDR. Ausente si no hay LDR. |
 | `reported.oscuro` | booleano | `true`, `false`; `null` sin dato | ESP32 | Clasificación del LDR con histéresis (oscuro < 350, claro > 650 en escala 0–1000) y 3 s de confirmación. Ausente si no hay LDR. |
 | `reported.led` | string | `encendido`, `apagado` | ESP32 | Estado del LED. Ausente si no hay LED. |
@@ -106,7 +106,19 @@ Sin calibración previa, el ESP32 usa las referencias de fábrica de `calibracio
 | R5 | Edge (`LogicaEdge::evaluarR5`) | Modo `automatico`: oscuro → LED encendido; claro → apagado | Inmediata, datos locales, sin Internet. |
 | R2 | Nube (Lambda supervisor, cada 5 min) | Modo `automatico`, resguardado y sin agua durante `minutos_reexponer` → `desired = {posicion: expuesto, origen: nube}` | Necesita el histórico. |
 | R3 | Nube (Lambda supervisor) | Sin reporte durante 3 min → alerta en el histórico | El objeto no puede reportar su propia desconexión. |
-| R4 | Nube (Lambda de lógica, regla `tendedero_movimientos`) | Más de 6 movimientos en una hora → `desired.modo = manual` | Necesita el histórico de movimientos. |
+| R4 | Nube (Lambda de lógica, regla `tendedero_movimientos`) | Modo `automatico` y más de 6 movimientos en una hora → `desired.minutos_reexponer` × 2 (tope 240) y alerta `exceso_movimientos` en el histórico. El modo no cambia y R1 sigue activa. | Necesita el histórico de movimientos. |
+
+### Por qué R4 duplica la espera y no pasa a modo manual
+
+R4 protege el servo cuando la lluvia es intermitente y la espera es corta. En ese caso R2 vuelve a exponer la ropa entre un chubasco y otro, y R1 la resguarda con cada lluvia nueva. Esperar más antes de volver a exponer frena ese vaivén.
+
+- **El modo no cambia.** La primera versión pasaba a modo `manual`, que apagaba también R1: si después alguien exponía la ropa, ninguna regla la protegía de la siguiente lluvia.
+- **No agrega estado nuevo.** Usa un parámetro que ya existe, ya está en el Shadow y Alexa ya informa al consultar el modo. El usuario lo puede bajar otra vez por voz («espera treinta minutos para volver a exponer»).
+- **Solo actúa al cruzar el límite** (el 7.º movimiento de la hora). Los siguientes movimientos de esa hora no vuelven a duplicar la espera.
+
+Con la espera inicial de 30 minutos, R2 genera como mucho unos 4 movimientos por hora, así que R4 casi nunca actúa. Se activa cuando el usuario configuró una espera corta (el mínimo es 15 minutos) y la lluvia va y viene, que es justamente el caso en que el brazo se mueve de más.
+
+Para contar los movimientos, R4 suma los guardados en la hora anterior al mensaje y el movimiento que trae el mensaje. La misma publicación dispara en paralelo la Lambda de almacenamiento, así que este movimiento puede no estar guardado todavía. Contarlo aparte da el mismo resultado sin importar cuál de las dos termine antes.
 
 ### Convivencia de la voz con la lógica automática
 
@@ -162,22 +174,21 @@ Tabla `tendedero_vinculaciones` (P4, clave compuesta):
 | `thingName` | String, clave de ordenamiento | Thing validado. Un usuario no puede vincular dos veces el mismo. |
 | `nombre` | String | Nombre que dio el usuario («patio», «terraza»). Único entre los tendederos del mismo usuario; la Lambda lo compara sin tildes ni mayúsculas. |
 | `fechaVinculacion` | String ISO-8601 UTC | Cuándo se vinculó. Se conserva si el usuario lo renombra. |
-| `fechaSeleccion` | String ISO-8601 UTC | Cuándo se vinculó o se eligió por última vez. El de fecha más reciente es el **tendedero activo**. |
 
 Ejemplo ficticio: un usuario con dos tendederos y un segundo usuario de la misma casa.
 
-| `userId` | `thingName` | `nombre` | `fechaSeleccion` |
-|---|---|---|---|
-| `amzn1.ask.account.A` | `tendedero-inteligente` | patio | 2026-11-21T10:05:00Z |
-| `amzn1.ask.account.A` | `tendedero-prueba2` | terraza | 2026-11-21T09:00:00Z ← no activo |
-| `amzn1.ask.account.B` | `tendedero-inteligente` | casa | 2026-11-20T18:00:00Z |
+| `userId` | `thingName` | `nombre` |
+|---|---|---|
+| `amzn1.ask.account.A` | `tendedero-inteligente` | patio |
+| `amzn1.ask.account.A` | `tendedero-prueba2` | terraza |
+| `amzn1.ask.account.B` | `tendedero-inteligente` | casa |
 
 Decisiones de diseño:
 
 - **`thingName` como clave de ordenamiento, no `nombre`.** Lo estable es el Thing; el nombre lo puede cambiar el usuario. Así, renombrar es reescribir el mismo ítem y no puede quedar el mismo Thing dos veces con nombres distintos.
-- **Tendedero activo por fecha, no por una marca `activo: true`.** Elegir otro tendedero es una sola escritura (`UpdateItem` de `fechaSeleccion`). Con una marca habría que desmarcar el anterior en una segunda escritura, y un fallo entre las dos dejaría dos activos o ninguno.
+- **No hay un tendedero «activo» guardado.** Con varios tendederos, cada orden dice a cuál va; si no lo dice, Alexa pregunta. Se descartó recordar el último elegido: el usuario puede olvidar cuál era y mover el tendedero equivocado, y el aviso llegaría cuando la orden ya está enviada.
 - **Un Thing puede estar vinculado a varios usuarios.** En una casa con dos cuentas de Alexa, cada persona vincula el mismo tendedero con su propio nombre.
-- **Máximo de 10 tendederos por usuario** (`MAX_TENDEDEROS`). Acota la `Query` de cada solicitud y la lista que Alexa lee en voz alta.
+- **Máximo de 10 tendederos por usuario** (`MAX_TENDEDEROS`). Acota la `Query` de cada solicitud y la lista que Alexa lee al preguntar en cuál actuar.
 - **Sin índice por `thingName`.** Ningún flujo actual necesita saber qué usuarios tiene un tendedero. Si más adelante se avisa por voz de una alerta (R3) a los dueños de un Thing, se agrega un índice global `thingName-index`.
 
 Patrones de acceso que satisface:
@@ -186,15 +197,16 @@ Patrones de acceso que satisface:
 |---|---|
 | Tendederos de un usuario (en cada solicitud y en «qué tendederos tengo») | `Query` por `userId`, con lectura consistente |
 | Vincular o renombrar un tendedero | `PutItem` (`userId`, `thingName`) |
-| Elegir el tendedero activo | `UpdateItem` de `fechaSeleccion`, con la condición de que el ítem exista |
 | Desvincular un tendedero | `DeleteItem` (`userId`, `thingName`) |
 | Reportes de un usuario (mockups) | `Query` por `userId` → `thingName` de cada tendedero → `Query` en `tendedero_historico` |
 
 ### A qué tendedero va cada orden
 
-1. Si la frase nombra uno («resguarda el tendedero **del patio**»), se usa ese. Si no existe, Alexa dice cuáles tiene el usuario y no escribe nada.
-2. Si no, se usa el tendedero activo: el último que el usuario vinculó o eligió («usa el tendedero de la terraza»). Nombrar uno en una frase no cambia el activo.
-3. Si el usuario tiene más de uno, cada respuesta empieza con el nombre del tendedero («Tendedero patio: el sensor detecta agua»). Así sabe sobre cuál actuó Alexa.
+1. **Un solo tendedero:** a ese. El usuario no tiene que nombrarlo.
+2. **Varios, con nombre en la frase** («resguarda el tendedero **del patio**»): a ese. Si no existe, Alexa dice cuáles tiene el usuario y no escribe nada.
+3. **Varios, sin nombre en la frase:** Alexa pregunta «¿En cuál tendedero? Tienes patio o terraza». La Lambda responde con la directiva `Dialog.ElicitSlot` sobre el slot `nombre` y devuelve el mismo intent con sus demás slots, como la condición de una calibración. El usuario contesta («el del patio»), Alexa vuelve a llamar a la Lambda con el nombre completado y la orden original se cumple. Mientras no se sabe cuál, no se lee ni se escribe ningún Shadow.
+
+Con varios tendederos, cada respuesta empieza con el nombre («Tendedero patio: el sensor detecta agua»), para confirmar sobre cuál actuó Alexa.
 
 Al vincular:
 
@@ -202,15 +214,14 @@ Al vincular:
 - Desde el segundo, el nombre es obligatorio. Alexa lo pide y la Lambda rechaza un nombre repetido.
 - Volver a vincular el mismo código con otro nombre lo renombra, sin crear otra fila.
 
-Al desvincular con varios tendederos y sin decir cuál, Alexa pregunta cuál quiere desvincular en lugar de adivinar.
+Desvincular sigue la misma regla: con varios tendederos y sin nombre, Alexa pregunta cuál.
 
 Flujo de la Lambda:
 
 | Momento | Operaciones |
 |---|---|
 | Vincular | Validar formato del código → `Query` al índice por código → `DescribeThing` → `Query` de los tendederos del usuario (nombre repetido, tope) → `PutItem` en vinculaciones. |
-| Elegir tendedero | `Query` por `userId` → `UpdateItem` de `fechaSeleccion`. |
-| Cualquier otro intent | `Query` por `userId` → tendedero nombrado o activo → Shadow del Thing. El código no interviene. |
+| Cualquier otro intent | `Query` por `userId` → tendedero único, nombrado o preguntado → Shadow del Thing. El código no interviene. |
 | Desvincular | `Query` por `userId` → `DeleteItem` del tendedero elegido. |
 
 No se asigna un Thing por defecto a usuarios sin vincular.
@@ -219,9 +230,8 @@ No se asigna un Thing por defecto a usuarios sin vincular.
 
 | Intent | Slot | Comportamiento |
 |---|---|---|
-| `VincularThingIntent` | `codigo` (`AMAZON.NUMBER`), `nombre` (`NombreTendedero`) | Buscar el Thing por código, validar que existe y agregarlo a los tendederos del usuario con ese nombre. Queda como activo. |
-| `SeleccionarTendederoIntent` | `nombre` | Elegir el tendedero activo. Reemplaza a `CambiarThingIntent` de la práctica 3. |
-| `ListarTendederosIntent` | — | Decir los tendederos del usuario y cuál es el activo. |
+| `VincularThingIntent` | `codigo` (`AMAZON.NUMBER`), `nombre` (`NombreTendedero`) | Buscar el Thing por código, validar que existe y agregarlo a los tendederos del usuario con ese nombre. Reemplaza también a `CambiarThingIntent` de la práctica 3. |
+| `ListarTendederosIntent` | — | Decir los tendederos del usuario. |
 | `DesvincularThingIntent` | `nombre` (opcional) | Borrar una vinculación. Con varios tendederos y sin nombre, pregunta cuál. |
 | `ConsultarAguaIntent` | `nombre` (opcional) | Responder con `reported.agua_detectada`. |
 | `ExponerTendederoIntent` | `nombre` (opcional) | Escribir `desired = {posicion: expuesto, origen: voz}`, salvo en automático con agua (ver convivencia). |
@@ -231,11 +241,11 @@ No se asigna un Thing por defecto a usuarios sin vincular.
 | `ConsultarCalibracionIntent` | — | Informar si el último pedido está pendiente, aplicado, rechazado o caducado. |
 | `CambiarModoIntent` | `modo` (`ModoOperacion`: `manual` / `automatico`) | Escribir `desired.modo`. |
 | `ConsultarModoIntent` | — | Leer `reported.modo` y `minutos_reexponer`, e indicar si hay un cambio pendiente. |
-| `ConfigurarEsperaIntent` | `minutos` (`AMAZON.NUMBER`) | Validar 5–240 y escribir `desired.minutos_reexponer`. |
+| `ConfigurarEsperaIntent` | `minutos` (`AMAZON.NUMBER`) | Validar 15–240 y escribir `desired.minutos_reexponer`. |
 | `EncenderLuzIntent` / `ApagarLuzIntent` | — | Escribir `desired.led` con `origen_led: voz`, salvo en automático con LDR (ver convivencia). |
 | `ConsultarLuzIntent` | — | Leer `reported.oscuro` y `reported.led`. |
 
-Los intents sin slot `nombre` actúan sobre el tendedero activo. La Lambda lee el slot `nombre` en cualquier intent, así que basta con agregar frases al modelo para permitirlo en otros.
+Todos los intents que actúan sobre un tendedero tienen el slot `nombre` (opcional), aunque la tabla no lo repita en cada fila. Así se puede nombrar el tendedero en la frase y la Lambda puede preguntarlo con `Dialog.ElicitSlot`, que solo funciona sobre un slot que el intent tiene en el modelo.
 
 `NombreTendedero` es un tipo propio con valores de ejemplo (patio, terraza, azotea, balcón, jardín, lavandería…). Alexa también acepta nombres fuera de la lista. La Lambda quita «el», «del», «de la» y «tendedero» de lo que llega en el slot.
 

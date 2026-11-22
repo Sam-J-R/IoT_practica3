@@ -48,8 +48,8 @@ static void persistencia() {
   CHECK(c.aplicarModo(Modo::Manual) && !c.aplicarModo(Modo::Manual), "cambiar modo informa solo si cambia");
   CHECK(!c.aplicarModo(Modo::Ninguno) && c.modo() == Modo::Manual, "Ninguno no cambia el modo");
   CHECK(c.aplicarMinutos(45) && c.minutosReexponer() == 45, "minutos validos se aplican");
-  CHECK(!c.aplicarMinutos(300) && !c.aplicarMinutos(0) && c.minutosReexponer() == 45,
-        "minutos fuera de 5..240 se ignoran");
+  CHECK(!c.aplicarMinutos(300) && !c.aplicarMinutos(0) && !c.aplicarMinutos(10) && c.minutosReexponer() == 45,
+        "minutos fuera de 15..240 se ignoran");
   ConfiguracionOperacion r; r.iniciar(); // reinicio: lee la NVS
   CHECK(r.modo() == Modo::Manual && r.minutosReexponer() == 45, "tras reiniciar conserva modo y minutos");
   __nvs["espera"] = 9999;

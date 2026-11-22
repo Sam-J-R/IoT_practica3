@@ -125,7 +125,7 @@ Resources:
                 Resource: !Sub arn:aws:iot:${AWS::Region}:${AWS::AccountId}:thing/${PrefijoThing}*
               - Sid: Vinculaciones
                 Effect: Allow
-                Action: [dynamodb:Query, dynamodb:PutItem, dynamodb:UpdateItem, dynamodb:DeleteItem]
+                Action: [dynamodb:Query, dynamodb:PutItem, dynamodb:DeleteItem]
                 Resource: !GetAtt TablaVinculaciones.Arn
               - Sid: BuscarPorCodigo
                 Effect: Allow

@@ -49,7 +49,18 @@
           "slots": [
             {
               "name": "nombre",
-              "type": "NombreTendedero"
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
@@ -64,30 +75,6 @@
           ]
         },
         {
-          "name": "SeleccionarTendederoIntent",
-          "slots": [
-            {
-              "name": "nombre",
-              "type": "NombreTendedero"
-            }
-          ],
-          "samples": [
-            "usa el tendedero {nombre}",
-            "usa el tendedero del {nombre}",
-            "usa el tendedero de la {nombre}",
-            "cambia al tendedero {nombre}",
-            "cambia al tendedero del {nombre}",
-            "cambia al tendedero de la {nombre}",
-            "elige el tendedero del {nombre}",
-            "elige el tendedero de la {nombre}",
-            "quiero usar el tendedero del {nombre}",
-            "quiero usar el tendedero de la {nombre}",
-            "cambia de tendedero",
-            "elige otro tendedero",
-            "usa otro tendedero"
-          ]
-        },
-        {
           "name": "ListarTendederosIntent",
           "slots": [],
           "samples": [
@@ -95,8 +82,7 @@
             "cuáles son mis tendederos",
             "lista mis tendederos",
             "cuántos tendederos tengo",
-            "dime mis tendederos",
-            "qué tendedero estoy usando"
+            "dime mis tendederos"
           ]
         },
         {
@@ -104,7 +90,18 @@
           "slots": [
             {
               "name": "nombre",
-              "type": "NombreTendedero"
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
@@ -123,7 +120,18 @@
           "slots": [
             {
               "name": "nombre",
-              "type": "NombreTendedero"
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
@@ -143,7 +151,18 @@
           "slots": [
             {
               "name": "nombre",
-              "type": "NombreTendedero"
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
@@ -163,7 +182,18 @@
           "slots": [
             {
               "name": "nombre",
-              "type": "NombreTendedero"
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
@@ -184,23 +214,60 @@
             {
               "name": "condicion",
               "type": "CondicionSensor"
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
             "calibra el sensor {condicion}",
             "calibrar el sensor {condicion}",
             "ajusta el sensor {condicion}",
-            "calibra el sensor"
+            "calibra el sensor",
+            "calibra el sensor {condicion} en el {nombre}",
+            "calibra el sensor {condicion} en la {nombre}",
+            "calibra el sensor {condicion} del tendedero del {nombre}",
+            "calibra el sensor {condicion} del tendedero de la {nombre}"
           ]
         },
         {
           "name": "ConsultarCalibracionIntent",
-          "slots": [],
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
             "cómo está la calibración",
             "cómo quedó la calibración",
             "se aplicó la calibración",
-            "consulta la calibración"
+            "consulta la calibración",
+            "cómo está la calibración del tendedero del {nombre}",
+            "cómo está la calibración del tendedero de la {nombre}"
           ]
         },
         {
@@ -209,6 +276,21 @@
             {
               "name": "modo",
               "type": "ModoOperacion"
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
@@ -218,18 +300,38 @@
             "usa el modo {modo}",
             "quiero el modo {modo}",
             "modo {modo}",
-            "pasa a modo {modo}"
+            "pasa a modo {modo}",
+            "pon el tendedero del {nombre} en modo {modo}",
+            "pon el tendedero de la {nombre} en modo {modo}"
           ]
         },
         {
           "name": "ConsultarModoIntent",
-          "slots": [],
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
             "en qué modo está",
             "en qué modo está el tendedero",
             "qué modo tiene el tendedero",
             "cuál es el modo",
-            "cuál es el modo de operación"
+            "cuál es el modo de operación",
+            "en qué modo está el tendedero del {nombre}",
+            "en qué modo está el tendedero de la {nombre}"
           ]
         },
         {
@@ -238,6 +340,21 @@
             {
               "name": "minutos",
               "type": "AMAZON.NUMBER"
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
             }
           ],
           "samples": [
@@ -245,39 +362,95 @@
             "vuelve a exponer después de {minutos} minutos",
             "configura la espera en {minutos} minutos",
             "pon la espera en {minutos} minutos",
-            "cambia la espera a {minutos} minutos"
+            "cambia la espera a {minutos} minutos",
+            "espera {minutos} minutos para volver a exponer el tendedero del {nombre}",
+            "espera {minutos} minutos para volver a exponer el tendedero de la {nombre}"
           ]
         },
         {
           "name": "EncenderLuzIntent",
-          "slots": [],
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
             "enciende la luz",
             "prende la luz",
             "enciende la luz del tendedero",
             "prende la luz del tendedero",
-            "enciende el foco"
+            "enciende el foco",
+            "enciende la luz del tendedero del {nombre}",
+            "enciende la luz del tendedero de la {nombre}"
           ]
         },
         {
           "name": "ApagarLuzIntent",
-          "slots": [],
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
             "apaga la luz",
             "apaga la luz del tendedero",
             "apaga el foco",
-            "apaga la lámpara"
+            "apaga la lámpara",
+            "apaga la luz del tendedero del {nombre}",
+            "apaga la luz del tendedero de la {nombre}"
           ]
         },
         {
           "name": "ConsultarLuzIntent",
-          "slots": [],
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
             "cómo está la luz",
             "está oscuro",
             "hay luz",
             "la luz está encendida",
-            "está encendida la luz"
+            "está encendida la luz",
+            "cómo está la luz del tendedero del {nombre}",
+            "cómo está la luz del tendedero de la {nombre}"
           ]
         },
         {
