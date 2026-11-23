@@ -22,7 +22,7 @@ Revisar cada punto en la consola. Si alguno no se cumple, volver al paso de la g
 | ☐ | `tendedero_dispositivos` con el índice `codigoVinculacion-index` activo y los dos tendederos | DynamoDB → Tables → la tabla → Indexes / Explore items |
 | ☐ | `tendedero_historico` con clave `thingName` + `sk` y TTL activo sobre `ttl` | DynamoDB → Tables → la tabla → Additional settings |
 | ☐ | Rol de la Lambda de Alexa: `Query`, `PutItem` y `DeleteItem` en vinculaciones; IoT sobre `thing/tendedero-*` | IAM → Roles → `tendedero-inteligente-lambda-role` |
-| ☐ | Rol de lógica con `iot:UpdateThingShadow` (R4 escribe la espera) | IAM → Roles → `tendedero-logica-role` |
+| ☐ | Rol de lógica con `iot:UpdateThingShadow` (R4 escribe la espera) | IAM → Roles → `tendedero-logica-lambda-role` |
 | ☐ | Las cuatro Lambdas con el código nuevo: Alexa, almacenamiento, lógica y supervisor | Lambda → cada función → Code (fecha de *Last modified*) |
 | ☐ | Supervisor sin `MINUTOS_SIN_REPORTE`, o con valor `5` | Lambda → `tendedero_supervisor` → Configuration → Environment variables |
 | ☐ | Reglas `tendedero_lecturas`, `tendedero_cambios` y `tendedero_movimientos` activas; el SQL de `tendedero_cambios` termina en `WHERE NOT isUndefined(current.state.reported)` | AWS IoT → Message routing → Rules |
@@ -50,6 +50,21 @@ Todos usan el mismo usuario de prueba (`amzn1.ask.account.PRUEBA-CONSOLA`) y el 
 | `alexa-10-modo-automatico` | «He activado el modo automático…» | `desired.modo = automatico` |
 | `alexa-11-consultar-modo` | «…está en modo automático. Resguarda la ropa si llueve o anochece…» | — |
 | `alexa-12-desvincular` | «He eliminado la vinculación de tu tendedero.» | El ítem del paso 01 ya no está en `tendedero_vinculaciones` |
+
+### 3.1 Un usuario con dos tendederos
+
+Prueba la clave `userId` + `thingName` y el nombre de cada tendedero. Se hace **entre `alexa-11` y `alexa-12`**, cuando el usuario de prueba ya tiene vinculada la «terraza».
+
+Usa el código `483920` de `tendedero-inteligente`. Si en tu tabla `tendedero_dispositivos` el código es otro, cámbialo en el evento `alexa-13` (aparece dos veces). Ninguno de estos eventos mueve el tendedero físico: solo lo vinculan y leen su Shadow.
+
+| Evento | Respuesta esperada | Qué revisar además |
+|---|---|---|
+| `alexa-13-vincular-segundo` | «He vinculado tu tendedero patio. Ahora tienes 2 tendederos: patio y terraza…» | `tendedero_vinculaciones`: **dos ítems con el mismo `userId`**, uno `tendedero-prueba2` / `terraza` y otro `tendedero-inteligente` / `patio`. Esta es la captura `02-vinculaciones.png` |
+| `alexa-14-agua-sin-nombre` | «¿En cuál tendedero? Tienes patio o terraza.» | En el JSON de la respuesta, `directives` tiene `Dialog.ElicitSlot` con `slotToElicit = nombre`: Alexa pregunta y conserva la orden |
+| `alexa-15-agua-del-patio` | «Tendedero patio: El sensor…» | La respuesta empieza con el nombre: con varios tendederos, Alexa confirma sobre cuál actuó |
+| `alexa-16-desvincular-patio` | «He desvinculado el tendedero patio. Tu tendedero se llama terraza.» | Queda un solo ítem del usuario, el de la terraza |
+
+Después sigue con `alexa-12-desvincular`. Con un solo tendedero, ya no pregunta cuál.
 
 **Si una respuesta es «No pude completar la solicitud…»:** abrir **Monitor → View CloudWatch logs**, buscar `AccessDeniedException` y revisar el rol (paso 4 de la guía). Si el error es de IoT, ver el procedimiento de respaldo del paso 4.
 
@@ -153,25 +168,9 @@ Con un tendedero, el consumo queda dentro de la capa gratuita de IoT Core. El co
 
 ## 8. Evidencias
 
-Capturas para el informe, en `docs/evidencias/p4/aws/`, con estos nombres:
+Las capturas están en [docs/evidencias/p4/aws/](../evidencias/p4/aws/README.md), numeradas: de la 01 a la 13 son de configuración y de la 20 en adelante, de pruebas. El README de esa carpeta explica qué muestra cada una.
 
-| Archivo | Qué mostrar |
-|---|---|
-| `01-tablas.png` | Las tres tablas en DynamoDB → Tables |
-| `02-vinculaciones.png` | `tendedero_vinculaciones` con un usuario con dos tendederos (clave `userId` + `thingName` y `nombre`) |
-| `03-historico-lecturas.png` | Explore items de `tendedero_historico` con lecturas |
-| `04-historico-eventos.png` | Eventos de posición con `origen`, `agua_detectada` y `oscuro` |
-| `05-historico-alertas.png` | Una alerta `sin_reporte` o `exceso_movimientos` |
-| `06-reglas.png` | AWS IoT → Rules con las tres reglas activas |
-| `07-regla-cambios-sql.png` | El SQL de `tendedero_cambios` |
-| `08-lambdas.png` | La lista de las cuatro Lambdas |
-| `09-eventbridge.png` | El disparador `rate(5 minutes)` del supervisor |
-| `10-roles.png` | La política de cada rol (una captura por rol, si hace falta) |
-| `11-shadow-fisico.png` | El Shadow de `tendedero-inteligente` con los campos de la P4 |
-| `12-cloudwatch-descarte.png` | El log del mensaje inválido descartado (paso 4.3) |
-| `13-facturacion.png` | El presupuesto de facturación |
-
-No capturar claves, certificados ni el número completo de la cuenta. Si aparece, taparlo.
+Antes de agregar una captura nueva, revisar que no aparezcan claves, certificados ni el número de cuenta, que suele estar en los ARN y en el menú de arriba a la derecha. Si aparece, taparlo.
 
 ## 9. Subir tus resultados
 

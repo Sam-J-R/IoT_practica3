@@ -3,10 +3,10 @@
 - **Fecha:** 23 de noviembre de 2026, entre las 00:20 y las 01:35 UTC (horas de los logs de CloudWatch).
 - **Responsable:** María Lozada (encargada de AWS).
 - **Cuenta y región:** cuenta del equipo, `us-east-2`.
-- **Procedimiento:** [docs/practica4/PRUEBAS_AWS.md](../docs/practica4/PRUEBAS_AWS.md). Los eventos usados están en [aws/eventos-prueba/](../aws/eventos-prueba).
+- **Procedimiento:** [docs/practica4/PRUEBAS_AWS.md](../docs/practica4/PRUEBAS_AWS.md). **Capturas:** [docs/evidencias/p4/aws/](../docs/evidencias/p4/aws/README.md). Los eventos usados están en [aws/eventos-prueba/](../aws/eventos-prueba).
 - **Thing:** `tendedero-prueba2` (sin ESP32), con el Shadow simulado de [aws/shadow-prueba2.example.json](../aws/shadow-prueba2.example.json). Usuario de Alexa de prueba: `amzn1.ask.account.PRUEBA-CONSOLA`.
 
-**Resultado: 20 de 20 pruebas pasan.**
+**Resultado: 25 de 25 pruebas pasan.**
 
 ## Lambda de Alexa (`tendedero-inteligente-alexa`, pestaña Test)
 
@@ -24,6 +24,20 @@
 | 10 | Cambiar a modo automático | `alexa-10-modo-automatico` | «He activado el modo automático. El tendedero resguardará la ropa si llueve o anochece, y la volverá a exponer cuando haya luz y no llueva.» | `desired.modo = automatico` | PASA |
 | 11 | Consultar modo | `alexa-11-consultar-modo` | «El tendedero está en modo automático. Resguarda la ropa si llueve o anochece, y la vuelve a exponer después de 30 minutos sin agua, cuando hay luz.» | Lee `reported`: sin ESP32, la espera sigue en 30 | PASA |
 | 12 | Desvincular | `alexa-12-desvincular` | «He eliminado la vinculación de tu tendedero.» | El ítem ya no está en `tendedero_vinculaciones` | PASA |
+
+## Un usuario con dos tendederos (pestaña Test de la Lambda de Alexa)
+
+Mismo usuario de prueba, entre las pruebas 11 y 12. El segundo tendedero es `tendedero-inteligente`, código `483920`. Ninguna de estas pruebas mueve el tendedero físico.
+
+| # | Prueba | Evento | Respuesta obtenida | Verificación adicional | Resultado |
+|---|---|---|---|---|---|
+| 21 | Vincular un segundo tendedero | `alexa-13-vincular-segundo` | «He vinculado tu tendedero patio. Ahora tienes 2 tendederos: patio y terraza. En cada orden di en cuál…» | `tendedero_vinculaciones`: dos ítems con el mismo `userId` («patio» y «terraza»). Captura `02-vinculaciones-dos-tendederos.jpg` | PASA |
+| 22 | Orden sin decir en cuál | `alexa-14-agua-sin-nombre` | «¿En cuál tendedero? Tienes patio o terraza.» | La respuesta trae `Dialog.ElicitSlot` sobre el slot `nombre` | PASA |
+| 23 | Orden nombrando el tendedero | `alexa-15-agua-del-patio` | «Tendedero patio: El sensor…» | La respuesta empieza con el nombre del tendedero | PASA |
+| 24 | Desvincular uno por nombre | `alexa-16-desvincular-patio` | «He desvinculado el tendedero patio. Tu tendedero se llama terraza.» | Queda un solo ítem del usuario | PASA |
+| 25 | Desvincular el último | `alexa-12-desvincular` | «He eliminado la vinculación de tu tendedero.» | Con un solo tendedero no pregunta cuál | PASA |
+
+Nota: las pruebas 21 a 25 se agregaron después de la prueba 12 de la tabla anterior. En la ejecución, la prueba 12 se hizo al final, como prueba 25.
 
 ## Lambdas de la Nube (pestaña Test)
 

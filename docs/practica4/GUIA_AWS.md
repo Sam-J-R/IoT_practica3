@@ -66,7 +66,7 @@ Si el ESP32 deja de conectarse después de este cambio, volver a activar la vers
 ## 4. Actualizar la política del rol de la Lambda
 
 1. Abrir **IAM → Roles → `tendedero-inteligente-lambda-role`**.
-2. Editar la política en línea y reemplazarla por [lambda-iam-policy.template.json](../../aws/lambda-iam-policy.template.json), sustituyendo `ACCOUNT_ID`.
+2. Editar la política en línea (`tendedero-inteligente-lambda-policy`) y reemplazarla por [lambda-iam-policy.template.json](../../aws/lambda-iam-policy.template.json), sustituyendo `ACCOUNT_ID`.
 
 Cambian dos declaraciones:
 
@@ -183,11 +183,11 @@ Las tres Lambdas usan el **mismo endpoint de IoT** que la de Alexa. Copiarlo de 
 
 Repetir para cada fila:
 
-| Rol | Política (en `aws/iam/`) | Qué permite |
+| Rol | Política (en `aws/iam/`, mismo nombre en la consola) | Qué permite |
 |---|---|---|
-| `tendedero-almacenamiento-role` | [tendedero-almacenamiento-role.json](../../aws/iam/tendedero-almacenamiento-role.json) | Solo `PutItem` en el histórico y escribir sus logs |
-| `tendedero-logica-role` | [tendedero-logica-role.json](../../aws/iam/tendedero-logica-role.json) | Leer y escribir el histórico y escribir `desired` en el Shadow de los tendederos |
-| `tendedero-supervisor-role` | [tendedero-supervisor-role.json](../../aws/iam/tendedero-supervisor-role.json) | Leer la lista de tendederos, leer y escribir el histórico, y leer y escribir el Shadow |
+| `tendedero-almacenamiento-lambda-role` | [tendedero-almacenamiento-lambda-policy.json](../../aws/iam/tendedero-almacenamiento-lambda-policy.json) | Solo `PutItem` en el histórico y escribir sus logs |
+| `tendedero-logica-lambda-role` | [tendedero-logica-lambda-policy.json](../../aws/iam/tendedero-logica-lambda-policy.json) | Leer y escribir el histórico y escribir `desired` en el Shadow de los tendederos |
+| `tendedero-supervisor-lambda-role` | [tendedero-supervisor-lambda-policy.json](../../aws/iam/tendedero-supervisor-lambda-policy.json) | Leer la lista de tendederos, leer y escribir el histórico, y leer y escribir el Shadow |
 
 1. **IAM → Roles → Create role.**
 2. **Trusted entity type: AWS service. Use case: Lambda** → **Next**.
@@ -195,7 +195,7 @@ Repetir para cada fila:
 4. **Role name:** el de la tabla → **Create role**.
 5. Abrir el rol → **Add permissions → Create inline policy → JSON**.
 6. Pegar el contenido del archivo correspondiente y **reemplazar `ACCOUNT_ID`** por el número de la cuenta: 12 dígitos, sin guiones. Si los Things no están en `us-east-2`, cambiar también la región en cada ARN.
-7. **Next** → **Policy name:** el mismo nombre del rol → **Create policy**.
+7. **Next** → **Policy name:** el nombre del archivo sin `.json` (por ejemplo `tendedero-almacenamiento-lambda-policy`) → **Create policy**.
 
 Si el resumen de la política muestra «IoT: None» (en los roles de lógica y supervisor), es el mismo aviso del paso 4. Se comprueba con la prueba del paso 9.6 y, si falla, se cambia solo ese recurso a `"*"`.
 
@@ -205,9 +205,9 @@ Para cada fila de esta tabla:
 
 | Función | Código | Rol | Timeout | Variables de entorno |
 |---|---|---|---|---|
-| `tendedero_almacenamiento` | [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) | `tendedero-almacenamiento-role` | 10 s | `DDB_HISTORY_TABLE` = `tendedero_historico` |
-| `tendedero_logica` | [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) | `tendedero-logica-role` | 10 s | `DDB_HISTORY_TABLE` = `tendedero_historico`<br>`IOT_ENDPOINT` = el endpoint<br>`LIMITE_MOVIMIENTOS_HORA` = `6` |
-| `tendedero_supervisor` | [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) | `tendedero-supervisor-role` | **30 s** | `DDB_HISTORY_TABLE` = `tendedero_historico`<br>`DDB_DEVICES_TABLE` = `tendedero_dispositivos`<br>`IOT_ENDPOINT` = el endpoint<br>`MINUTOS_SIN_REPORTE` = `5` |
+| `tendedero_almacenamiento` | [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) | `tendedero-almacenamiento-lambda-role` | 10 s | `DDB_HISTORY_TABLE` = `tendedero_historico` |
+| `tendedero_logica` | [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) | `tendedero-logica-lambda-role` | 10 s | `DDB_HISTORY_TABLE` = `tendedero_historico`<br>`IOT_ENDPOINT` = el endpoint<br>`LIMITE_MOVIMIENTOS_HORA` = `6` |
+| `tendedero_supervisor` | [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) | `tendedero-supervisor-lambda-role` | **30 s** | `DDB_HISTORY_TABLE` = `tendedero_historico`<br>`DDB_DEVICES_TABLE` = `tendedero_dispositivos`<br>`IOT_ENDPOINT` = el endpoint<br>`MINUTOS_SIN_REPORTE` = `5` |
 
 1. **Lambda → Create function → Author from scratch.**
 2. **Function name:** el de la tabla, exacto: las reglas y los roles lo usan.
