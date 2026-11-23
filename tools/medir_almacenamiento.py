@@ -9,6 +9,10 @@ Latencia = ts_guardado - ts_dispositivo (si el ESP32 lo envía) o - ts_iot (hora
 que la regla recibió el mensaje). El script indica cuál usó.
 
 Ejemplos:
+  # 0) Sin CLI: en la consola de DynamoDB, Explore items -> consulta por thingName y
+  #    sk que empiece con "lectura#" -> Actions -> Download results to CSV
+  python tools/medir_almacenamiento.py --log resultados_p4/<carpeta>/log.csv --items lecturas.csv
+
   # 1) Exportar los ítems con la CLI de AWS y analizarlos
   aws dynamodb query --table-name tendedero_historico \\
       --key-condition-expression "thingName = :t AND begins_with(sk, :p)" \\
@@ -50,6 +54,21 @@ def leer_items_json(ruta):
     return [{k: _valor(v) for k, v in i.items()} for i in items]
 
 
+def leer_items_csv(ruta):
+    """CSV que descarga la consola de DynamoDB (Download results to CSV).
+
+    Cada columna es un atributo. Las celdas vacías (atributo ausente) se omiten;
+    los números quedan como texto y se convierten donde se usan.
+    """
+    with open(ruta, newline="", encoding="utf-8-sig") as f:
+        return [{k.strip(): v.strip() for k, v in fila.items() if k and v and v.strip()}
+                for fila in csv.DictReader(f)]
+
+
+def leer_items(ruta):
+    return leer_items_csv(ruta) if str(ruta).lower().endswith(".csv") else leer_items_json(ruta)
+
+
 def leer_items_dynamo(tabla, thing, desde, hasta):
     import boto3  # solo si se usa --dynamo
     from boto3.dynamodb.conditions import Key
@@ -82,7 +101,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--log", required=True, help="CSV de grabar_rnf.py")
     fuente = ap.add_mutually_exclusive_group(required=True)
-    fuente.add_argument("--items", help="JSON exportado de DynamoDB (query o scan)")
+    fuente.add_argument("--items", help="ítems de DynamoDB: JSON exportado (query o scan) o CSV de la consola")
     fuente.add_argument("--dynamo", action="store_true", help="consultar DynamoDB con boto3")
     ap.add_argument("--thing", help="thingName (con --dynamo)")
     ap.add_argument("--tabla", default="tendedero_historico")
@@ -106,7 +125,7 @@ def main(argv=None):
             sys.exit("--dynamo necesita --thing")
         items = leer_items_dynamo(a.tabla, a.thing, iso(t0), iso(t1 + a.margen))
     else:
-        items = leer_items_json(a.items)
+        items = leer_items(a.items)
     lecturas = [i for i in items if str(i.get("sk", "")).startswith("lectura#")
                 and t0 - 2 <= epoch_de_sk(i["sk"]) <= t1 + a.margen]
 

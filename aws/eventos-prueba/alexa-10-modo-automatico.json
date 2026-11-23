@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "session": {
+    "new": false,
+    "sessionId": "amzn1.echo-api.session.prueba-automatica",
+    "application": {
+      "applicationId": "amzn1.ask.skill.prueba"
+    },
+    "user": {
+      "userId": "amzn1.ask.account.PRUEBA-CONSOLA"
+    }
+  },
+  "context": {
+    "System": {
+      "application": {
+        "applicationId": "amzn1.ask.skill.prueba"
+      },
+      "user": {
+        "userId": "amzn1.ask.account.PRUEBA-CONSOLA"
+      }
+    }
+  },
+  "request": {
+    "type": "IntentRequest",
+    "dialogState": "COMPLETED",
+    "requestId": "prueba.consola.alexa-10-modo-automatico",
+    "locale": "es-MX",
+    "timestamp": "2026-11-22T12:00:00Z",
+    "intent": {
+      "name": "CambiarModoIntent",
+      "confirmationStatus": "NONE",
+      "slots": {
+        "modo": {
+          "name": "modo",
+          "value": "automatico",
+          "confirmationStatus": "CONFIRMED"
+        }
+      }
+    }
+  }
+}
