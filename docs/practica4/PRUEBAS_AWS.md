@@ -161,10 +161,12 @@ Lo mide la rúbrica: al menos el 99 % de los mensajes guardados, con una latenci
 ## 7. Costo mensual
 
 ```powershell
-python tools/estimar_costo.py > resultados_p4/costo.txt
+python tools/estimar_costo.py --libre-lambda 1000000
 ```
 
-Con un tendedero, el consumo queda dentro de la capa gratuita de IoT Core. El concepto más alto son las reglas disparadas, alrededor del 53 %. Para Lambda y DynamoDB, la herramienta indica que hay que comparar con los límites de su página de precios.
+Copiar la tabla que muestra a `resultados_p4/costo.md`, junto con el modelo de la cuenta. Para saberlo, ir a **Billing and Cost Management → Free Tier**: o lista límites por servicio (capa gratuita clásica) o muestra un saldo de créditos. El resultado de esta cuenta ya está en [resultados_p4/costo.md](../../resultados_p4/costo.md): plan con créditos y un costo estimado de entre USD 0,21 y 1,37 al mes.
+
+No redirigir la salida con `>` en PowerShell: guarda el archivo en otra codificación y las tildes salen mal.
 
 ## 8. Evidencias
 

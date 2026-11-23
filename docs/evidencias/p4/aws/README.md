@@ -21,6 +21,7 @@ Se revisó que ninguna muestre claves, certificados ni el número de cuenta. En 
 | [11-shadow-fisico.jpg](11-shadow-fisico.jpg) | El Shadow de `tendedero-inteligente` con los campos de la P4 (modo, espera, calibración, LED, `oscuro`, origen) |
 | [12-cloudwatch-descarte.jpg](12-cloudwatch-descarte.jpg) | CloudWatch de `tendedero_almacenamiento`: `Guardados 2 items` y, en la prueba 4.3, dos `Mensaje descartado` (uno por cada regla) |
 | [13-facturacion.jpg](13-facturacion.jpg) | Presupuesto *Zero-Spend* creado |
+| [14-capa-gratuita.png](14-capa-gratuita.png) | Billing → Free Tier: la cuenta usa el plan gratuito con créditos (USD 139,98 disponibles). Se usa en [resultados_p4/costo.md](../../../../resultados_p4/costo.md) |
 
 ## Pruebas
 
