@@ -2,8 +2,15 @@
   "state": {
     "reported": {
       "posicion": "expuesto",
+      "origen": "voz",
       "agua_detectada": false,
       "lectura_adc": 0,
+      "modo": "automatico",
+      "minutos_reexponer": 30,
+      "nivel_luz": 80,
+      "oscuro": false,
+      "led": "apagado",
+      "origen_led": "voz",
       "calibracion": {
         "umbral_seco": 200,
         "umbral_agua": 600,

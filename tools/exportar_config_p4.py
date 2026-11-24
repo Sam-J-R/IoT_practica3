@@ -5,7 +5,7 @@
 La fuente única es aws/cloudformation/tendedero-p4.yaml. Este script escribe:
   aws/tendedero-historico.table.json   definición de la tabla de histórico (create-table)
   aws/reglas/<regla>.json              SQL y acción de cada regla de AWS IoT (create-topic-rule)
-  aws/iam/<rol>.json                   política de cada rol de las Lambdas nuevas
+  aws/iam/<política>.json              política de cada rol de las Lambdas nuevas
 
 Los ARN llevan ACCOUNT_ID en lugar del número de cuenta. Uso:
   python tools/exportar_config_p4.py            # escribe los archivos
@@ -122,7 +122,7 @@ def exportaciones(plantilla):
             }
         elif tipo == "AWS::IAM::Role":
             for politica in props["Policies"]:
-                salida[f"aws/iam/{props['RoleName']}.json"] = politica["PolicyDocument"]
+                salida[f"aws/iam/{politica['PolicyName']}.json"] = politica["PolicyDocument"]
     return salida
 
 
