@@ -1,6 +1,12 @@
 {
   "TableName": "tendedero_vinculaciones",
-  "AttributeDefinitions": [{"AttributeName": "userId", "AttributeType": "S"}],
-  "KeySchema": [{"AttributeName": "userId", "KeyType": "HASH"}],
+  "AttributeDefinitions": [
+    {"AttributeName": "userId", "AttributeType": "S"},
+    {"AttributeName": "thingName", "AttributeType": "S"}
+  ],
+  "KeySchema": [
+    {"AttributeName": "userId", "KeyType": "HASH"},
+    {"AttributeName": "thingName", "KeyType": "RANGE"}
+  ],
   "BillingMode": "PAY_PER_REQUEST"
 }

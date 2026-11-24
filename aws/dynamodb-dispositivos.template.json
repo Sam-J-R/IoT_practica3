@@ -1,0 +1,16 @@
+{
+  "TableName": "tendedero_dispositivos",
+  "AttributeDefinitions": [
+    {"AttributeName": "thingName", "AttributeType": "S"},
+    {"AttributeName": "codigoVinculacion", "AttributeType": "S"}
+  ],
+  "KeySchema": [{"AttributeName": "thingName", "KeyType": "HASH"}],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "codigoVinculacion-index",
+      "KeySchema": [{"AttributeName": "codigoVinculacion", "KeyType": "HASH"}],
+      "Projection": {"ProjectionType": "KEYS_ONLY"}
+    }
+  ],
+  "BillingMode": "PAY_PER_REQUEST"
+}
