@@ -1,0 +1,45 @@
+serie_estado,1795537473.916,2026-11-24T12:24:33.915,puerto abierto
+serie,1795537473.942,2026-11-24T12:24:33.942,ets Jul 29 2019 12:21:46
+serie,1795537473.942,2026-11-24T12:24:33.942,"rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)"
+serie,1795537473.942,2026-11-24T12:24:33.942,"configsip: 0, SPIWP:0xee"
+serie,1795537473.943,2026-11-24T12:24:33.942,"clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00"
+serie,1795537473.943,2026-11-24T12:24:33.942,"mode:DIO, clock div:2"
+serie,1795537473.943,2026-11-24T12:24:33.942,"load:0x3fff0030,len:1184"
+serie,1795537474.049,2026-11-24T12:24:34.048,"load:0x40078000,len:13232"
+serie,1795537474.049,2026-11-24T12:24:34.049,"load:0x40080400,len:3028"
+serie,1795537474.050,2026-11-24T12:24:34.049,entry 0x400805e4
+serie,1795537474.376,2026-11-24T12:24:34.375,[SENSOR] ms=35 raw=2063 agua=1
+serie,1795537474.376,2026-11-24T12:24:34.375,[LUZ] ms=35 raw=282 nivel=-62 oscuro=1
+serie,1795537474.376,2026-11-24T12:24:34.375,[LUZ] ldr=instalado led=instalado
+marca,1795537474.416,2026-11-24T12:24:34.416,prueba arranque
+marca,1795537474.417,2026-11-24T12:24:34.416,reinicio
+serie,1795537474.485,2026-11-24T12:24:34.484,[ENSAYO] Firmware de ensayo RNF: comandos exponer | resguardar | auto | manual | led_on | led_off | ldr_oscuro | ldr_claro | ldr_real | calibrar_seco | calibrar_mojado | estado | wifi_off | wifi_on
+serie,1795537474.485,2026-11-24T12:24:34.485,[CALIBRACION] umbral_seco=142 umbral_agua=426
+serie,1795537474.486,2026-11-24T12:24:34.485,[OPERACION] modo=automatico minutos_reexponer=45
+serie,1795537474.592,2026-11-24T12:24:34.591,ets Jul 29 2019 12:21:46
+serie,1795537474.592,2026-11-24T12:24:34.591,"rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)"
+serie,1795537474.592,2026-11-24T12:24:34.592,"configsip: 0, SPIWP:0xee"
+serie,1795537474.592,2026-11-24T12:24:34.592,"clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00"
+serie,1795537474.592,2026-11-24T12:24:34.592,"mode:DIO, clock div:2"
+serie,1795537474.593,2026-11-24T12:24:34.592,"load:0x3fff0030,len:1184"
+serie,1795537474.704,2026-11-24T12:24:34.703,"load:0x40078000,len:13232"
+serie,1795537474.704,2026-11-24T12:24:34.703,"load:0x40080400,len:3028"
+serie,1795537474.704,2026-11-24T12:24:34.704,entry 0x400805e4
+serie,1795537475.030,2026-11-24T12:24:35.029,[SENSOR] ms=35 raw=2047 agua=1
+serie,1795537475.030,2026-11-24T12:24:35.029,[LUZ] ms=35 raw=287 nivel=-59 oscuro=1
+serie,1795537475.030,2026-11-24T12:24:35.030,[LUZ] ldr=instalado led=instalado
+serie,1795537475.138,2026-11-24T12:24:35.137,[ENSAYO] Firmware de ensayo RNF: comandos exponer | resguardar | auto | manual | led_on | led_off | ldr_oscuro | ldr_claro | ldr_real | calibrar_seco | calibrar_mojado | estado | wifi_off | wifi_on
+serie,1795537475.138,2026-11-24T12:24:35.137,[CALIBRACION] umbral_seco=142 umbral_agua=426
+serie,1795537475.138,2026-11-24T12:24:35.138,[OPERACION] modo=automatico minutos_reexponer=45
+serie,1795537475.466,2026-11-24T12:24:35.465,[ENSAYO] wifi conectado ip=172.21.175.132 ms=419
+serie,1795537475.576,2026-11-24T12:24:35.575,[SENSOR] ms=535 raw=2064 agua=1
+serie,1795537475.576,2026-11-24T12:24:35.575,[LUZ] ms=535 raw=286 nivel=-60 oscuro=1
+serie,1795537475.576,2026-11-24T12:24:35.575,"[EDGE] R1: agua detectada en modo automatico, resguardando ms=535"
+serie,1795537475.576,2026-11-24T12:24:35.575,[SERVO] destino=resguardado origen=edge ms=535
+serie,1795537476.012,2026-11-24T12:24:36.012,[SENSOR] ms=1035 raw=2066 agua=1
+serie,1795537476.123,2026-11-24T12:24:36.123,[LUZ] ms=1035 raw=285 nivel=-60 oscuro=1
+serie,1795537476.559,2026-11-24T12:24:36.558,[SENSOR] ms=1535 raw=2047 agua=1
+serie,1795537476.559,2026-11-24T12:24:36.558,[LUZ] ms=1535 raw=281 nivel=-62 oscuro=1
+serie,1795537476.559,2026-11-24T12:24:36.558,[SERVO] Posicion estimada tras espera ms=1535
+serie,1795537476.559,2026-11-24T12:24:36.558,[ENSAYO] reloj NTP listo ms=1543
+serie_estado,1795537476.667,2026-11-24T12:24:36.667,puerto cerrado
