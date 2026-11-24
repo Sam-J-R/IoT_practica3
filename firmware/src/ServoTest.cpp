@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#include "ServoCubierta.h"
+#include "ServoTendedero.h"
 
 #if __has_include("calibracion_local.h")
 #include "calibracion_local.h"
@@ -9,17 +9,17 @@
 #endif
 
 namespace {
-ServoCubierta servo(SERVO_ABIERTA_US, SERVO_CERRADA_US, SERVO_FRECUENCIA_HZ,
+ServoTendedero servo(SERVO_EXPUESTO_US, SERVO_RESGUARDADO_US, SERVO_FRECUENCIA_HZ,
                     SERVO_ASENTAMIENTO_MS);
 bool listo = false;
 Posicion anterior = Posicion::Desconocida;
 
 bool parametrosValidos() {
   return SERVO_FRECUENCIA_HZ > 0 && SERVO_ASENTAMIENTO_MS > 0 &&
-         SERVO_ABIERTA_US > 0 && SERVO_CERRADA_US > 0 &&
-         SERVO_ABIERTA_US != SERVO_CERRADA_US &&
-         static_cast<uint64_t>(SERVO_ABIERTA_US) * SERVO_FRECUENCIA_HZ < 1000000 &&
-         static_cast<uint64_t>(SERVO_CERRADA_US) * SERVO_FRECUENCIA_HZ < 1000000;
+         SERVO_EXPUESTO_US > 0 && SERVO_RESGUARDADO_US > 0 &&
+         SERVO_EXPUESTO_US != SERVO_RESGUARDADO_US &&
+         static_cast<uint64_t>(SERVO_EXPUESTO_US) * SERVO_FRECUENCIA_HZ < 1000000 &&
+         static_cast<uint64_t>(SERVO_RESGUARDADO_US) * SERVO_FRECUENCIA_HZ < 1000000;
 }
 }
 
@@ -35,7 +35,7 @@ void setup() {
     Serial.println("[SERVO] Error al configurar PWM");
     return;
   }
-  Serial.println("[SERVO] Listo. Enviar A para abierta o C para cerrada.");
+  Serial.println("[SERVO] Listo. Enviar E para expuesto o R para resguardado.");
   Serial.println("[SERVO] Usar fuente externa regulada, GND comun y comenzar sin carga.");
 }
 
@@ -48,12 +48,12 @@ void loop() {
   const unsigned long ahora = millis();
   while (Serial.available() > 0) {
     const char orden = static_cast<char>(Serial.read());
-    if (orden == 'A' || orden == 'a') {
-      servo.solicitar(Posicion::Abierta, ahora);
-      Serial.println("[SERVO] Solicitada apertura");
-    } else if (orden == 'C' || orden == 'c') {
-      servo.solicitar(Posicion::Cerrada, ahora);
-      Serial.println("[SERVO] Solicitado cierre");
+    if (orden == 'E' || orden == 'e') {
+      servo.solicitar(Posicion::Expuesto, ahora);
+      Serial.println("[SERVO] Solicitado expuesto");
+    } else if (orden == 'R' || orden == 'r') {
+      servo.solicitar(Posicion::Resguardado, ahora);
+      Serial.println("[SERVO] Solicitado resguardado");
     }
   }
 

@@ -1,20 +1,39 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <time.h>
+#include "CalibracionSensor.h"
 #include "ClienteShadow.h"
+#include "ConfiguracionOperacion.h"
+#include "LogicaEdge.h"
+#include "LuzLed.h"
 #include "SensorAgua.h"
+#include "SensorLuz.h"
 
-// PROGRAMA FINAL DEL ESP32
+// PROGRAMA FINAL DEL ESP32 (Practica 4)
 // 1. Lee el sensor de agua cada 500 ms.
-// 2. Se conecta a AWS IoT Core usando MQTT seguro (TLS).
-// 3. ClienteShadow recibe ordenes de Alexa por el Device Shadow y mueve el servo.
-// 4. Publica el sensor y la posicion ESTIMADA del servo en reported.
-// IMPORTANTE: leer agua NO mueve el servo automaticamente.
+// 2. Regla R1 (Edge): en modo automatico, si detecta agua, resguarda la ropa.
+//    Funciona aunque no haya Wi-Fi ni AWS.
+// 3. Se conecta a AWS IoT Core usando MQTT seguro (TLS).
+// 4. ClienteShadow recibe del Device Shadow: posicion (voz o nube), modo,
+//    minutos_reexponer, luz y pedidos de calibracion. Antes de mover el brazo,
+//    LogicaEdge decide si la orden se acepta (en automatico, exponer se rechaza
+//    con agua o de noche).
+// 5. Regla R5 (Edge): en modo automatico, al anochecer (LDR oscuro sostenido)
+//    resguarda la ropa. Tambien sin red.
+// 6. El LED es la luz para recoger la ropa: lo enciende la voz y se apaga solo
+//    tras LED_APAGADO_AUTOMATICO_MS.
+// 7. Publica sensores, posicion ESTIMADA, LED, modo, origen y umbrales en reported.
 
 #if __has_include("calibracion_local.h")
 #include "calibracion_local.h"
 #else
 #include "calibracion.example.h"
+#endif
+
+#if __has_include("luz_local.h")
+#include "luz_local.h"
+#else
+#include "luz.example.h"
 #endif
 
 #if __has_include("secrets.h")
@@ -27,29 +46,36 @@ namespace {
 constexpr unsigned long REINTENTO_RED_MS = 10000;
 constexpr time_t RELOJ_MINIMO = 1704067200; // 2024-01-01 UTC, descarta un reloj sin SNTP.
 SensorAgua sensor;
-ServoCubierta servo(SERVO_ABIERTA_US, SERVO_CERRADA_US, SERVO_FRECUENCIA_HZ,
-                    SERVO_ASENTAMIENTO_MS);
+CalibracionSensor calibracion;
+ServoTendedero servo(SERVO_EXPUESTO_US, SERVO_RESGUARDADO_US, SERVO_FRECUENCIA_HZ,
+                     SERVO_ASENTAMIENTO_MS);
 ClienteShadow shadow;
+ConfiguracionOperacion operacion;
+Origen origen = Origen::Ninguno; // Quien pidio el ultimo movimiento del brazo.
+SensorLuz ldr(REFERENCIA_LUZ_CLARO, REFERENCIA_LUZ_OSCURO);
+LuzLed led;
+Origen origenLed = Origen::Ninguno; // Quien pidio el ultimo cambio del LED.
+unsigned long ledEncendidoDesde = 0; // Para apagarlo solo pasado el tiempo maximo.
+int luzRaw = 0;
+int oscuro = -1; // -1 = sin LDR o sin dato; 0 = claro; 1 = oscuro.
+// Solo en el perfil de ensayo: LDR simulado por comandos (ldr_oscuro,
+// ldr_claro, ldr_real) para probar R5 sin el LDR conectado.
+// -1 = usar el LDR real; 0 = claro; 1 = oscuro.
+int luzSimulada = -1;
 bool integracion = false; // Solo se activa con credenciales y calibracion validas.
 bool mqttIniciado = false;
 unsigned long ultimaLectura = 0;
 unsigned long ultimoIntentoMqtt = 0;
 int raw = 0;
 int agua = -1; // -1 = no sabemos; 0 = seco; 1 = se detecta agua.
-Posicion cubierta = Posicion::Desconocida;
+Posicion posicion = Posicion::Desconocida;
 
-bool calibracionValida() {
-  const bool sensorValido =
-      UMBRAL_SECO >= 0 && UMBRAL_SECO <= 4095 &&
-      UMBRAL_AGUA >= 0 && UMBRAL_AGUA <= 4095 && UMBRAL_SECO != UMBRAL_AGUA;
-
-  const bool servoValido =
-      SERVO_FRECUENCIA_HZ > 0 && SERVO_ASENTAMIENTO_MS > 0 &&
-      SERVO_ABIERTA_US > 0 && SERVO_CERRADA_US > 0 && SERVO_ABIERTA_US != SERVO_CERRADA_US &&
-      static_cast<uint64_t>(SERVO_ABIERTA_US) * SERVO_FRECUENCIA_HZ < 1000000 &&
-      static_cast<uint64_t>(SERVO_CERRADA_US) * SERVO_FRECUENCIA_HZ < 1000000;
-
-  return sensorValido && servoValido;
+bool servoValido() {
+  return SERVO_FRECUENCIA_HZ > 0 && SERVO_ASENTAMIENTO_MS > 0 &&
+         SERVO_EXPUESTO_US > 0 && SERVO_RESGUARDADO_US > 0 &&
+         SERVO_EXPUESTO_US != SERVO_RESGUARDADO_US &&
+         static_cast<uint64_t>(SERVO_EXPUESTO_US) * SERVO_FRECUENCIA_HZ < 1000000 &&
+         static_cast<uint64_t>(SERVO_RESGUARDADO_US) * SERVO_FRECUENCIA_HZ < 1000000;
 }
 
 bool credencialesConfiguradas() {
@@ -63,19 +89,143 @@ void muestrear(unsigned long ahora) {
   if (integracion) {
     // Histeresis: un umbral para entrar en "agua" y otro para volver a "seco".
     // Evita que pequenas variaciones en el ADC cambien el estado repetidamente.
-    const bool desdeSeco = sensor.detectar(raw, false, UMBRAL_SECO, UMBRAL_AGUA);
-    const bool desdeAgua = sensor.detectar(raw, true, UMBRAL_SECO, UMBRAL_AGUA);
+    // Los umbrales salen de la calibracion guardada, no de constantes compiladas.
+    const int umbralSeco = calibracion.umbralSeco();
+    const int umbralAgua = calibracion.umbralAgua();
+    const bool desdeSeco = sensor.detectar(raw, false, umbralSeco, umbralAgua);
+    const bool desdeAgua = sensor.detectar(raw, true, umbralSeco, umbralAgua);
     if (agua >= 0 || desdeSeco == desdeAgua) {
       agua = agua == 1 ? desdeAgua : desdeSeco;
     }
   }
   Serial.printf("[SENSOR] ms=%lu raw=%d agua=%d\n", ahora, raw, agua);
+  if (luzSimulada >= 0) {
+    // Sin histeresis ni confirmacion: el cambio es inmediato.
+    luzRaw = 0;
+    oscuro = luzSimulada;
+    Serial.printf("[LUZ] ms=%lu raw=0 nivel=%d oscuro=%d simulado\n", ahora,
+                  oscuro ? 0 : 1000, oscuro);
+  } else if (ldr.instalado()) {
+    luzRaw = ldr.leerRaw();
+    oscuro = ldr.actualizar(luzRaw, ahora);
+    Serial.printf("[LUZ] ms=%lu raw=%d nivel=%ld oscuro=%d\n", ahora, luzRaw, ldr.nivel(luzRaw),
+                  oscuro);
+  }
+}
+
+const char* nombreOrigen(Origen quien) {
+  return quien == Origen::Edge ? "edge" : (quien == Origen::Nube ? "nube" : "voz");
+}
+
+// Cambia el LED y registra quien lo pidio. Devuelve true si cambio.
+bool cambiarLed(Luz luz, Origen quien, unsigned long ahora) {
+  if (!LED_INSTALADO || !led.aplicar(luz)) return false;
+  origenLed = quien;
+  if (luz == Luz::Encendida) ledEncendidoDesde = ahora;
+  Serial.printf("[LED] estado=%s origen=%s ms=%lu\n",
+                luz == Luz::Encendida ? "encendido" : "apagado", nombreOrigen(quien), ahora);
+  return true;
+}
+
+// Orden de voz para el LED (luz para recoger la ropa). Se cumple siempre.
+void atenderOrdenLuz(Luz pedida, Origen quien, unsigned long ahora) {
+  if (!LED_INSTALADO) return;
+  cambiarLed(pedida, quien, ahora);
+}
+
+// Apagado automatico del LED. Escribe desired.led = apagado para que el Shadow
+// no devuelva la orden de encender.
+void apagarLedPorTiempo(unsigned long ahora) {
+  if (!LED_INSTALADO || led.estado() != Luz::Encendida ||
+      ahora - ledEncendidoDesde < LED_APAGADO_AUTOMATICO_MS) {
+    return;
+  }
+  Serial.printf("[EDGE] LED encendido %lu min: se apaga solo ms=%lu\n",
+                LED_APAGADO_AUTOMATICO_MS / 60000, ahora);
+  cambiarLed(Luz::Apagada, Origen::Edge, ahora);
+  shadow.publicarDecisionLuz(Luz::Apagada);
+}
+
+// Mueve el brazo y registra quien lo pidio. Devuelve true si hubo movimiento.
+bool mover(Posicion destino, Origen quien, unsigned long ahora) {
+  if (destino == Posicion::Desconocida || destino == servo.destino()) return false;
+  servo.solicitar(destino, ahora);
+  origen = quien;
+  Serial.printf("[SERVO] destino=%s origen=%s ms=%lu\n",
+                destino == Posicion::Expuesto ? "expuesto" : "resguardado",
+                nombreOrigen(quien), ahora);
+  return true;
+}
+
+// Mueve el brazo por una regla del Edge y escribe desired para que el Shadow
+// no devuelva la orden anterior.
+void resguardarPorRegla(Posicion decision, const char* regla, const char* motivo, unsigned long ahora) {
+  if (decision == Posicion::Desconocida) return;
+  Serial.printf("[EDGE] %s: %s en modo automatico, resguardando ms=%lu\n", regla, motivo, ahora);
+  mover(decision, Origen::Edge, ahora);
+  shadow.publicarDecisionEdge(decision);
+}
+
+// Reglas R1 (lluvia) y R5 (noche). Se evaluan tras cada lectura y no dependen de la red.
+void aplicarReglasEdge(unsigned long ahora) {
+  resguardarPorRegla(LogicaEdge::evaluarR1(operacion.modo(), agua, servo.destino()),
+                     "R1", "agua detectada", ahora);
+  resguardarPorRegla(LogicaEdge::evaluarR5(operacion.modo(), oscuro, servo.destino()),
+                     "R5", "es de noche", ahora);
+}
+
+// Orden llegada por el Shadow (Alexa o Lambdas de la Nube).
+void atenderOrden(Posicion pedida, Origen quien, unsigned long ahora) {
+  quien = LogicaEdge::resolverOrigen(quien, origen);
+  if (!LogicaEdge::aceptarOrden(operacion.modo(), agua, oscuro, pedida)) {
+    // Prioridad de las reglas automaticas: la ropa no sale con lluvia ni de noche.
+    Serial.printf("[EDGE] Orden de exponer rechazada: %s y el modo es automatico ms=%lu\n",
+                  agua == 1 ? "hay agua" : "es de noche", ahora);
+    mover(Posicion::Resguardado, Origen::Edge, ahora);
+    shadow.publicarDecisionEdge(Posicion::Resguardado);
+    return;
+  }
+  mover(pedida, quien, ahora);
+}
+
+// Atiende un pedido de calibracion llegado por el Shadow. El usuario indico
+// la condicion (seco o mojado); aqui se mide el sensor y se guarda la referencia.
+void calibrar(Condicion condicion, uint64_t id) {
+  if (calibracion.yaAtendido(id)) return; // El mismo pedido no se repite.
+
+  // El id es la hora del pedido en milisegundos. Si llego tarde (por ejemplo,
+  // el equipo estaba apagado), no se mide: la condicion pudo haber cambiado.
+  const double edadMs = static_cast<double>(time(nullptr)) * 1000.0 - static_cast<double>(id);
+  if (edadMs > VIGENCIA_PEDIDO_CALIBRACION_MS) {
+    calibracion.caducar(condicion, id);
+    Serial.printf("[CALIBRACION] pedido caducado (%.0f s de antiguedad)\n", edadMs / 1000.0);
+    return;
+  }
+
+  long suma = 0;
+  for (int i = 0; i < MUESTRAS_CALIBRACION; ++i) {
+    suma += sensor.leerRaw();
+    delay(PAUSA_MUESTRA_CALIBRACION_MS);
+  }
+  const int promedio = static_cast<int>(suma / MUESTRAS_CALIBRACION);
+  const bool aplicada = calibracion.aplicar(condicion, id, promedio);
+  Serial.printf("[CALIBRACION] condicion=%s lectura=%d %s umbral_seco=%d umbral_agua=%d\n",
+                condicion == Condicion::Seco ? "seco" : "mojado", promedio,
+                aplicada ? "aplicada" : "rechazada",
+                calibracion.umbralSeco(), calibracion.umbralAgua());
+  if (aplicada) {
+    // Con umbrales nuevos, la clasificacion anterior deja de ser valida.
+    agua = -1;
+    muestrear(millis());
+  }
 }
 
 #ifdef MODO_ENSAYO_RNF
-// Comandos de ensayo por monitor serie: abrir | cerrar | estado | wifi_off | wifi_on.
-// abrir/cerrar publican desired en el Shadow (como Lambda); la orden vuelve
-// como delta desde AWS, de modo que el recorrido por la nube se conserva.
+// Comandos de ensayo por monitor serie:
+// exponer | resguardar | auto | manual | led_on | led_off | ldr_oscuro |
+// ldr_claro | ldr_real | calibrar_seco | calibrar_mojado | estado | wifi_off | wifi_on.
+// Las ordenes se publican en desired (como Lambda) y vuelven como delta desde
+// AWS, de modo que el recorrido por la nube se conserva.
 bool wifiCortado = false;   // wifi_off: corte de red con el ESP32 encendido.
 bool esperandoWifi = false; // wifi_on: avisar cuando vuelva la asociacion.
 
@@ -105,11 +255,32 @@ void atenderConsola(unsigned long ahora) {
     }
     linea.trim();
     linea.toLowerCase();
-    if (linea == "abrir" || linea == "cerrar") {
+    if (linea == "exponer" || linea == "resguardar") {
       const bool ok = integracion &&
-          shadow.solicitarDesired(linea == "abrir" ? Posicion::Abierta : Posicion::Cerrada);
+          shadow.solicitarDesired(linea == "exponer" ? Posicion::Expuesto : Posicion::Resguardado);
       Serial.printf("[ENSAYO] orden %s %s ms=%lu\n", linea.c_str(),
                     ok ? "publicada" : "NO publicada (sin MQTT)", ahora);
+    } else if (linea == "calibrar_seco" || linea == "calibrar_mojado") {
+      const bool ok = integracion &&
+          shadow.solicitarCalibracion(linea == "calibrar_seco" ? Condicion::Seco : Condicion::Mojado);
+      Serial.printf("[ENSAYO] pedido %s %s ms=%lu\n", linea.c_str(),
+                    ok ? "publicado" : "NO publicado (sin MQTT)", ahora);
+    } else if (linea == "auto" || linea == "manual") {
+      const bool ok = integracion &&
+          shadow.solicitarModo(linea == "auto" ? Modo::Automatico : Modo::Manual);
+      Serial.printf("[ENSAYO] modo %s %s ms=%lu\n", linea.c_str(),
+                    ok ? "publicado" : "NO publicado (sin MQTT)", ahora);
+    } else if (linea == "led_on" || linea == "led_off") {
+      const bool ok = integracion &&
+          shadow.solicitarLed(linea == "led_on" ? Luz::Encendida : Luz::Apagada);
+      Serial.printf("[ENSAYO] led %s %s ms=%lu\n", linea == "led_on" ? "on" : "off",
+                    ok ? "publicado" : "NO publicado (sin MQTT)", ahora);
+    } else if (linea == "ldr_oscuro" || linea == "ldr_claro" || linea == "ldr_real") {
+      luzSimulada = linea == "ldr_oscuro" ? 1 : (linea == "ldr_claro" ? 0 : -1);
+      if (luzSimulada < 0) oscuro = -1; // El LDR real vuelve a decidir desde cero.
+      Serial.printf("[ENSAYO] ldr %s ms=%lu\n",
+                    luzSimulada < 0 ? "real" : (luzSimulada ? "simulado oscuro" : "simulado claro"),
+                    ahora);
     } else if (linea == "estado") {
       if (integracion) shadow.consultarShadow();
       Serial.printf("[ENSAYO] consulta de Shadow ms=%lu\n", ahora);
@@ -139,17 +310,35 @@ void atenderConsola(unsigned long ahora) {
 void setup() {
   Serial.begin(115200);
   sensor.iniciar();
+  // LDR y LED: opcionales. Sin referencias del LDR o sin LED no se usan.
+  ldr.iniciar();
+  if (LED_INSTALADO) led.iniciar();
+  // Referencias guardadas por una calibracion anterior o, si no hay, de fabrica.
+  calibracion.iniciar(REFERENCIA_SECO_FABRICA, REFERENCIA_AGUA_FABRICA);
+  // Modo y espera guardados: sin Internet, R1 sigue en el modo que tenia.
+  operacion.iniciar();
   // Seguridad: sin parametros validos, solo se leen valores ADC.
   // No se intenta AWS ni se da una orden al servo.
-  integracion = calibracionValida() && credencialesConfiguradas() && servo.iniciar();
+  integracion = calibracion.valida() && servoValido() && credencialesConfiguradas() &&
+                servo.iniciar();
   muestrear(millis());
+  Serial.printf("[LUZ] ldr=%s led=%s\n", ldr.instalado() ? "instalado" : "no instalado",
+                LED_INSTALADO ? "instalado" : "no instalado");
 #ifdef MODO_ENSAYO_RNF
-  Serial.println("[ENSAYO] Firmware de ensayo RNF: comandos abrir | cerrar | estado | wifi_off | wifi_on");
+  Serial.println("[ENSAYO] Firmware de ensayo RNF: comandos exponer | resguardar | auto | "
+                 "manual | led_on | led_off | ldr_oscuro | ldr_claro | ldr_real | "
+                 "calibrar_seco | calibrar_mojado | estado | "
+                 "wifi_off | wifi_on");
 #endif
   if (!integracion) {
-    Serial.println("[P3] Solo ADC. Completar calibracion y secretos locales para habilitar TLS y servo");
+    Serial.println("[P4] Solo ADC. Completar calibracion y secretos locales para habilitar TLS y servo");
     return;
   }
+  Serial.printf("[CALIBRACION] umbral_seco=%d umbral_agua=%d\n", calibracion.umbralSeco(),
+                calibracion.umbralAgua());
+  Serial.printf("[OPERACION] modo=%s minutos_reexponer=%d\n",
+                operacion.modo() == Modo::Manual ? "manual" : "automatico",
+                operacion.minutosReexponer());
 
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
@@ -164,8 +353,12 @@ void setup() {
 void loop() {
   const unsigned long ahora = millis();
 
-  // Paso 1: actualizar la lectura del sensor.
-  if (ahora - ultimaLectura >= INTERVALO_SENSOR_MS) muestrear(ahora);
+  // Paso 1: actualizar las lecturas y evaluar R1 y R5 (sin depender de la red).
+  if (ahora - ultimaLectura >= INTERVALO_SENSOR_MS) {
+    muestrear(ahora);
+    if (integracion) aplicarReglasEdge(ahora);
+    apagarLedPorTiempo(ahora); // No necesita servo ni AWS.
+  }
 
   // Paso 2: iniciar MQTT una vez haya Wi-Fi y reloj correcto para TLS.
   // ClienteShadow gestiona las reconexiones posteriores.
@@ -180,21 +373,66 @@ void loop() {
   atenderConsola(ahora);
 #endif
 
-  // Paso 3: procesar deltas del Shadow. Aqui puede llegar una orden al servo.
+  // Paso 3: procesar deltas del Shadow. Pueden llegar: modo y minutos, una
+  // orden de posicion (que pasa por la politica de LogicaEdge) o un pedido de
+  // calibracion del sensor. El modo va primero: una orden y un cambio de modo
+  // pueden llegar en el mismo delta.
   shadow.atender(ahora, servo);
+  Modo modoPedido = Modo::Ninguno;
+  int minutosPedidos = 0;
+  if (shadow.tomarConfiguracion(modoPedido, minutosPedidos)) {
+    if (operacion.aplicarModo(modoPedido)) {
+      Serial.printf("[OPERACION] modo=%s ms=%lu\n",
+                    operacion.modo() == Modo::Manual ? "manual" : "automatico", ahora);
+      aplicarReglasEdge(ahora); // Pasar a automatico con agua o de noche resguarda de inmediato.
+    }
+    if (operacion.aplicarMinutos(minutosPedidos)) {
+      Serial.printf("[OPERACION] minutos_reexponer=%d\n", operacion.minutosReexponer());
+    }
+  }
+  Posicion pedida = Posicion::Desconocida;
+  Origen quien = Origen::Ninguno;
+  if (shadow.tomarOrden(pedida, quien)) atenderOrden(pedida, quien, ahora);
+  Luz luzPedida = Luz::Desconocida;
+  Origen quienLuz = Origen::Ninguno;
+  if (shadow.tomarOrdenLuz(luzPedida, quienLuz)) atenderOrdenLuz(luzPedida, quienLuz, ahora);
+  Condicion condicion = Condicion::Ninguna;
+  uint64_t idCalibracion = 0;
+  if (shadow.tomarPedidoCalibracion(condicion, idCalibracion)) {
+    calibrar(condicion, idCalibracion);
+  }
 
   // Paso 4: solo despues del tiempo de movimiento se estima la posicion.
-  // No hay sensor fisico que confirme si la cubierta se atasco.
+  // No hay sensor fisico que confirme si el brazo se atasco.
   const Posicion estimada = servo.estimada(ahora);
-  if (estimada != cubierta) {
-    cubierta = estimada;
-    if (cubierta != Posicion::Desconocida) {
+  if (estimada != posicion) {
+    posicion = estimada;
+    if (posicion != Posicion::Desconocida) {
       Serial.printf("[SERVO] Posicion estimada tras espera ms=%lu\n", ahora);
     }
   }
 
   // Paso 5: informar a AWS (por cambio o como respaldo periodico).
-  shadow.reportar(ahora, raw, agua, cubierta);
+  Telemetria telemetria;
+  telemetria.lecturaAdc = raw;
+  telemetria.agua = agua;
+  telemetria.posicion = posicion;
+  telemetria.modo = operacion.modo();
+  telemetria.minutosReexponer = operacion.minutosReexponer();
+  telemetria.origen = origen;
+  telemetria.luzInstalada = ldr.instalado() || luzSimulada >= 0;
+  telemetria.luzSimulada = luzSimulada >= 0;
+  // Nivel 0..100 %: la Nube no conoce las referencias del LDR, asi que se envia
+  // ya normalizado (el reporte de luz por hora lo usa directamente).
+  // Sin LDR no se calcula: con referencias invalidas nivel() dividiria por cero.
+  if (luzSimulada >= 0) {
+    telemetria.nivelLuz = luzSimulada ? 0 : 100;
+  } else if (ldr.instalado()) {
+    telemetria.nivelLuz = constrain(static_cast<int>(ldr.nivel(luzRaw) / 10), 0, 100);
+  }
+  telemetria.oscuro = oscuro;
+  telemetria.led = LED_INSTALADO ? led.estado() : Luz::Desconocida;
+  telemetria.origenLed = origenLed;
+  shadow.reportar(ahora, telemetria, calibracion.estado());
   delay(1);
 }
-

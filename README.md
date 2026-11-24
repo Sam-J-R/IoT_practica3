@@ -4,6 +4,8 @@
 
 Un ESP32 captura un sensor analógico MH y controla un servomotor. La Skill consulta y solicita posiciones a través de Lambda, DynamoDB y el Device Shadow del Thing vinculado. No hay cierre automático local ni LED como actuador.
 
+> **Práctica 4 en curso.** El código y las configuraciones de este repositorio ya corresponden a la práctica 4: vinculación por código, calibración del sensor desde Alexa, Shadow en español y tendedero que se resguarda bajo un techo fijo. Su documentación está en [docs/practica4/](docs/practica4/CAMBIOS.md). El resto de este README, el informe, las evidencias y los resultados describen la práctica 3, cuya entrega se conserva en la etiqueta de git `practica3-entrega`.
+
 ## Informe y evidencias
 
 El **[informe técnico completo](docs/INFORME.md)** concentra los requerimientos, arquitectura, circuito, clases, secuencias, contrato Shadow, configuraciones, pruebas, resultados y anexos exigidos. Se conservan también los registros específicos de cada área para mantener la trazabilidad de los aportes y sus evidencias.
@@ -54,15 +56,16 @@ IoT Core, Lambda y DynamoDB utilizan `us-east-2`. El dispositivo físico es `ten
 
 ## Ensayos de requisitos no funcionales
 
-Con el perfil `tendedero_ensayo` cargado y el monitor serie cerrado, `ensayo_rnf.py` ejecuta los ensayos y genera informes en `resultados/`:
+Práctica 4: con el perfil `tendedero_ensayo` cargado y el monitor serie cerrado, `tools/probar_esp32.py` ejecuta las pruebas en el ESP32 y deja informes en `resultados_p4/`. Las mediciones de almacenamiento y costo están en `tools/`. Detalle en [tools/README.md](tools/README.md).
 
 ```powershell
-pip install pyserial paho-mqtt
-python ensayo_rnf.py --puerto COM3 todo --endpoint <endpoint ATS> --thing tendedero-inteligente --ca <CA> --cert <certificado> --key <clave privada>
-python ensayo_rnf.py --puerto COM3 sensor --referencia "método físico"
+pip install pyserial
+python tools/probar_esp32.py --puerto COM3 todo
 ```
 
-Reemplazar los valores entre `< >` por las rutas locales, entre comillas si tienen espacios; los certificados nunca se suben al repositorio. Procedimiento: [ENSAYOS_RNF_SIN_CONSOLA.md](docs/ENSAYOS_RNF_SIN_CONSOLA.md) y [GUIA_MEDICIONES_RNF.md](docs/GUIA_MEDICIONES_RNF.md). `analizar_rnf.py`, `grabar_rnf.py` y `orden_offline.py` permiten registrar y analizar ensayos manuales.
+`tools/grabar_rnf.py` graba el monitor serie y marcas manuales para ensayos libres.
+
+Los scripts de ensayo de la práctica 3 (`ensayo_rnf.py`, `orden_offline.py`, `analizar_rnf.py`) se movieron a [tools/practica3/](tools/practica3/README.md). Usan la cubierta de la P3 y no funcionan con el firmware actual. Sus procedimientos están en [ENSAYOS_RNF_SIN_CONSOLA.md](docs/ENSAYOS_RNF_SIN_CONSOLA.md) y [GUIA_MEDICIONES_RNF.md](docs/GUIA_MEDICIONES_RNF.md).
 
 ## Pruebas locales
 

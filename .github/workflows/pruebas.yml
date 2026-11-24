@@ -1,0 +1,36 @@
+# Corre las pruebas automatizadas en cada push y pull request.
+# "pruebas" debe quedar en verde para unir una rama a main.
+# "entregables" es una lista de pendientes de la P4: puede fallar hasta completarlos.
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # trae la etiqueta practica3-entrega
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: Lambda, Shadow, firmware (g++) y herramientas
+        run: python -m pytest tests -v --ignore=tests/p4/test_entregables.py
+
+  entregables:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - name: Lista de entregables de la P4
+        run: python -m pytest tests/p4/test_entregables.py -v

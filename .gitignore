@@ -1,6 +1,7 @@
 .pio/
 .venv/
 __pycache__/
+.pytest_cache/
 *.pyc
 .env
 *.pem
@@ -19,6 +20,9 @@ firmware/.pio/
 .vscode/
 certificados AWS/
 calibracion_local.h
+luz_local.h
+# Certificado, clave y estado de la cuenta propia de pruebas
+resultados_p4/cuenta_propia/
 
 # Capturas originales sin redactar; solo se versionan los paneles sanitizados.
 docs/evidencias/aws/originales_privados/

@@ -5,74 +5,701 @@
       "intents": [
         {
           "name": "VincularThingIntent",
-          "slots": [{"name": "thing_name", "type": "AMAZON.SearchQuery"}],
+          "slots": [
+            {
+              "name": "codigo",
+              "type": "AMAZON.NUMBER",
+              "samples": [
+                "{codigo}",
+                "el código es {codigo}",
+                "es {codigo}"
+              ]
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "se llama {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "ponle {nombre}"
+              ]
+            }
+          ],
           "samples": [
-            "vincula mi objeto con {thing_name}",
-            "vincula el tendedero {thing_name}",
-            "asocia mi objeto a {thing_name}"
-          ]
-        },
-        {
-          "name": "CambiarThingIntent",
-          "slots": [{"name": "thing_name", "type": "AMAZON.SearchQuery"}],
-          "samples": [
-            "cambia mi objeto a {thing_name}",
-            "cambia el tendedero por {thing_name}"
+            "vincula mi tendedero con el código {codigo}",
+            "vincula mi tendedero con {codigo}",
+            "vincula el código {codigo}",
+            "asocia mi tendedero al código {codigo}",
+            "vincula mi tendedero",
+            "vincula mi tendedero {nombre} con el código {codigo}",
+            "vincula el tendedero del {nombre} con el código {codigo}",
+            "vincula el tendedero de la {nombre} con el código {codigo}",
+            "agrega el tendedero del {nombre} con el código {codigo}",
+            "agrega el tendedero de la {nombre} con el código {codigo}",
+            "agrega un tendedero con el código {codigo}",
+            "agrega otro tendedero",
+            "vincula otro tendedero",
+            "registra un tendedero nuevo"
           ]
         },
         {
           "name": "DesvincularThingIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "desvincula mi tendedero",
+            "elimina la vinculación",
+            "desconecta mi tendedero",
+            "desvincula el tendedero {nombre}",
+            "desvincula el tendedero del {nombre}",
+            "desvincula el tendedero de la {nombre}",
+            "elimina el tendedero del {nombre}",
+            "elimina el tendedero de la {nombre}"
+          ]
+        },
+        {
+          "name": "ListarTendederosIntent",
           "slots": [],
           "samples": [
-            "desvincula mi objeto",
-            "elimina la vinculación",
-            "desconecta mi tendedero"
+            "qué tendederos tengo",
+            "cuáles son mis tendederos",
+            "lista mis tendederos",
+            "cuántos tendederos tengo",
+            "dime mis tendederos"
           ]
         },
         {
           "name": "ConsultarAguaIntent",
-          "slots": [],
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
             "hay agua en el sensor",
             "está lloviendo",
             "detectas lluvia",
-            "cómo está el sensor de agua"
+            "cómo está el sensor de agua",
+            "hay agua en el tendedero del {nombre}",
+            "hay agua en el tendedero de la {nombre}",
+            "está lloviendo en el {nombre}",
+            "está lloviendo en la {nombre}"
           ]
         },
         {
-          "name": "AbrirCubiertaIntent",
-          "slots": [],
+          "name": "ExponerTendederoIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
-            "abre la cubierta",
-            "descubre el tendedero",
-            "abre el techo del tendedero"
+            "expón el tendedero",
+            "expón la ropa",
+            "saca el tendedero",
+            "saca la ropa",
+            "pon la ropa al sol",
+            "expón el tendedero del {nombre}",
+            "expón el tendedero de la {nombre}",
+            "saca la ropa del {nombre}",
+            "saca la ropa de la {nombre}"
           ]
         },
         {
-          "name": "CerrarCubiertaIntent",
-          "slots": [],
+          "name": "ResguardarTendederoIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
-            "cierra la cubierta",
+            "resguarda el tendedero",
+            "resguarda la ropa",
+            "guarda la ropa",
             "protege el tendedero",
-            "cierra el techo del tendedero"
+            "pon el tendedero bajo techo",
+            "resguarda el tendedero del {nombre}",
+            "resguarda el tendedero de la {nombre}",
+            "guarda la ropa del {nombre}",
+            "guarda la ropa de la {nombre}"
           ]
         },
         {
-          "name": "ConsultarCubiertaIntent",
-          "slots": [],
+          "name": "ConsultarPosicionIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
           "samples": [
-            "cómo está la cubierta",
-            "está cerrado el tendedero",
-            "consulta el estado de la cubierta"
+            "dónde está el tendedero",
+            "cómo está el tendedero",
+            "está resguardada la ropa",
+            "está expuesto el tendedero",
+            "consulta la posición del tendedero",
+            "dónde está el tendedero del {nombre}",
+            "dónde está el tendedero de la {nombre}",
+            "cómo está el tendedero del {nombre}",
+            "cómo está el tendedero de la {nombre}",
+            "por qué está guardada la ropa",
+            "por qué está resguardada la ropa",
+            "por qué no está afuera la ropa",
+            "cómo está la ropa",
+            "por qué está guardada la ropa del {nombre}",
+            "por qué está guardada la ropa de la {nombre}"
           ]
         },
-        {"name": "AMAZON.CancelIntent", "samples": []},
-        {"name": "AMAZON.StopIntent", "samples": []},
-        {"name": "AMAZON.HelpIntent", "samples": []},
-        {"name": "AMAZON.FallbackIntent", "samples": []}
+        {
+          "name": "CalibrarSensorIntent",
+          "slots": [
+            {
+              "name": "condicion",
+              "type": "CondicionSensor"
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "calibra el sensor {condicion}",
+            "calibrar el sensor {condicion}",
+            "ajusta el sensor {condicion}",
+            "calibra el sensor",
+            "calibra el sensor {condicion} en el {nombre}",
+            "calibra el sensor {condicion} en la {nombre}",
+            "calibra el sensor {condicion} del tendedero del {nombre}",
+            "calibra el sensor {condicion} del tendedero de la {nombre}"
+          ]
+        },
+        {
+          "name": "ConsultarCalibracionIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "cómo está la calibración",
+            "cómo quedó la calibración",
+            "se aplicó la calibración",
+            "consulta la calibración",
+            "cómo está la calibración del tendedero del {nombre}",
+            "cómo está la calibración del tendedero de la {nombre}"
+          ]
+        },
+        {
+          "name": "CambiarModoIntent",
+          "slots": [
+            {
+              "name": "modo",
+              "type": "ModoOperacion"
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "cambia a modo {modo}",
+            "activa el modo {modo}",
+            "pon el tendedero en modo {modo}",
+            "usa el modo {modo}",
+            "quiero el modo {modo}",
+            "modo {modo}",
+            "pasa a modo {modo}",
+            "pon el tendedero del {nombre} en modo {modo}",
+            "pon el tendedero de la {nombre} en modo {modo}"
+          ]
+        },
+        {
+          "name": "ConsultarModoIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "en qué modo está",
+            "en qué modo está el tendedero",
+            "qué modo tiene el tendedero",
+            "cuál es el modo",
+            "cuál es el modo de operación",
+            "en qué modo está el tendedero del {nombre}",
+            "en qué modo está el tendedero de la {nombre}"
+          ]
+        },
+        {
+          "name": "ConfigurarEsperaIntent",
+          "slots": [
+            {
+              "name": "minutos",
+              "type": "AMAZON.NUMBER"
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "espera {minutos} minutos para volver a exponer",
+            "vuelve a exponer después de {minutos} minutos",
+            "configura la espera en {minutos} minutos",
+            "pon la espera en {minutos} minutos",
+            "cambia la espera a {minutos} minutos",
+            "espera {minutos} minutos para volver a exponer el tendedero del {nombre}",
+            "espera {minutos} minutos para volver a exponer el tendedero de la {nombre}"
+          ]
+        },
+        {
+          "name": "EncenderLuzIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "enciende la luz",
+            "prende la luz",
+            "enciende la luz del tendedero",
+            "prende la luz del tendedero",
+            "enciende el foco",
+            "enciende la luz del tendedero del {nombre}",
+            "enciende la luz del tendedero de la {nombre}",
+            "enciende la luz para recoger la ropa",
+            "prende la luz para recoger la ropa"
+          ]
+        },
+        {
+          "name": "ApagarLuzIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "apaga la luz",
+            "apaga la luz del tendedero",
+            "apaga el foco",
+            "apaga la lámpara",
+            "apaga la luz del tendedero del {nombre}",
+            "apaga la luz del tendedero de la {nombre}"
+          ]
+        },
+        {
+          "name": "ConsultarLuzIntent",
+          "slots": [
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "samples": [
+                "{nombre}",
+                "el {nombre}",
+                "la {nombre}",
+                "el del {nombre}",
+                "el de la {nombre}",
+                "en el {nombre}",
+                "en la {nombre}",
+                "del {nombre}",
+                "de la {nombre}"
+              ]
+            }
+          ],
+          "samples": [
+            "cómo está la luz",
+            "la luz está encendida",
+            "está encendida la luz",
+            "cómo está la luz del tendedero del {nombre}",
+            "cómo está la luz del tendedero de la {nombre}"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        }
       ],
-      "types": []
-    }
+      "types": [
+        {
+          "name": "CondicionSensor",
+          "values": [
+            {
+              "id": "seco",
+              "name": {
+                "value": "seco",
+                "synonyms": [
+                  "seca",
+                  "en seco",
+                  "sin agua"
+                ]
+              }
+            },
+            {
+              "id": "mojado",
+              "name": {
+                "value": "mojado",
+                "synonyms": [
+                  "mojada",
+                  "húmedo",
+                  "con agua"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ModoOperacion",
+          "values": [
+            {
+              "id": "automatico",
+              "name": {
+                "value": "automático",
+                "synonyms": [
+                  "automatico",
+                  "auto"
+                ]
+              }
+            },
+            {
+              "id": "manual",
+              "name": {
+                "value": "manual",
+                "synonyms": [
+                  "a mano"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "NombreTendedero",
+          "values": [
+            {
+              "id": "patio",
+              "name": {
+                "value": "patio"
+              }
+            },
+            {
+              "id": "terraza",
+              "name": {
+                "value": "terraza"
+              }
+            },
+            {
+              "id": "azotea",
+              "name": {
+                "value": "azotea",
+                "synonyms": [
+                  "techo"
+                ]
+              }
+            },
+            {
+              "id": "balcon",
+              "name": {
+                "value": "balcón",
+                "synonyms": [
+                  "balcon"
+                ]
+              }
+            },
+            {
+              "id": "jardin",
+              "name": {
+                "value": "jardín",
+                "synonyms": [
+                  "jardin"
+                ]
+              }
+            },
+            {
+              "id": "lavanderia",
+              "name": {
+                "value": "lavandería",
+                "synonyms": [
+                  "lavanderia"
+                ]
+              }
+            },
+            {
+              "id": "cocina",
+              "name": {
+                "value": "cocina"
+              }
+            },
+            {
+              "id": "garaje",
+              "name": {
+                "value": "garaje",
+                "synonyms": [
+                  "cochera"
+                ]
+              }
+            },
+            {
+              "id": "casa",
+              "name": {
+                "value": "casa"
+              }
+            },
+            {
+              "id": "departamento",
+              "name": {
+                "value": "departamento"
+              }
+            },
+            {
+              "id": "cuarto",
+              "name": {
+                "value": "cuarto",
+                "synonyms": [
+                  "dormitorio"
+                ]
+              }
+            },
+            {
+              "id": "primer_piso",
+              "name": {
+                "value": "primer piso"
+              }
+            },
+            {
+              "id": "segundo_piso",
+              "name": {
+                "value": "segundo piso"
+              }
+            },
+            {
+              "id": "principal",
+              "name": {
+                "value": "principal"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "dialog": {
+      "delegationStrategy": "ALWAYS",
+      "intents": [
+        {
+          "name": "VincularThingIntent",
+          "confirmationRequired": false,
+          "prompts": {},
+          "slots": [
+            {
+              "name": "codigo",
+              "type": "AMAZON.NUMBER",
+              "elicitationRequired": true,
+              "confirmationRequired": true,
+              "prompts": {
+                "elicitation": "Elicit.Slot.Vincular.codigo",
+                "confirmation": "Confirm.Slot.Vincular.codigo"
+              }
+            },
+            {
+              "name": "nombre",
+              "type": "NombreTendedero",
+              "elicitationRequired": true,
+              "confirmationRequired": false,
+              "prompts": {
+                "elicitation": "Elicit.Slot.Vincular.nombre"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "prompts": [
+      {
+        "id": "Elicit.Slot.Vincular.codigo",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "Dime el código de seis dígitos que está en la etiqueta de tu tendedero."
+          }
+        ]
+      },
+      {
+        "id": "Confirm.Slot.Vincular.codigo",
+        "variations": [
+          {
+            "type": "SSML",
+            "value": "<speak>Entendí el código <say-as interpret-as=\"digits\">{codigo}</say-as>. ¿Es correcto?</speak>"
+          }
+        ]
+      },
+      {
+        "id": "Elicit.Slot.Vincular.nombre",
+        "variations": [
+          {
+            "type": "PlainText",
+            "value": "¿Qué nombre le pones a este tendedero? Por ejemplo: patio, terraza o azotea."
+          }
+        ]
+      }
+    ]
   }
 }
-
