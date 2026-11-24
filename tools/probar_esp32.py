@@ -25,6 +25,15 @@ Pruebas (se eligen por nombre; "todo" corre las que no necesitan operador):
                 ldr_oscuro / ldr_claro en lugar de pedir que lo tapen.
   sin_conexion  GUIADA: R1 con el WiFi cortado y, al volver, que el desired viejo
                 no exponga la ropa (RNF operación sin conexión).
+  led           Enciende la luz para recoger la ropa y espera el apagado automático
+                (10 min): mide el tiempo, que el origen sea edge y que el reporte
+                llegue al Shadow. Con --thing y credenciales de AWS lee además el
+                Shadow. Con frecuencia, --con-led hace lo mismo sin sumar tiempo.
+  r3            Corta el WiFi del ESP32 (como desenchufarlo, para la Nube) y espera
+                la alerta "sin_reporte" del supervisor (regla R3). Con --thing y
+                credenciales de AWS la busca sola en DynamoDB; sin ellas es guiada
+                (avisan con Enter cuando la ven en la consola). Al final vuelve el
+                WiFi y comprueba que el ESP32 reporta otra vez.
   todo          arranque + ordenes + persistencia + frecuencia.
 
 Cada corrida deja en resultados_p4/<fecha-hora>/:
@@ -34,6 +43,7 @@ Cada corrida deja en resultados_p4/<fecha-hora>/:
 
 Ejemplos:
   python tools/probar_esp32.py --puerto COM3 todo
+  python tools/probar_esp32.py --puerto COM3 todo --minutos 15 --con-led
   python tools/probar_esp32.py --puerto /dev/ttyUSB0 calibracion
   python tools/probar_esp32.py --puerto COM3 edge sin_conexion luz
   python tools/probar_esp32.py --puerto COM3 reconexion --thing tendedero-inteligente
@@ -46,7 +56,7 @@ import statistics
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
@@ -82,6 +92,7 @@ RE = {
     "led": r"\[LED\] estado=(encendido|apagado) origen=(\S+)",
     "led_pub": r"\[ENSAYO\] led (on|off) publicado",
     "ldr_sim": r"\[ENSAYO\] ldr (simulado oscuro|simulado claro|real)",
+    "led_auto": r"\[EDGE\] LED encendido \d+ min: se apaga solo",
 }
 
 
@@ -262,10 +273,18 @@ def p_ordenes(mon, res, a):
                     f"{len(tiempos['reporte'])} de {a.ordenes}")
 
 
-def p_frecuencia(mon, res, a):
+def p_frecuencia(mon, res, a, cliente_shadow=None):
     t0 = mon.marca("frecuencia inicio")
+    t_led = None
+    if a.con_led:
+        try:
+            t_led = _led(mon, "led_on")
+        except Fallo as exc:
+            res.agregar("led", "enciende la luz al inicio de la frecuencia", False, str(exc))
     print(f"Observando reportes durante {a.minutos} min (no muevan el sensor)...")
     time.sleep(a.minutos * 60)
+    if t_led is not None:
+        _evaluar_led_automatico(mon, res, a, t_led, cliente_shadow)
     acks = [t for t, _ in mon.todas("aceptado", t0)]
     caidas = [t for t, _ in mon.todas("mqtt_off", t0)]
     # Un intervalo que contiene una caida de MQTT no mide la frecuencia de reporte:
@@ -557,6 +576,145 @@ def _led(mon, orden):
     return t0
 
 
+def _leer_shadow_reported(cliente_shadow, thing):
+    doc = json.loads(cliente_shadow.get_thing_shadow(thingName=thing)["payload"].read())
+    return doc.get("state", {}).get("reported", {})
+
+
+def _evaluar_led_automatico(mon, res, a, t_orden, cliente_shadow=None):
+    """Tras un led_on: apagado automático a los --led-s, con origen edge y reportado al Shadow."""
+    enc = mon.esperar("led", t_orden, a.timeout_orden, grupo="encendido")
+    if not enc:
+        res.agregar("led", "la luz se enciende", False, "sin '[LED] estado=encendido'")
+        return
+    restante = enc[0] + a.led_s + 30 - time.time()
+    auto = mon.esperar("led_auto", enc[0], max(restante, 0))
+    if not auto:
+        res.agregar("led", f"se apaga sola a los {a.led_s:.0f} s", False,
+                    f"sin '[EDGE] LED encendido ... se apaga solo' en {a.led_s + 30:.0f} s")
+        return
+    dt = auto[0] - enc[0]
+    res.agregar("led", f"se apaga sola a los {a.led_s:.0f} s", a.led_s - 1 <= dt <= a.led_s + 5, f"{dt:.1f} s")
+    apagado = mon.esperar("led", auto[0] - 0.5, 3, grupo="apagado")
+    origen = apagado[1].group(2) if apagado else None
+    res.agregar("led", "el apagado lo hace el Edge", origen == "edge", f"origen={origen}")
+    ack = mon.esperar("aceptado", auto[0], 15)
+    caidas = mon.todas("mqtt_off", enc[0], auto[0] + 15)
+    res.agregar("led", "el apagado llega al Shadow (reported aceptado)", bool(ack),
+                f"{ms(auto[0], ack[0]):.0f} ms" if ack else
+                ("sin conexión: hubo [MQTT] Desconectado" if caidas else "sin '[SHADOW] reported aceptado'"))
+    if ack and a.thing:
+        cliente = cliente_shadow or _cliente_aws(a)
+        if cliente is None or not hasattr(cliente, "get_thing_shadow"):
+            res.agregar("led", "Shadow: led=apagado, origen_led=edge", None,
+                        "sin credenciales de AWS: confirmar en la consola")
+            return
+        try:
+            rep = _leer_shadow_reported(cliente, a.thing)
+        except Exception as exc:
+            res.agregar("led", "Shadow: led=apagado, origen_led=edge", False, f"{type(exc).__name__}: {exc}")
+            return
+        res.agregar("led", "Shadow: led=apagado, origen_led=edge",
+                    rep.get("led") == "apagado" and rep.get("origen_led") == "edge",
+                    f"led={rep.get('led')} origen_led={rep.get('origen_led')}")
+    elif ack:
+        res.agregar("led", "Shadow: led=apagado, origen_led=edge", None,
+                    "sin --thing: confirmar en la consola (captura)")
+
+
+def _alertas_sin_reporte(a, desde_epoch):
+    """Alertas sin_reporte del Thing en tendedero_historico desde 'desde_epoch' (None sin AWS)."""
+    try:
+        import boto3
+        from boto3.dynamodb.conditions import Key
+        sesion = boto3.Session(region_name=a.region)
+        if sesion.get_credentials() is None:
+            return None
+        tabla = sesion.resource("dynamodb").Table(a.tabla_historico)
+        desde = datetime.fromtimestamp(desde_epoch, timezone.utc).isoformat(timespec="milliseconds")
+        r = tabla.query(KeyConditionExpression=Key("thingName").eq(a.thing)
+                        & Key("sk").between(f"alerta#{desde}", "alerta#~"))
+        return [i for i in r.get("Items", []) if i.get("alerta") == "sin_reporte"]
+    except ImportError:
+        return None
+
+
+def _restaurar_wifi(mon, res, a):
+    """Devuelve la red al ESP32 y comprueba que vuelve a reportar. Corre incluso si la
+    espera de la alerta falló: si no, el objeto se queda sin red y hay que reiniciarlo."""
+    t1 = mon.enviar("wifi_on")
+    r = mon.esperar("recuperado", t1, a.timeout_conexion)
+    ack = mon.esperar("aceptado", r[0], 15) if r else None
+    res.agregar("r3", "al volver la red reporta otra vez", bool(ack),
+                f"Shadow recuperado en {ms(t1, r[0]) / 1000:.1f} s" if r else "no reconectó")
+
+
+def _esperar_alerta_r3(mon, res, a, t0, preguntar):
+    limite = a.minutos_r3 * 60
+    t_alerta, detalle = None, ""
+    try:
+        automatica = bool(a.thing) and _alertas_sin_reporte(a, t0) is not None
+    except Exception as exc:  # credenciales vencidas, permisos, red de la PC
+        raise Fallo(f"DynamoDB rechazó la consulta ({type(exc).__name__}: {exc})")
+    if automatica:
+        print(f"ESP32 sin red. Buscando la alerta sin_reporte en DynamoDB (hasta {a.minutos_r3:.0f} min)...")
+        while time.time() - t0 < limite:
+            time.sleep(a.sondeo_s)
+            try:
+                alertas = _alertas_sin_reporte(a, t0)
+            except Exception as exc:  # credenciales, permisos o red de la PC
+                raise Fallo(f"DynamoDB rechazó la consulta ({type(exc).__name__}: {exc})")
+            if alertas:
+                t_alerta = time.time()
+                detalle = alertas[0].get("sk", "")
+                break
+    else:
+        res.agregar("r3", "modo de la prueba", None,
+                    "guiada: sin --thing o sin credenciales de AWS, la alerta se mira en la consola")
+        # Antes de MINUTOS_SIN_REPORTE la alerta no puede ser de este corte: seria una vieja.
+        minimo = a.minutos_sin_reporte * 60
+        print(f"\nESP32 sin red desde las {datetime.fromtimestamp(t0):%H:%M:%S}. "
+              f"La alerta de ESTE corte no puede existir antes de las "
+              f"{datetime.fromtimestamp(t0 + minimo):%H:%M:%S} "
+              f"({a.minutos_sin_reporte:.0f} min sin lectura); el supervisor corre cada 5 min, "
+              f"asi que suele aparecer entre {a.minutos_sin_reporte:.0f} y {a.minutos_r3:.0f} min.")
+        print("Solo cuenta una alerta NUEVA: su 'sk' (alerta#<fecha UTC>#sin_reporte) debe ser "
+              f"posterior a {datetime.fromtimestamp(t0, timezone.utc):%Y-%m-%dT%H:%M:%S}Z.")
+        while True:
+            preguntar("\nCuando vean esa alerta nueva en DynamoDB (o 'R3:' en CloudWatch del "
+                      "supervisor), presionen Enter... ")
+            t_alerta = time.time()
+            if t_alerta - t0 >= minimo:
+                break
+            faltan = minimo - (t_alerta - t0)
+            print(f"  Han pasado {(t_alerta - t0) / 60:.1f} min: muy pronto. Una alerta visible ahora "
+                  f"es de una desconexion anterior. Faltan {faltan / 60:.1f} min como minimo.")
+        detalle = "hora del Enter (aprox.)"
+    if t_alerta:
+        minutos = (t_alerta - t0) / 60
+        res.agregar("r3", f"alerta sin_reporte <= {a.minutos_r3:.0f} min", minutos <= a.minutos_r3,
+                    f"{minutos:.1f} min; {detalle}")
+    else:
+        res.agregar("r3", f"alerta sin_reporte <= {a.minutos_r3:.0f} min", False,
+                    f"no apareció en {a.minutos_r3:.0f} min (¿EventBridge del supervisor habilitado?)")
+
+
+def p_r3(mon, res, a, preguntar=input):
+    t0 = mon.enviar("wifi_off")
+    if not mon.esperar("wifi_cortado", t0, 5):
+        raise Fallo("el firmware no aceptó wifi_off (¿perfil tendedero_ensayo?)")
+    try:
+        _esperar_alerta_r3(mon, res, a, t0, preguntar)
+    finally:
+        _restaurar_wifi(mon, res, a)
+
+
+def p_led(mon, res, a, cliente_shadow=None):
+    t0 = _led(mon, "led_on")
+    print(f"Luz encendida: esperando el apagado automático ({a.led_s:.0f} s)...")
+    _evaluar_led_automatico(mon, res, a, t0, cliente_shadow)
+
+
 def p_luz(mon, res, a, preguntar=input):
     """R5 (de noche resguarda), rechazo de exponer de noche y luz para recoger la ropa por voz."""
     def paso(texto, comando):
@@ -629,8 +787,8 @@ def p_luz(mon, res, a, preguntar=input):
 PRUEBAS = {"arranque": p_arranque, "ordenes": p_ordenes, "frecuencia": p_frecuencia,
            "persistencia": p_persistencia, "calibracion": p_calibracion, "sensor": p_sensor,
            "reconexion": p_reconexion, "edge": p_edge, "sin_conexion": p_sin_conexion,
-           "luz": p_luz}
-GUIADAS = ("calibracion", "sensor", "edge", "sin_conexion", "luz")
+           "luz": p_luz, "led": p_led, "r3": p_r3}
+GUIADAS = ("calibracion", "sensor", "edge", "sin_conexion", "luz", "r3")
 TODO = ["arranque", "ordenes", "persistencia", "frecuencia"]
 
 
@@ -663,6 +821,16 @@ def argumentos(argv=None):
     # Muestreo de 500 ms + confirmación del LDR de 3000 ms + margen.
     ap.add_argument("--objetivo-luz-ms", type=float, default=None,
                     help="máximo de oscuridad -> resguardo (por defecto 310000 con el LDR real, 3000 simulado)")
+    ap.add_argument("--con-led", action="store_true",
+                    help="frecuencia: enciende la luz al inicio y comprueba su apagado automático")
+    # Apagado automático de la luz (LED_APAGADO_AUTOMATICO_MS en config.h).
+    ap.add_argument("--led-s", type=float, default=600.0)
+    # R3: 5 min sin lectura + el supervisor corre cada 5 min + margen.
+    ap.add_argument("--minutos-r3", type=float, default=11.0)
+    # MINUTOS_SIN_REPORTE de la Lambda del supervisor: antes la alerta no puede ser de este corte.
+    ap.add_argument("--minutos-sin-reporte", type=float, default=5.0)
+    ap.add_argument("--sondeo-s", type=float, default=30.0, help="r3: cada cuánto consultar DynamoDB")
+    ap.add_argument("--tabla-historico", default="tendedero_historico")
     ap.add_argument("--ldr-simulado", action="store_true",
                     help="prueba 'luz' sin LDR: usa los comandos ldr_oscuro / ldr_claro del firmware")
     return ap.parse_args(argv)
@@ -684,6 +852,8 @@ def ejecutar(a, puerto, preguntar=input, cliente_shadow=None):
                     PRUEBAS[nombre](mon, res, a, preguntar=preguntar)
                 elif nombre == "reconexion":
                     PRUEBAS[nombre](mon, res, a, cliente_shadow=cliente_shadow, preguntar=preguntar)
+                elif nombre in ("led", "frecuencia"):
+                    PRUEBAS[nombre](mon, res, a, cliente_shadow=cliente_shadow)
                 else:
                     PRUEBAS[nombre](mon, res, a)
             except Fallo as exc:

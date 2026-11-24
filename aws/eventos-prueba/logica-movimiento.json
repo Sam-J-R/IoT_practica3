@@ -1,0 +1,13 @@
+{
+  "thingName": "tendedero-prueba2",
+  "ts": 1795400180000,
+  "actual": {
+    "posicion": "resguardado",
+    "modo": "automatico",
+    "minutos_reexponer": 30
+  },
+  "anterior": {
+    "posicion": "expuesto",
+    "modo": "automatico"
+  }
+}

@@ -1,0 +1,6 @@
+﻿Ventana: 2026-11-24T18:18:28.615+00:00 -> 2026-11-24T18:34:43.686+00:00 (16.3 min)
+Reportes aceptados por AWS (log): 38
+Lecturas en DynamoDB:             39
+Integridad: 100.00 % (objetivo >= 99.0 %) -> CUMPLE
+  Aviso: hay mßs lecturas que reportes aceptados. ┐Ventana o log incompletos?
+Latencia (ts_guardado - ts_dispositivo): n=39 min=329 media=900 p95=1395 max=2010 ms (objetivo <= 5000 ms) -> CUMPLE

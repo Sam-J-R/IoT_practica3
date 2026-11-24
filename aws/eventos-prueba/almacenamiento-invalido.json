@@ -1,0 +1,8 @@
+{
+  "reported": {
+    "lectura_adc": 9999,
+    "agua_detectada": false
+  },
+  "thingName": "tendedero-prueba2",
+  "ts": 1795400120000
+}

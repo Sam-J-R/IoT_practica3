@@ -61,6 +61,22 @@ class ToolsTests(unittest.TestCase):
         self.assertIn("max=300 ms", out)
         self.assertEqual(codigo, 0, out)
 
+    def test_acepta_el_csv_de_la_consola_de_dynamodb(self):
+        log = self.dir / "log.csv"
+        escribir_log(log, [("serie", T0 + 60 * i, "[SHADOW] reported aceptado ms=1") for i in range(1, 11)])
+        # Formato de "Download results to CSV": una columna por atributo, celdas vacias si falta.
+        filas = ['"thingName","sk","ts_iot","ts_guardado","ts_dispositivo","nivel_luz"']
+        for i in range(1, 11):
+            t = int((T0 + 60 * i) * 1000)
+            filas.append(f'"t","lectura#{iso(T0 + 60 * i)}","{t}","{t + 900}","{t - 100}",""')
+        (self.dir / "lecturas.csv").write_text("\n".join(filas) + "\n", encoding="utf-8")
+        codigo, out = correr(medir_almacenamiento.main,
+                             ["--log", str(log), "--items", str(self.dir / "lecturas.csv")])
+        self.assertIn("Integridad: 100.00 %", out)
+        self.assertIn("ts_guardado - ts_dispositivo", out)
+        self.assertIn("max=1000 ms", out)
+        self.assertEqual(codigo, 0, out)
+
     def test_integridad_insuficiente_devuelve_error(self):
         log = self.dir / "log.csv"
         escribir_log(log, [("serie", T0 + i, "[SHADOW] reported aceptado ms=1") for i in range(10)])

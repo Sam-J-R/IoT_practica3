@@ -1,0 +1,12 @@
+{
+  "reported": {
+    "lectura_adc": 120,
+    "agua_detectada": false,
+    "posicion": "expuesto",
+    "modo": "automatico",
+    "nivel_luz": 80,
+    "oscuro": false
+  },
+  "thingName": "tendedero-prueba2",
+  "ts": 1795400000000
+}

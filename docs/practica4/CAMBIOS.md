@@ -11,6 +11,7 @@ La entrega de la práctica 3 queda recuperable en la etiqueta de git `practica3-
 | [CONTRATO.md](CONTRATO.md) | Shadow, tablas, intents y reglas de calibración. Es la referencia común. |
 | [GUIA_AWS.md](GUIA_AWS.md) | Pasos para actualizar la cuenta de AWS. |
 | [ALEXA.md](ALEXA.md) | Pasos para actualizar la Skill y frases de prueba. |
+| [PRUEBAS_AWS.md](PRUEBAS_AWS.md) | Pruebas de AWS paso a paso desde la consola, con eventos listos y respuestas esperadas. |
 | [MOCKUPS.md](MOCKUPS.md) | Mockups de los cuatro reportes (RF15) y de qué consulta sale cada elemento. |
 
 ## 1. Qué cambió y por qué

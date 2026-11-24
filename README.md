@@ -4,7 +4,7 @@
 
 Un ESP32 captura un sensor analógico MH y controla un servomotor. La Skill consulta y solicita posiciones a través de Lambda, DynamoDB y el Device Shadow del Thing vinculado. No hay cierre automático local ni LED como actuador.
 
-> **Práctica 4 en curso.** El código y las configuraciones de este repositorio ya corresponden a la práctica 4: vinculación por código, calibración del sensor desde Alexa, Shadow en español y tendedero que se resguarda bajo un techo fijo. Su documentación está en [docs/practica4/](docs/practica4/CAMBIOS.md). El resto de este README, el informe, las evidencias y los resultados describen la práctica 3, cuya entrega se conserva en la etiqueta de git `practica3-entrega`.
+> **Práctica 4:** el informe técnico está en [docs/INFORME_P4.md](docs/INFORME_P4.md); la documentación de apoyo, en [docs/practica4/](docs/practica4/CAMBIOS.md); las evidencias, en [docs/evidencias/p4/](docs/evidencias/p4) y [resultados_p4/](resultados_p4). El resto de este README describe la práctica 3, cuya entrega se conserva en la etiqueta de git `practica3-entrega`.
 
 ## Informe y evidencias
 

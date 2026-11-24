@@ -64,13 +64,13 @@ Resources:
   RolAlmacenamiento:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: tendedero-almacenamiento-role
+      RoleName: tendedero-almacenamiento-lambda-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}
       Policies:
-        - PolicyName: tendedero-almacenamiento
+        - PolicyName: tendedero-almacenamiento-lambda-policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -86,13 +86,13 @@ Resources:
   RolLogica:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: tendedero-logica-role
+      RoleName: tendedero-logica-lambda-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}
       Policies:
-        - PolicyName: tendedero-logica
+        - PolicyName: tendedero-logica-lambda-policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -112,13 +112,13 @@ Resources:
   RolSupervisor:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: tendedero-supervisor-role
+      RoleName: tendedero-supervisor-lambda-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - {Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: sts:AssumeRole}
       Policies:
-        - PolicyName: tendedero-supervisor
+        - PolicyName: tendedero-supervisor-lambda-policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:

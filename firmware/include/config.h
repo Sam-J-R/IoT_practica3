@@ -43,5 +43,9 @@ constexpr unsigned long LUZ_CONFIRMACION_MS = 300000;
 // Luz para recoger la ropa: se enciende por voz y se apaga sola pasado este
 // tiempo, por si el usuario se olvida de apagarla.
 constexpr unsigned long LED_APAGADO_AUTOMATICO_MS = 600000;
+// Si el punto de acceso desaparece, WiFi.setAutoReconnect no siempre vuelve a
+// asociarse: la estacion queda en WL_IDLE_STATUS. Tras este tiempo sin conexion
+// se pide la asociacion otra vez.
+constexpr unsigned long RECONEXION_WIFI_MS = 20000;
 // Diferencia minima entre las referencias de claro y oscuro para aceptarlas.
 constexpr int SEPARACION_MINIMA_LUZ = 200;

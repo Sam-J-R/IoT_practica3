@@ -1,0 +1,266 @@
+Processing sensor_test (platform: espressif32 @ 7.0.1; board: esp32doit-devkit-v1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32doit-devkit-v1.html
+PLATFORM: Espressif 32 (7.0.1) > DOIT ESP32 DEVKIT V1
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20017.241212+sha.dcc1105b 
+ - tool-esptoolpy @ 2.41100.0 (4.11.0) 
+ - tool-mkfatfs @ 2.0.1 
+ - tool-mklittlefs @ 1.203.210628 (2.3) 
+ - tool-mkspiffs @ 2.230.0 (2.30) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 33 compatible libraries
+Scanning dependencies...
+No dependencies
+Building in release mode
+Retrieving maximum program size .pio\build\sensor_test\firmware.elf
+Checking size .pio\build\sensor_test\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]   6.6% (used 21640 bytes from 327680 bytes)
+Flash: [==        ]  21.0% (used 275065 bytes from 1310720 bytes)
+Configuring upload protocol...
+AVAILABLE: cmsis-dap, esp-bridge, esp-prog, espota, esptool, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa
+CURRENT: upload_protocol = esptool
+Looking for upload port...
+Using manually specified: COM3
+Uploading .pio\build\sensor_test\firmware.bin
+esptool.py v4.11.0
+Serial port COM3
+Connecting....
+Chip is ESP32-D0WD-V3 (revision v3.1)
+Features: WiFi, BT, Dual Core, 240MHz, VRef calibration in efuse, Coding Scheme None
+Crystal is 40MHz
+MAC: 8c:94:df:7d:08:00
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 460800
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00001000 to 0x00005fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+Flash will be erased from 0x0000e000 to 0x0000ffff...
+Flash will be erased from 0x00010000 to 0x00053fff...
+SHA digest in image updated
+Compressed 17536 bytes to 12202...
+Writing at 0x00001000... (100 %)
+Wrote 17536 bytes (12202 compressed) at 0x00001000 in 0.5 seconds (effective 303.3 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 146...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (146 compressed) at 0x00008000 in 0.0 seconds (effective 686.8 kbit/s)...
+Hash of data verified.
+Compressed 8192 bytes to 47...
+Writing at 0x0000e000... (100 %)
+Wrote 8192 bytes (47 compressed) at 0x0000e000 in 0.1 seconds (effective 955.5 kbit/s)...
+Hash of data verified.
+Compressed 275424 bytes to 153180...
+Writing at 0x00010000... (10 %)
+Writing at 0x0001bac9... (20 %)
+Writing at 0x00024944... (30 %)
+Writing at 0x00029dc0... (40 %)
+Writing at 0x0002f2b1... (50 %)
+Writing at 0x000348c5... (60 %)
+Writing at 0x0003cea2... (70 %)
+Writing at 0x00046809... (80 %)
+Writing at 0x0004bcf5... (90 %)
+Writing at 0x00051553... (100 %)
+Wrote 275424 bytes (153180 compressed) at 0x00010000 in 3.8 seconds (effective 581.8 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...
+========================= [SUCCESS] Took 10.82 seconds =========================
+
+Environment    Status    Duration
+-------------  --------  ------------
+sensor_test    SUCCESS   00:00:10.824
+========================= 1 succeeded in 00:00:10.824 =========================
+
+
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0030,len:1184
+load:0x40078000,len:13232
+load:0x40080400,len:3028
+entry 0x400805e4
+[P3] Prueba del sensor: GPIO34, lectura ADC, sin servo ni AWS
+[P4] LDR en GPIO35: anotar raw con luz y con el LDR tapado
+[SENSOR] ms=502 raw=0
+[LDR] ms=502 raw=2815
+[SENSOR] ms=1003 raw=0
+[LDR] ms=1003 raw=2805
+[SENSOR] ms=1503 raw=0
+[LDR] ms=1503 raw=2775
+[SENSOR] ms=2003 raw=0
+[LDR] ms=2003 raw=2774
+[SENSOR] ms=2503 raw=0
+[LDR] ms=2503 raw=2756
+[SENSOR] ms=3003 raw=0
+[LDR] ms=3003 raw=2789
+[SENSOR] ms=3503 raw=0
+[LDR] ms=3503 raw=2723
+[SENSOR] ms=4003 raw=0
+[LDR] ms=4003 raw=2631
+[SENSOR] ms=4503 raw=0
+[LDR] ms=4503 raw=2604
+[SENSOR] ms=5003 raw=0
+[LDR] ms=5003 raw=2539
+[SENSOR] ms=5503 raw=0
+[LDR] ms=5503 raw=2389
+[SENSOR] ms=6003 raw=0
+[LDR] ms=6003 raw=2221
+[SENSOR] ms=6503 raw=0
+[LDR] ms=6503 raw=2204
+[SENSOR] ms=7003 raw=0
+[LDR] ms=7003 raw=2225
+[SENSOR] ms=7503 raw=0
+[LDR] ms=7503 raw=2219
+[SENSOR] ms=8003 raw=0
+[LDR] ms=8003 raw=2271
+[SENSOR] ms=8503 raw=0
+[LDR] ms=8503 raw=2192
+[SENSOR] ms=9003 raw=0
+[LDR] ms=9003 raw=2194
+[SENSOR] ms=9503 raw=0
+[LDR] ms=9503 raw=2199
+[SENSOR] ms=10003 raw=0
+[LDR] ms=10003 raw=2224
+[SENSOR] ms=10503 raw=0
+[LDR] ms=10503 raw=2210
+[SENSOR] ms=11003 raw=0
+[LDR] ms=11003 raw=2193
+[SENSOR] ms=11503 raw=0
+[LDR] ms=11503 raw=2192
+[SENSOR] ms=12003 raw=0
+[LDR] ms=12003 raw=2325
+[SENSOR] ms=12503 raw=0
+[LDR] ms=12503 raw=2657
+[SENSOR] ms=13003 raw=0
+[LDR] ms=13003 raw=2768
+[SENSOR] ms=13503 raw=0
+[LDR] ms=13503 raw=2721
+[SENSOR] ms=14003 raw=0
+[LDR] ms=14003 raw=2381
+[SENSOR] ms=14503 raw=0
+[LDR] ms=14503 raw=2192
+[SENSOR] ms=15003 raw=0
+[LDR] ms=15003 raw=2157
+[SENSOR] ms=15503 raw=0
+[LDR] ms=15503 raw=2287
+[SENSOR] ms=16003 raw=0
+[LDR] ms=16003 raw=2207
+[SENSOR] ms=16503 raw=0
+[LDR] ms=16503 raw=2178
+[SENSOR] ms=17003 raw=0
+[LDR] ms=17003 raw=2192
+[SENSOR] ms=17503 raw=0
+[LDR] ms=17503 raw=2185
+[SENSOR] ms=18003 raw=0
+[LDR] ms=18003 raw=2192
+[SENSOR] ms=18503 raw=0
+[LDR] ms=18503 raw=2164
+[SENSOR] ms=19003 raw=0
+[LDR] ms=19003 raw=2183
+[SENSOR] ms=19503 raw=0
+[LDR] ms=19503 raw=2743
+[SENSOR] ms=20003 raw=0
+[LDR] ms=20003 raw=2767
+[SENSOR] ms=20503 raw=0
+[LDR] ms=20503 raw=2768
+[SENSOR] ms=21003 raw=0
+[LDR] ms=21003 raw=2766
+[SENSOR] ms=21503 raw=0
+[LDR] ms=21503 raw=2733
+[SENSOR] ms=22003 raw=0
+[LDR] ms=22003 raw=1676
+[SENSOR] ms=22503 raw=0
+[LDR] ms=22503 raw=925
+[SENSOR] ms=23003 raw=0
+[LDR] ms=23003 raw=580
+[SENSOR] ms=23503 raw=0
+[LDR] ms=23503 raw=435
+[SENSOR] ms=24003 raw=0
+[LDR] ms=24003 raw=354
+[SENSOR] ms=24503 raw=0
+[LDR] ms=24503 raw=354
+[SENSOR] ms=25003 raw=0
+[LDR] ms=25003 raw=337
+[SENSOR] ms=25503 raw=0
+[LDR] ms=25503 raw=352
+[SENSOR] ms=26003 raw=0
+[LDR] ms=26003 raw=311
+[SENSOR] ms=26503 raw=0
+[LDR] ms=26503 raw=374
+[SENSOR] ms=27003 raw=0
+[LDR] ms=27003 raw=359
+[SENSOR] ms=27503 raw=0
+[LDR] ms=27503 raw=329
+[SENSOR] ms=28003 raw=0
+[LDR] ms=28003 raw=290
+[SENSOR] ms=28503 raw=0
+[LDR] ms=28503 raw=571
+[SENSOR] ms=29003 raw=0
+[LDR] ms=29003 raw=459
+[SENSOR] ms=29503 raw=0
+[LDR] ms=29503 raw=464
+[SENSOR] ms=30003 raw=0
+[LDR] ms=30003 raw=656
+[SENSOR] ms=30503 raw=0
+[LDR] ms=30503 raw=1049
+[SENSOR] ms=31003 raw=0
+[LDR] ms=31003 raw=766
+[SENSOR] ms=31503 raw=0
+[LDR] ms=31503 raw=421
+[SENSOR] ms=32003 raw=0
+[LDR] ms=32003 raw=398
+[SENSOR] ms=32503 raw=0
+[LDR] ms=32503 raw=411
+[SENSOR] ms=33003 raw=0
+[LDR] ms=33003 raw=460
+[SENSOR] ms=33503 raw=0
+[LDR] ms=33503 raw=419
+[SENSOR] ms=34003 raw=0
+[LDR] ms=34003 raw=397
+[SENSOR] ms=34503 raw=0
+[LDR] ms=34503 raw=400
+[SENSOR] ms=35003 raw=0
+[LDR] ms=35003 raw=427
+[SENSOR] ms=35503 raw=0
+[LDR] ms=35503 raw=389
+[SENSOR] ms=36003 raw=0
+[LDR] ms=36003 raw=364
+[SENSOR] ms=36503 raw=0
+[LDR] ms=36503 raw=320
+[SENSOR] ms=37003 raw=0
+[LDR] ms=37003 raw=371
+[SENSOR] ms=37503 raw=0
+[LDR] ms=37503 raw=342
+[SENSOR] ms=38003 raw=0
+[LDR] ms=38003 raw=272
+[SENSOR] ms=38503 raw=0
+[LDR] ms=38503 raw=359
+[SENSOR] ms=39003 raw=0
+[LDR] ms=39003 raw=290
+[SENSOR] ms=39503 raw=0
+[LDR] ms=39503 raw=325
+[SENSOR] ms=40003 raw=0
+[LDR] ms=40003 raw=314
+[SENSOR] ms=40503 raw=0
+[LDR] ms=40503 raw=470
+[SENSOR] ms=41003 raw=0
+[LDR] ms=41003 raw=511
+[SENSOR] ms=41503 raw=0
+[LDR] ms=41503 raw=427
+[SENSOR] ms=42003 raw=0
+[LDR] ms=42003 raw=457
+[SENSOR] ms=42503 raw=0
+[LDR] ms=42503 raw=2625

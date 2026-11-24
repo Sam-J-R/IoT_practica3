@@ -55,6 +55,8 @@ class Esp32Simulado:
         self.oscuro = -1
         self.cambio_desde = None
         self.led = "apagado"
+        self.led_desde = None
+        self.led_auto_s = 0.5  # apagado automatico (10 min en el firmware)
         self.confirmacion_s = 0.3
         self.lock = threading.Lock()
         self.vivo = True
@@ -126,6 +128,7 @@ class Esp32Simulado:
         if estado == self.led:
             return
         self.led = estado
+        self.led_desde = time.time() if estado == "encendido" else None
         self.linea(f"[LED] estado={estado} origen={origen} ms=1")
 
     def _luz(self):
@@ -161,7 +164,12 @@ class Esp32Simulado:
             self.linea(f"[SENSOR] ms=1 raw={self.lectura} agua={int(self.mojado)}")
             self._luz()
             self._r1()
-            self.linea("[SHADOW] reported aceptado ms=2")
+            with self.lock:
+                if self.led_desde and time.time() - self.led_desde >= self.led_auto_s:
+                    self.linea("[EDGE] LED encendido 10 min: se apaga solo ms=1")
+                    self._cambiar_led("apagado", "edge")
+            if self.en_linea:
+                self.linea("[SHADOW] reported aceptado ms=2")
 
     def _comando(self, cmd):
         time.sleep(0.02)
@@ -243,8 +251,13 @@ class Esp32Simulado:
 
 
 class ShadowAws:
-    def __init__(self):
+    def __init__(self, reported=None):
         self.pedidos = []
+        self.reported = reported or {}
+
+    def get_thing_shadow(self, thingName):
+        import io
+        return {"payload": io.BytesIO(json.dumps({"state": {"reported": self.reported}}).encode())}
 
     def update_thing_shadow(self, thingName, payload):
         self.pedidos.append((thingName, json.loads(payload)))
@@ -270,6 +283,75 @@ class ProbarEsp32Tests(unittest.TestCase):
         filas = {(p, v): (r, d) for p, v, r, d in res.filas}
         carpeta = next(Path(self.tmp.name).iterdir())
         return res, filas, carpeta, aws
+
+    def test_led_se_apaga_solo_y_llega_al_shadow(self):
+        res, filas, _, _ = self.correr(["led"], led_s=0.5)
+        self.assertTrue(res.ok(), res.markdown())
+        self.assertEqual(filas[("led", "el apagado lo hace el Edge")], ("PASA", "origen=edge"))
+        self.assertEqual(filas[("led", "Shadow: led=apagado, origen_led=edge")][0], "INFO")
+
+    def test_led_sin_conexion_no_llega_al_shadow(self):
+        esp = Esp32Simulado()
+        esp.en_linea = False
+        res, filas, _, _ = self.correr(["led"], esp=esp, led_s=0.5)
+        self.assertEqual(filas[("led", f"se apaga sola a los 0 s")][0], "PASA")
+        self.assertEqual(filas[("led", "el apagado llega al Shadow (reported aceptado)")][0], "FALLA")
+
+    def test_led_lee_el_shadow_con_thing(self):
+        a = probar_esp32.argumentos(["--puerto", "SIM", "--salida", self.tmp.name, "--sin-eco",
+                                     "--led-s", "0.5", "--thing", "t1", "led"])
+        esp = Esp32Simulado()
+        aws = ShadowAws(reported={"led": "apagado", "origen_led": "edge"})
+        res = probar_esp32.ejecutar(a, esp, preguntar=lambda _: "", cliente_shadow=aws)
+        esp.vivo = False
+        filas = {(p, v): (r, d) for p, v, r, d in res.filas}
+        self.assertEqual(filas[("led", "Shadow: led=apagado, origen_led=edge")][0], "PASA")
+
+    def test_r3_guiada_sin_aws(self):
+        res, filas, _, _ = self.correr(["r3"], minutos_r3=1, minutos_sin_reporte=0.002)
+        self.assertTrue(res.ok(), res.markdown())
+        self.assertEqual(filas[("r3", "modo de la prueba")][0], "INFO")
+        self.assertEqual(filas[("r3", "al volver la red reporta otra vez")][0], "PASA")
+
+    def test_r3_busca_la_alerta_en_dynamodb(self):
+        respuestas = iter([[], [], [{"sk": "alerta#2026-11-24T16:00:00.000+00:00#sin_reporte",
+                                    "alerta": "sin_reporte"}]])
+        with unittest.mock.patch.object(probar_esp32, "_alertas_sin_reporte",
+                                        side_effect=lambda a, t: next(respuestas, [{"sk": "x"}])):
+            res, filas, _, _ = self.correr(["r3"], thing="t1", minutos_r3=1, sondeo_s=0.1)
+        self.assertTrue(res.ok(), res.markdown())
+        self.assertIn("sin_reporte", filas[("r3", "alerta sin_reporte <= 1 min")][1])
+
+    def test_r3_sin_alerta_falla(self):
+        with unittest.mock.patch.object(probar_esp32, "_alertas_sin_reporte", return_value=[]):
+            res, filas, _, _ = self.correr(["r3"], thing="t1", minutos_r3=0.01, sondeo_s=0.1)
+        self.assertEqual(filas[("r3", "alerta sin_reporte <= 0 min")][0], "FALLA")
+
+    def test_r3_guiada_no_acepta_un_enter_prematuro(self):
+        pedidos = []
+
+        def preguntar(texto):
+            pedidos.append(texto)
+            return ""
+
+        res, filas, _, _ = self.correr(["r3"], preguntar=preguntar, minutos_r3=1,
+                                       minutos_sin_reporte=0.02)
+        self.assertTrue(res.ok(), res.markdown())
+        self.assertGreaterEqual(len(pedidos), 2)  # el primer Enter llego antes del minimo
+
+    def test_r3_devuelve_el_wifi_aunque_dynamodb_falle(self):
+        with unittest.mock.patch.object(probar_esp32, "_alertas_sin_reporte",
+                                        side_effect=RuntimeError("AccessDenied")):
+            res, filas, _, esp = self.correr(["r3"], thing="t1", minutos_r3=1)
+        self.assertEqual(filas[("r3", "prueba interrumpida")][0], "FALLA")
+        self.assertIn("AccessDenied", filas[("r3", "prueba interrumpida")][1])
+        # Lo que importa: el ESP32 no se queda sin red.
+        self.assertEqual(filas[("r3", "al volver la red reporta otra vez")][0], "PASA")
+
+    def test_frecuencia_con_led(self):
+        res, filas, _, _ = self.correr(["frecuencia"], con_led=True, led_s=0.5)
+        self.assertTrue(res.ok(), res.markdown())
+        self.assertIn(("led", "el apagado lo hace el Edge"), filas)
 
     def test_todo_pasa_con_un_firmware_correcto(self):
         res, filas, carpeta, _ = self.correr(["todo"])

@@ -10,6 +10,8 @@ Pasos para actualizar la cuenta de AWS que ya funciona con la práctica 3. La [g
 | Lambda `tendedero-inteligente-alexa` | ZIP nuevo y cambio de variables de entorno. |
 | Shadows de los dos Things | Se borran los atributos antiguos. |
 | Tabla `tendedero_vinculaciones` | **Se recrea** con clave `userId` + `thingName`, para que un usuario tenga varios tendederos (paso 4.1). |
+| Lógica de la Nube: tabla `tendedero_historico`, tres Lambdas, tres roles, tres reglas y la programación | **Nueva** (paso 9). |
+| Alerta de facturación | **Nueva** (paso 10). |
 
 No copiar certificados, claves privadas, contraseñas ni valores completos de `userId` al repositorio.
 
@@ -64,7 +66,7 @@ Si el ESP32 deja de conectarse después de este cambio, volver a activar la vers
 ## 4. Actualizar la política del rol de la Lambda
 
 1. Abrir **IAM → Roles → `tendedero-inteligente-lambda-role`**.
-2. Editar la política en línea y reemplazarla por [lambda-iam-policy.template.json](../../aws/lambda-iam-policy.template.json), sustituyendo `ACCOUNT_ID`.
+2. Editar la política en línea (`tendedero-inteligente-lambda-policy`) y reemplazarla por [lambda-iam-policy.template.json](../../aws/lambda-iam-policy.template.json), sustituyendo `ACCOUNT_ID`.
 
 Cambian dos declaraciones:
 
@@ -149,38 +151,108 @@ Con muchos dispositivos, el alta manual no escala. Hay dos formas de automatizar
 
 La tabla `tendedero_dispositivos` también queda preparada para guardar más datos de cada producto (ubicación, modelo, versión de firmware), que servirán para el análisis de datos de la siguiente fase.
 
-## 9. Actualizar la lógica de la Nube (R2 y R4)
+## 9. Crear la lógica de la Nube (histórico, Lambdas, reglas y programación)
 
-R4 ya no pasa a modo manual: duplica `minutos_reexponer` ([CONTRATO.md](CONTRATO.md#por-qué-r4-duplica-la-espera-y-no-pasa-a-modo-manual)). R2 ahora tiene en cuenta la luz. Los permisos no cambian.
+En la práctica 3 la cuenta solo tenía la Lambda de Alexa. La práctica 4 agrega todo lo que procesa y guarda los datos y ejecuta las reglas en la Nube. Si alguno de estos recursos ya existe en la cuenta, en lugar de crearlo hay que **actualizarlo** con los mismos valores (código, variables, SQL).
 
-| Recurso | Cambio |
+| Recurso | Para qué sirve |
 |---|---|
-| Lambda `tendedero_logica` | Código nuevo. Variables sin cambios (`DDB_HISTORY_TABLE`, `IOT_ENDPOINT`, `LIMITE_MOVIMIENTOS_HORA`). |
-| Lambda `tendedero_almacenamiento` | Código nuevo: las lecturas guardan solo los datos de los sensores, los eventos de posición guardan si había agua y si era de noche, y acepta `minutos_reexponer` entre 15 y 240. |
-| Regla `tendedero_cambios` | SQL nuevo: sin filtro, la Lambda compara los documentos. |
-| Lambda `tendedero_supervisor` | Código nuevo: R2 solo vuelve a exponer si hay luz, y después de una noche seca expone a la mañana. R3 alerta tras 5 min sin reportes (antes, 3). |
-| Rol `tendedero-logica-role` | Sin cambios: sigue necesitando `iot:UpdateThingShadow` para escribir la espera nueva. |
+| Tabla `tendedero_historico` | Guarda lecturas, eventos y alertas: es la tabla de análisis de los reportes (ver [CONTRATO.md](CONTRATO.md#modelo-del-histórico-rf11-rf12-rf15)). |
+| Lambda `tendedero_almacenamiento` | Valida y guarda en el histórico lo que publica el ESP32 (RF11, RF12). |
+| Lambda `tendedero_logica` | R4: si el brazo se mueve demasiado, duplica la espera antes de volver a exponer. |
+| Lambda `tendedero_supervisor` | Cada 5 minutos, R2 (volver a exponer) y R3 (detectar que un tendedero dejó de reportar). |
+| Reglas `tendedero_lecturas`, `tendedero_cambios`, `tendedero_movimientos` | Llevan cada publicación del Shadow a la Lambda que corresponde. |
+| Programación de EventBridge | Ejecuta el supervisor cada 5 minutos. |
+| Tres roles de IAM | Cada Lambda con solo los permisos que usa. |
 
-### Pasos en la consola
+El orden importa: primero la tabla, después los roles, las Lambdas, las reglas y la programación. Cada paso usa lo que se creó en el anterior.
 
-1. **Lambda → `tendedero_logica` → Code**: reemplazar `lambda_function.py` por [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) y elegir **Deploy**.
-2. **Lambda → `tendedero_almacenamiento` → Code**: reemplazar `lambda_function.py` por [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) y elegir **Deploy**.
-3. **Lambda → `tendedero_supervisor` → Code**: reemplazar `lambda_function.py` por [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) y elegir **Deploy**. En **Configuration → Environment variables**, si existe `MINUTOS_SIN_REPORTE`, cambiarla a `5` (o eliminarla: el código usa 5 por defecto).
-4. **AWS IoT → Message routing → Rules → `tendedero_cambios` → Edit**: reemplazar la sentencia SQL por la de [tendedero_cambios.json](../../aws/reglas/tendedero_cambios.json) y guardar. La acción (invocar `tendedero_almacenamiento`) no cambia:
+### 9.1 Tabla `tendedero_historico`
 
-   ```sql
-   SELECT current.state.reported AS actual, previous.state.reported AS anterior, topic(3) AS thingName, timestamp() AS ts FROM '$aws/things/+/shadow/update/documents' WHERE NOT isUndefined(current.state.reported)
-   ```
+1. **DynamoDB → Tables → Create table.**
+2. **Table name:** `tendedero_historico`.
+3. **Partition key:** `thingName`, tipo **String**.
+4. **Sort key:** `sk`, tipo **String**.
+5. **Table settings → Customize settings → Read/write capacity settings → Provisioned**, con **Auto scaling apagado** en lectura y escritura, y **2** unidades de lectura y **2** de escritura. Está dentro de la capa gratuita permanente (25 y 25), y un tendedero escribe más o menos una vez por minuto.
+6. **Create table** y esperar a que quede en **Active**.
+7. Abrir la tabla → **Additional settings → Time to Live (TTL) → Turn on** → atributo **`ttl`** → **Turn on TTL**. DynamoDB borra solo las lecturas de más de 30 días y los eventos y alertas de más de un año.
 
-### Verificar
+Las tres Lambdas usan el **mismo endpoint de IoT** que la de Alexa. Copiarlo de **Lambda → `tendedero-inteligente-alexa` → Configuration → Environment variables → `IOT_ENDPOINT`**, o de **AWS IoT → Settings → Device data endpoint**, sin `https://`.
 
-- [ ] Prueba en `tendedero_logica` (**Test**) con este evento: responde `{"accion": "ninguna", "movimientos": ...}` sin errores.
+### 9.2 Roles de IAM (uno por Lambda)
 
-  ```json
-  {"thingName": "tendedero-prueba2", "ts": 1795110000000,
-   "actual": {"posicion": "resguardado", "modo": "automatico", "minutos_reexponer": 30},
-   "anterior": {"posicion": "expuesto", "modo": "automatico"}}
-  ```
+Repetir para cada fila:
+
+| Rol | Política (en `aws/iam/`, mismo nombre en la consola) | Qué permite |
+|---|---|---|
+| `tendedero-almacenamiento-lambda-role` | [tendedero-almacenamiento-lambda-policy.json](../../aws/iam/tendedero-almacenamiento-lambda-policy.json) | Solo `PutItem` en el histórico y escribir sus logs |
+| `tendedero-logica-lambda-role` | [tendedero-logica-lambda-policy.json](../../aws/iam/tendedero-logica-lambda-policy.json) | Leer y escribir el histórico y escribir `desired` en el Shadow de los tendederos |
+| `tendedero-supervisor-lambda-role` | [tendedero-supervisor-lambda-policy.json](../../aws/iam/tendedero-supervisor-lambda-policy.json) | Leer la lista de tendederos, leer y escribir el histórico, y leer y escribir el Shadow |
+
+1. **IAM → Roles → Create role.**
+2. **Trusted entity type: AWS service. Use case: Lambda** → **Next**.
+3. En **Add permissions** no marcar nada → **Next**.
+4. **Role name:** el de la tabla → **Create role**.
+5. Abrir el rol → **Add permissions → Create inline policy → JSON**.
+6. Pegar el contenido del archivo correspondiente y **reemplazar `ACCOUNT_ID`** por el número de la cuenta: 12 dígitos, sin guiones. Si los Things no están en `us-east-2`, cambiar también la región en cada ARN.
+7. **Next** → **Policy name:** el nombre del archivo sin `.json` (por ejemplo `tendedero-almacenamiento-lambda-policy`) → **Create policy**.
+
+Si el resumen de la política muestra «IoT: None» (en los roles de lógica y supervisor), es el mismo aviso del paso 4. Se comprueba con la prueba del paso 9.6 y, si falla, se cambia solo ese recurso a `"*"`.
+
+### 9.3 Lambdas
+
+Para cada fila de esta tabla:
+
+| Función | Código | Rol | Timeout | Variables de entorno |
+|---|---|---|---|---|
+| `tendedero_almacenamiento` | [lambda/almacenamiento/lambda_function.py](../../lambda/almacenamiento/lambda_function.py) | `tendedero-almacenamiento-lambda-role` | 10 s | `DDB_HISTORY_TABLE` = `tendedero_historico` |
+| `tendedero_logica` | [lambda/logica/lambda_function.py](../../lambda/logica/lambda_function.py) | `tendedero-logica-lambda-role` | 10 s | `DDB_HISTORY_TABLE` = `tendedero_historico`<br>`IOT_ENDPOINT` = el endpoint<br>`LIMITE_MOVIMIENTOS_HORA` = `6` |
+| `tendedero_supervisor` | [lambda/supervisor/lambda_function.py](../../lambda/supervisor/lambda_function.py) | `tendedero-supervisor-lambda-role` | **30 s** | `DDB_HISTORY_TABLE` = `tendedero_historico`<br>`DDB_DEVICES_TABLE` = `tendedero_dispositivos`<br>`IOT_ENDPOINT` = el endpoint<br>`MINUTOS_SIN_REPORTE` = `5` |
+
+1. **Lambda → Create function → Author from scratch.**
+2. **Function name:** el de la tabla, exacto: las reglas y los roles lo usan.
+3. **Runtime: Python 3.12.** Architecture: x86_64.
+4. **Permissions → Change default execution role → Use an existing role** → el rol de la tabla → **Create function**.
+5. **Code:** abrir `lambda_function.py` en el editor, borrar todo, pegar el contenido del archivo del repositorio y elegir **Deploy**. No hace falta subir un ZIP: estas Lambdas solo usan `boto3`, que ya viene incluido.
+6. **Configuration → General configuration → Edit:** Memory 128 MB y el **Timeout** de la tabla → **Save**. El valor por defecto (3 s) es poco, sobre todo para el supervisor, que revisa todos los tendederos.
+7. **Configuration → Environment variables → Edit:** agregar las variables de la tabla → **Save**.
+
+### 9.4 Reglas de AWS IoT
+
+Para cada fila:
+
+| Regla | Sentencia SQL (copiar de `aws/reglas/`) | Acción: Lambda |
+|---|---|---|
+| `tendedero_lecturas` | [tendedero_lecturas.json](../../aws/reglas/tendedero_lecturas.json) | `tendedero_almacenamiento` |
+| `tendedero_cambios` | [tendedero_cambios.json](../../aws/reglas/tendedero_cambios.json) | `tendedero_almacenamiento` |
+| `tendedero_movimientos` | [tendedero_movimientos.json](../../aws/reglas/tendedero_movimientos.json) | `tendedero_logica` |
+
+1. **AWS IoT → Message routing → Rules → Create rule.**
+2. **Rule name:** el de la tabla → **Next**.
+3. **SQL version: 2016-03-23.** En **SQL statement**, pegar el valor del campo `"sql"` del archivo JSON: solo el texto entre comillas, empezando por `SELECT` → **Next**.
+4. **Rule actions → Action 1: Lambda** → elegir la función de la tabla → **Next**.
+5. **Create.** La consola agrega sola el permiso para que la regla invoque la Lambda.
+
+Para comprobarlo: **Lambda → la función → Configuration → Triggers** muestra la regla de AWS IoT. `tendedero_almacenamiento` muestra dos: lecturas y cambios.
+
+### 9.5 Programar el supervisor cada 5 minutos
+
+1. **Lambda → `tendedero_supervisor` → Add trigger.**
+2. **Source: EventBridge (CloudWatch Events).**
+3. **Create a new rule.** Rule name: `tendedero_supervisor_programado`. Rule type: **Schedule expression** → `rate(5 minutes)`.
+4. **Add.**
+
+A partir de ahí el supervisor corre solo. En **Monitor → View CloudWatch logs** aparece una ejecución cada 5 minutos.
+
+### 9.6 Verificar
+
+En la pestaña **Test** de cada función, con los eventos de [aws/eventos-prueba/](../../aws/eventos-prueba). El detalle está en el paso 5 de [PRUEBAS_AWS.md](PRUEBAS_AWS.md):
+
+- [ ] `tendedero_almacenamiento` con `almacenamiento-lectura` → `{"guardados": 1}`, y la lectura aparece en **DynamoDB → `tendedero_historico` → Explore items**.
+- [ ] `tendedero_logica` con `logica-movimiento` → `{"accion": "ninguna", "movimientos": 1}`.
+- [ ] `tendedero_supervisor` con `supervisor` (`{}`) → `{"revisados": 2, …}`.
+
+Si alguna responde con `AccessDeniedException` o `Task timed out`, revisar el rol (9.2) o el timeout (9.3).
 
 ## 10. Alerta de facturación
 
@@ -195,11 +267,13 @@ Con la frecuencia de reporte de 60 s, el consumo estimado queda dentro de la cap
 
 ## Orden de todo lo pendiente
 
+Después de aplicar todo, las pruebas paso a paso están en [PRUEBAS_AWS.md](PRUEBAS_AWS.md).
+
 1. Paso 4: política del rol de la Lambda de Alexa (`Query` sobre vinculaciones e IoT restringido a `tendedero-*`).
 2. Paso 4.1: recrear `tendedero_vinculaciones`. **Borra las vinculaciones actuales.**
 3. Paso 5: subir el ZIP nuevo de la Lambda de Alexa.
 4. [ALEXA.md](ALEXA.md): pegar el modelo nuevo y compilar.
-5. Paso 9: Lambdas de lógica (R4), almacenamiento y supervisor (R2 y R3), y la regla `tendedero_cambios`.
+5. Paso 9: crear la tabla `tendedero_historico`, los tres roles, las tres Lambdas (almacenamiento, lógica y supervisor), las tres reglas y la programación del supervisor.
 6. Paso 6: limpiar los Shadows con [shadow-migracion-practica4.json](../../aws/shadow-migracion-practica4.json) (borra `cubierta`, `sensor_raw`, `luz_adc`, `desired.origen_led` y los campos de ensayo).
 7. Paso 10: alerta de facturación, si la cuenta todavía no la tiene.
 8. Volver a vincular los tendederos desde Alexa, con nombre.

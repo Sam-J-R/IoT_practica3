@@ -1,0 +1,18 @@
+{
+  "actual": {
+    "posicion": "resguardado",
+    "origen": "edge",
+    "agua_detectada": true,
+    "oscuro": false,
+    "modo": "automatico"
+  },
+  "anterior": {
+    "posicion": "expuesto",
+    "origen": "nube",
+    "agua_detectada": false,
+    "oscuro": false,
+    "modo": "automatico"
+  },
+  "thingName": "tendedero-prueba2",
+  "ts": 1795400060000
+}
