@@ -146,7 +146,7 @@ Separarlas evita que la función que más se invoca (almacenamiento) tenga permi
 
 ### 2.3 Diagrama de circuito
 
-![Circuito de la práctica 4](../hardware/circuitoP4.jpeg)
+![Circuito de la práctica 4](../hardware/diagrama.svg)
 
 Conexiones detalladas en [CONEXIONES.md](../hardware/CONEXIONES.md) (sensor de agua y servo, sin cambios desde la P3) y [CONEXIONES_P4.md](../hardware/CONEXIONES_P4.md) (LDR en GPIO35 con divisor y LED en GPIO27 con resistencia). El servo se alimenta desde VIN (5 V del USB) con GND común. Foto del montaje: [montajeP4.jpeg](../referencias/montajeP4.jpeg).
 
