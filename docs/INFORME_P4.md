@@ -562,7 +562,7 @@ Modelo de interacción importado en el JSON Editor y compilado sin errores el 24
 | Regla de lecturas por MQTT (AWS 18) | 1 lectura sin posición ni modo |
 | Regla de cambios (AWS 19) | Lectura + evento de agua + evento de posición con `origen = edge`; también disparó R4 |
 | Mensaje inválido (AWS 15 y 20) | `lectura_adc = 9999` descartado, registrado en CloudWatch |
-| Integridad y latencia, 16,3 min con el ESP32 ([07-20-almacenamiento.txt](../resultados_p4/07-20-almacenamiento.txt), [lecturas.csv](../lecturas.csv)) | 100 % de los reportes guardados; latencia máx. 2,0 s |
+| Integridad y latencia, 16,3 min con el ESP32 ([07-20-almacenamiento.txt](../resultados_p4/07-20-almacenamiento.txt), [lecturas.csv](../resultados_p4/lecturas-almacenamiento.csv)) | 100 % de los reportes guardados; latencia máx. 2,0 s |
 
 ### 4.6 Costo
 
@@ -605,7 +605,7 @@ Modelo de interacción importado en el JSON Editor y compilado sin errores el 24
 | Reconexión | 5,9–7,1 s (con `wifi_off`); ~35 s Wi-Fi → Shadow tras el corte real |
 | Costo | USD 0,21–1,37 / mes; 53 % del límite gratuito de reglas |
 
-**Datos almacenados en DynamoDB.** En la ventana de 16,3 min se guardaron 39 lecturas de `tendedero-inteligente` ([lecturas.csv](../lecturas.csv)); el histórico contiene además eventos de agua y posición con su origen (`edge`, `voz`, `nube`) y alertas `sin_reporte` de R3 ([03](evidencias/p4/aws/03-historico-lecturas.jpg), [04](evidencias/p4/aws/04-historico-eventos.jpg), [05](evidencias/p4/aws/05-historico-alertas.jpg), [25](evidencias/p4/aws/25-historico-lectura-y-eventos.jpg)).
+**Datos almacenados en DynamoDB.** En la ventana de 16,3 min se guardaron 39 lecturas de `tendedero-inteligente` ([lecturas.csv](../resultados_p4/lecturas-almacenamiento.csv)); el histórico contiene además eventos de agua y posición con su origen (`edge`, `voz`, `nube`) y alertas `sin_reporte` de R3 ([03](evidencias/p4/aws/03-historico-lecturas.jpg), [04](evidencias/p4/aws/04-historico-eventos.jpg), [05](evidencias/p4/aws/05-historico-alertas.jpg), [25](evidencias/p4/aws/25-historico-lectura-y-eventos.jpg)).
 
 **Análisis Edge / Nube.** Las reglas que protegen la ropa (R1, R5) quedaron en el Edge y respondieron en 1,1 s incluso sin red; si R1 dependiera de la Nube, la respuesta sumaría la regla, la Lambda y el `delta` (≈2–3 s) y no funcionaría sin Internet. R2 en la Nube tarda hasta 5 min por el período del supervisor (51 s medidos), lo que es aceptable porque exponer la ropa un poco tarde no la daña, y a cambio usa el histórico y se puede cambiar sin reprogramar. R3 solo puede estar en la Nube. El precio de la Nube es costo de invocaciones, y la mayor parte del consumo son las reglas de almacenamiento, no la lógica.
 
@@ -643,5 +643,6 @@ Modelo de interacción importado en el JSON Editor y compilado sin errores el 24
 | [evidencias/p4/alexa/](evidencias/p4/alexa/README.md) | 40 capturas de la Skill |
 | [evidencias/p4/aws/](evidencias/p4/aws/README.md) | Capturas de AWS y muestras de DynamoDB |
 | [evidencias/p4/demo/](evidencias/p4/demo) | Videos de la demostración (servo y luces) |
+| [evidencias/p4/pruebas/](evidencias/p4/pruebas) | Capturas tomadas durante los ensayos con el ESP32 (Shadow, simulador, DynamoDB) |
 | [resultados_p4/](../resultados_p4) | Resúmenes y logs del ESP32, almacenamiento, R2, costo |
 | [tools/](../tools/README.md) | Scripts de prueba y medición |
