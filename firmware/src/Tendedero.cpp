@@ -360,6 +360,34 @@ void loop() {
     apagarLedPorTiempo(ahora); // No necesita servo ni AWS.
   }
 
+  // Paso 1b: volver a asociarse si la red desaparecio. Sin esto, un corte real
+  // del punto de acceso deja la estacion en WL_IDLE_STATUS y el objeto no se
+  // recupera solo aunque la red vuelva (medido el 24-11: 2 min en estado=0).
+  static bool wifiCaido = false;
+  static unsigned long sinWifiDesde = 0;
+#ifdef MODO_ENSAYO_RNF
+  const bool cortePedido = wifiCortado; // wifi_off: el corte es parte de la prueba.
+#else
+  const bool cortePedido = false;
+#endif
+  if (integracion && !cortePedido) {
+    if (WiFi.status() != WL_CONNECTED) {
+      if (!wifiCaido) {
+        wifiCaido = true;
+        sinWifiDesde = ahora;
+      } else if (ahora - sinWifiDesde >= RECONEXION_WIFI_MS) {
+        sinWifiDesde = ahora;
+        Serial.printf("[RED] sin wifi: reintentando asociacion ms=%lu\n", ahora);
+        WiFi.disconnect();
+        WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      }
+    } else if (wifiCaido) {
+      wifiCaido = false;
+      Serial.printf("[RED] wifi reconectado ip=%s ms=%lu\n",
+                    WiFi.localIP().toString().c_str(), ahora);
+    }
+  }
+
   // Paso 2: iniciar MQTT una vez haya Wi-Fi y reloj correcto para TLS.
   // ClienteShadow gestiona las reconexiones posteriores.
   if (integracion && !mqttIniciado && WiFi.status() == WL_CONNECTED &&
